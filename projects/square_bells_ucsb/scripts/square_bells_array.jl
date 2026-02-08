@@ -38,7 +38,11 @@ function parse_command_line_args(args::Vector{String})
     return (p_scatter = p_scatter,)
 end
 
-function p_scatter_tag(p_scatter::Real)
+function p_scatter_label(p_scatter::Real)
+    return "p=$(Float64(p_scatter))"
+end
+
+function p_scatter_slug(p_scatter::Real)
     return "p" * replace(string(Float64(p_scatter)), "." => "p", "-" => "m")
 end
 
@@ -73,11 +77,12 @@ mkpath(results_root)
 cli_args = parse_command_line_args(collect(ARGS))
 bias = 1.0 # change in a0 to drive flow
 p_scatter = cli_args.p_scatter # scattering prob. at walls (1.0 = fully diffuse, 0.0 = fully specular)
-p_tag = p_scatter_tag(p_scatter)
+p_label = p_scatter_label(p_scatter)
+p_slug = p_scatter_slug(p_scatter)
 
 # slurm parameters
 sbatch = Dict(
-    :job_name => "$(name)_sweep_$(p_tag)",
+    :job_name => "$(name)_sweep_$(p_slug)",
     :time => "24:00:00",
     :cpus_per_task => 1,
     :mem_per_cpu => "4G",
@@ -136,7 +141,7 @@ if !haskey(ENV, "SLURM_ARRAY_TASK_ID")
     @info "Square bells sweep submission" name mesh=basename(mesh_path) bias p_scatter total_cases
 
     timestamp = Dates.format(now(), "yyyy-mm-dd_HHMMSS")
-    sweep_id = "$(name)_sweep_$(p_tag)_$(timestamp)"
+    sweep_id = "$(name)_sweep_$(p_label)_$(timestamp)"
     sweep_dir = joinpath(results_root, sweep_id)
     data_dir = joinpath(sweep_dir, "data")
     log_dir = joinpath(sweep_dir, "logs")
@@ -177,7 +182,7 @@ end
 # read metadata to get the parameter grid and other info
 job_id = ENV["SLURM_ARRAY_JOB_ID"]
 task_id = parse(Int, ENV["SLURM_ARRAY_TASK_ID"])
-sweep_dir = get(ENV, "FERMI_SWEEP_DIR", joinpath(results_root, "$(name)_sweep_$(p_tag)_$(job_id)"))
+sweep_dir = get(ENV, "FERMI_SWEEP_DIR", joinpath(results_root, "$(name)_sweep_$(p_label)_$(job_id)"))
 data_dir = joinpath(sweep_dir, "data")
 @info "Worker starting" job_id task_id hostname=gethostname() julia=VERSION threads=Threads.nthreads()
 
