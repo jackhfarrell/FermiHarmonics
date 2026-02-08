@@ -4,13 +4,13 @@ FermiHarmonics is a Julia code for solving a toy linearized 2D Boltzmann equatio
 
 ![FermiHarmonics regime demo](demo/streamlines.png)
 
-Documentation: <https://docs.jackhfarrell.com>
+Documentation: <https://fermiharmonics.jackhfarrell.com>
 
 ## Citation
 If you happen to find this code useful, it would be great if you would cite our upcoming theory/numerics paper as well as the codebase itself!
 
 - Code release (Zenodo): `TBD`
-- Theory/application paper: `TBD`
+- Theory/application paper: Farrell & Lucas (2026, to appear)
 
 ### BibTeX (Code)
 
@@ -28,12 +28,10 @@ If you happen to find this code useful, it would be great if you would cite our 
 ### BibTeX (Theory Paper)
 
 ```bibtex
-@article{fermiharmonics_theory,
-  author = {Farrell, Jack H. and ...},
-  title = {TBD},
-  journal = {TBD},
-  year = {TBD},
-  doi = {TBD},
-  url = {TBD}
+@article{farrellSimpleDevices2026,
+  title = {Simple devices that distinguish hydrodynamic, ballistic, and diffusive transport},
+  author = {Farrell, Jack H. and Lucas, Andrew},
+  year = {2026},
+  journal = {to appear}
 }
 ```
