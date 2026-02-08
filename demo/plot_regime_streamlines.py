@@ -63,7 +63,7 @@ gs = fig.add_gridspec(
 )
 axes = [fig.add_subplot(gs[0, i]) for i in range(3)]
 cax = fig.add_subplot(gs[0, 3])
-cmap_icefire = sns.color_palette("flare_r", as_cmap=True)
+cmap_mako = sns.color_palette("mako", as_cmap=True)
 last_pcm = None
 
 # Determine common axis limits across all regimes
@@ -99,7 +99,7 @@ for ax, (regime, x, y, u_norm, v_norm) in zip(axes, field_data):
     v_masked = np.ma.masked_invalid(v_norm)
 
     pcm = ax.pcolormesh(
-        x, y, speed_masked, cmap=cmap_icefire, shading='auto', vmin=0.0, vmax=speed_norm_max
+        x, y, speed_masked, cmap=cmap_mako, shading='auto', vmin=0.0, vmax=speed_norm_max
     )
     last_pcm = pcm
     ax.streamplot(
