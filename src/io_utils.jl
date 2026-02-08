@@ -9,7 +9,7 @@ using Trixi
 # ======================================================================================================================
 # Analysis Output
 # ======================================================================================================================
-
+# TODO: make save_for_analysis more flexible, we should be able to give it a list of variable names and it saves those
 """
     save_for_analysis(sol, semi, filename; nvisnodes=400)
 
