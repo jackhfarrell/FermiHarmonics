@@ -6,6 +6,34 @@ FermiHarmonics is a Julia code for solving a toy linearized 2D Boltzmann equatio
 
 Documentation: <https://fermiharmonics.jackhfarrell.com>
 
+## Quick Start
+
+### 1. Install Julia dependencies
+
+From the repository root:
+
+```bash
+julia --project=. -e 'using Pkg; Pkg.instantiate()'
+```
+
+### 2. Run the regime demo
+
+Generate demo output:
+
+```bash
+julia --project=. demo/run_regime_demo.jl
+```
+
+Render the streamline figure:
+
+```bash
+python demo/plot_regime_streamlines.py
+```
+
+The figure is written to:
+
+- `demo/streamlines.png`
+
 ## Citation
 If you happen to find this code useful, it would be great if you would cite our upcoming theory/numerics paper as well as the codebase itself!
 
