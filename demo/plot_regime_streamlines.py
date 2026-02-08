@@ -46,6 +46,7 @@ def load_fields(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
 
 data_dir = Path(__file__).resolve().parent / "data"
 out_path = Path(__file__).resolve().parent / "streamlines.png"
+hydro_out_path = Path(__file__).resolve().parent / "hydrodynamic_streamlines.png"
 dpi = 300
 regimes = ["diffusive", "hydrodynamic", "ballistic"]
 x_cut = 0.4
@@ -142,3 +143,50 @@ if last_pcm is not None:
     )
 fig.savefig(out_path, dpi=dpi)
 print(f"saved: {out_path}")
+
+# Single-panel hydrodynamic image for presentations/figures.
+hydro_path = data_dir / "hydrodynamic.h5"
+if not hydro_path.is_file():
+    raise FileNotFoundError(f"Missing file: {hydro_path}")
+
+x_h, y_h, u_h, v_h = load_fields(hydro_path)
+line_current_h = integrated_current_at_x(x_h, y_h, v_h, x_cut=x_cut)
+line_scale_h = max(abs(line_current_h), 1e-14)
+u_h_norm = u_h / line_scale_h
+v_h_norm = v_h / line_scale_h
+speed_h = np.hypot(u_h_norm, v_h_norm)
+speed_h_masked = np.ma.masked_invalid(speed_h)
+u_h_masked = np.ma.masked_invalid(u_h_norm)
+v_h_masked = np.ma.masked_invalid(v_h_norm)
+local_h_max = float(np.nanmax(speed_h)) if np.isfinite(np.nanmax(speed_h)) else 1.0
+if local_h_max <= 0:
+    local_h_max = 1.0
+
+fig_h, ax_h = plt.subplots(figsize=(6.5, 5.0), constrained_layout=False)
+fig_h.patch.set_facecolor("black")
+ax_h.set_facecolor("black")
+ax_h.pcolormesh(
+    x_h, y_h, speed_h_masked, cmap=cmap_rocket, shading="auto", vmin=0.0, vmax=local_h_max
+)
+ax_h.streamplot(
+    x_h,
+    y_h,
+    u_h_masked,
+    v_h_masked,
+    color="white",
+    density=1.0,
+    linewidth=1.0,
+    arrowsize=1.0,
+    minlength=0.2,
+    integration_direction="both",
+)
+ax_h.set_xlim(float(x_h.min()), float(x_h.max()))
+ax_h.set_ylim(float(y_h.min()), float(y_h.max()))
+ax_h.set_xticks([])
+ax_h.set_yticks([])
+for spine in ax_h.spines.values():
+    spine.set_visible(False)
+ax_h.set_aspect("equal")
+
+fig_h.savefig(hydro_out_path, dpi=600, facecolor=fig_h.get_facecolor(), edgecolor="none")
+print(f"saved: {hydro_out_path}")
