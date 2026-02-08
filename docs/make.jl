@@ -8,7 +8,7 @@ makedocs(;
     remotes = nothing,  # Disable remote source links
     format = Documenter.HTML(;
         prettyurls = get(ENV, "CI", "false") == "true",
-        canonical = "https://docs.jackhfarrell.com",
+        canonical = "https://fermiharmonics.jackhfarrell.com",
         assets = String[],
         mathengine = Documenter.MathJax3(),  # LaTeX rendering via MathJax3
     ),
@@ -30,5 +30,5 @@ makedocs(;
 deploydocs(;
     repo = "github.com/jackhfarrell/FermiHarmonics.git",
     devbranch = "main",
-    cname = "docs.jackhfarrell.com",
+    cname = "fermiharmonics.jackhfarrell.com",
 )
