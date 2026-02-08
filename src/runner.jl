@@ -65,7 +65,7 @@ Estimate an efficient harmonic cutoff from physical scattering rates.
 The estimate uses the total scattering rate
 `gamma_total = gamma_mr + gamma_mc` and logarithmically interpolates:
 - `gamma_total = 0` -> `max_harmonic`,
-- `gamma_total >= 500` -> `min_harmonic`,
+- `gamma_total >= 300` -> `min_harmonic`,
 - intermediate values map via `log1p(gamma_total)` between those endpoints.
 """
 function estimate_max_harmonic(

@@ -17,7 +17,7 @@ FermiHarmonics.FermiHarmonics2D(nvars::Integer; gamma_mr, gamma_mc, max_harmonic
 
 ```julia
 params = SolveParams(;
-    max_harmonic = 60, # or :auto 
+    max_harmonic = 60,
     # ... other solver settings
 )
 
@@ -29,3 +29,5 @@ equations = FermiHarmonics2D(
     max_harmonic = params.max_harmonic,
 )
 ```
+
+Use `:auto` at solve-time, e.g. `solve(...; max_harmonic=:auto)`.
