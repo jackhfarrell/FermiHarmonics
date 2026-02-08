@@ -7,26 +7,47 @@ This folder contains scripts, meshes, and notebooks for square-bells UCSB parame
 - `scripts/`: run and sweep submission scripts.
 - `mesh/`: mesh and geometry inputs.
 - `analyze_sweep.ipynb`: sweep-level analysis notebook (cleaned for publication).
-- `inspect_observables.ipynb`: single-run observable inspection notebook (cleaned for publication).
 
 ## What is not tracked
 
-Generated results are intentionally excluded from git:
+Generated results are intentionally excluded from git, including:
 
 - `results/`
 - large generated `.h5` data files
 
-## Expected local data layout
+## Cluster sweep workflow (SLURM)
 
-The notebooks are configured to look for repo-local generated data under:
+Before submitting, configure your SLURM account/partition/qos in:
 
-- `results/example_sweep/data/*.h5`
-- `results/example_single_run/data/*.h5`
+- `projects/square_bells_ucsb/scripts/square_bells_array.jl`
 
-You can change these paths in the first data-loading cells.
+Relevant block:
 
-## Typical workflow
+- `sbatch = Dict(...)`
+  - `:account`
+  - `:partition`
+  - `:qos`
+  - and any other site-specific settings you need.
 
-1. Run a simulation or sweep via `scripts/`.
-2. Save analysis outputs under `results/<run_or_sweep>/data/`.
-3. Open notebooks and point to the relevant `results/.../data` path.
+Then submit both wall-scattering sweeps:
+
+```bash
+julia --project=. projects/square_bells_ucsb/scripts/submit_two_p_sweeps.jl
+```
+
+This submits:
+
+- one sweep at `p_scatter=1.0` with 250 jobs
+- one sweep at `p_scatter=0.0` with 250 jobs
+- total: **500 SLURM array jobs**
+
+Each sweep writes results under:
+
+- `projects/square_bells_ucsb/results/square_bells_ucsb_sweep_p=<...>_<timestamp>/data/*.h5`
+
+## Analyze a completed sweep
+
+1. Open `projects/square_bells_ucsb/analyze_sweep.ipynb`.
+2. Set `SWEEP_DATA_DIR` in the first configuration cell to your `.../data` directory.
+3. Choose `(I_IDX, J_IDX)` and plotting options.
+4. Run the notebook top-to-bottom.
