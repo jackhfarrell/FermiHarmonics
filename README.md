@@ -49,7 +49,7 @@ If you happen to find this code useful, it would be great if you would cite our 
 ```bibtex
 @software{fermiharmonics_zenodo,
   author = {Farrell, Jack H.},
-  title = {FermiHarmonics},
+  title = {{FermiHarmonics}: Linearized 2D Fermi-liquid Boltzmann transport on unstructured meshes},
   year = {2026},
   publisher = {Zenodo},
   doi = {10.5281/zenodo.18528662},
