@@ -3,8 +3,10 @@
 # usage: to run using 4 threads for example,
 #   JULIA_NUM_THREADS=4 julia --project=. projects/simple_geometries/scripts/run_junction.jl
 
+using Plots
 using FermiHarmonics
 using DrWatson
+
 
 # ======================================================================================================================
 # Configuration and Setup
