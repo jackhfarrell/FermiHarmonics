@@ -51,6 +51,7 @@ export FermiHarmonics2D,
        archive_mesh!,
        copy_mesh_to_scratch,
        select_cases,
+       ordered_case_indices,
        grid_lookup,
        submit_sweep!
 

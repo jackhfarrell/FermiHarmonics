@@ -183,3 +183,24 @@ function grid_lookup(gamma_mr_vals, gamma_mc_vals, index_global::Int)
     index_mc = mod(index_global - 1, n_mc) + 1
     return gamma_mr_vals[index_mr], gamma_mc_vals[index_mc]
 end
+
+
+"""
+    ordered_case_indices(gamma_mr_vals, gamma_mc_vals)
+
+Return global case indices ordered from hardest to easiest expected solves,
+using descending `(gamma_mr + gamma_mc, gamma_mr, gamma_mc)`.
+"""
+function ordered_case_indices(gamma_mr_vals, gamma_mc_vals)
+    total_cases = length(gamma_mr_vals) * length(gamma_mc_vals)
+    indices = collect(1:total_cases)
+    sort!(
+        indices;
+        by = index_global -> begin
+            gamma_mr, gamma_mc = grid_lookup(gamma_mr_vals, gamma_mc_vals, index_global)
+            (gamma_mr + gamma_mc, gamma_mr, gamma_mc)
+        end,
+        rev = true,
+    )
+    return indices
+end

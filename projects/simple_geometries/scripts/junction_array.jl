@@ -1,7 +1,7 @@
-# run a large parameter sweep for the square bells problem, sweeping over gamma_mr and gamma_mc using SLURM array jobs.
-# this script handles both the initial submission (writing shared metadata and submitting the array job) and the worker
-# logic. the parameter grid is defined in the script, and each worker picks which cases to run based on its
-# SLURM_ARRAY_TASK_ID. results are saved in a shared directory with one file per case.
+# run a large parameter sweep for the simple_geometries junction problem, sweeping over gamma_mr and gamma_mc using
+# SLURM array jobs. this script handles both the initial submission (writing shared metadata and submitting the array
+# job) and the worker logic. the parameter grid is defined in the script, and each worker picks which cases to run
+# based on its SLURM_ARRAY_TASK_ID. results are saved in a shared directory with one file per case.
 
 using Dates
 using DrWatson
@@ -9,52 +9,21 @@ using FermiHarmonics
 using Sockets: gethostname
 
 # ======================================================================================================================
-# CLI Arguments
-# ======================================================================================================================
-
-function parse_command_line_args(args::Vector{String})
-    p_scatter = 1.0
-    i = 1
-    while i <= length(args)
-        arg = args[i]
-        value_str = nothing
-        if startswith(arg, "--p_scatter=")
-            value_str = split(arg, "=", limit=2)[2]
-            i += 1
-        elseif arg == "--p_scatter"
-            i < length(args) || throw(ArgumentError("Missing value after --p_scatter"))
-            value_str = args[i + 1]
-            i += 2
-        else
-            throw(ArgumentError("Unknown argument: $arg. Supported: --p_scatter <float>"))
-        end
-
-        p_val = tryparse(Float64, value_str)
-        p_val === nothing && throw(ArgumentError("Could not parse --p_scatter value '$value_str' as Float64"))
-        (0.0 <= p_val <= 1.0) || throw(ArgumentError("--p_scatter must satisfy 0.0 <= p_scatter <= 1.0"))
-        p_scatter = p_val
-    end
-
-    return (p_scatter = p_scatter,)
-end
-
-# ======================================================================================================================
 # Configuration and Setup
 # ======================================================================================================================
 
 # sweep configuration
-name = "square_bells_ucsb"
+name = "simple_geometries_junction"
 project_root = normpath(joinpath(@__DIR__, ".."))
 main_project = normpath(joinpath(project_root, "..", ".."))
-mesh_path = joinpath(project_root, "mesh", "square_bells.inp")
+mesh_path = joinpath(project_root, "meshes", "junction", "junction.inp")
 results_root = joinpath(project_root, "results")
 n_jobs = 250
 cases_per_job = 10
 mkpath(results_root)
 
-cli_args = parse_command_line_args(collect(ARGS))
 bias = 1.0 # change in a0 to drive flow
-p_scatter = cli_args.p_scatter # scattering prob. at walls (1.0 = fully diffuse, 0.0 = fully specular)
+p_scatter = 1.0 # scattering prob. at walls (1.0 = fully diffuse, 0.0 = fully specular)
 
 # slurm parameters
 sbatch = Dict(
@@ -76,8 +45,10 @@ total_cases = length(gamma_mr_vals) * length(gamma_mc_vals)
 
 boundary_conditions = Dict(
     :walls => MaxwellWallBC(p_scatter),
-    :contact_top => OhmicContactBC(-bias / 2),
-    :contact_bottom => OhmicContactBC(bias / 2),
+    :middle => OhmicContactBC(-bias / 2),
+    :bottom => OhmicContactBC(bias / 2),
+    :left => OhmicContactBC(0.0),
+    :right => OhmicContactBC(0.0),
 )
 
 solve_params = SolveParams(;
@@ -114,7 +85,7 @@ sweep_metadata = Dict(
 # if not running as part of SLURM array job (initial submission), write shared metadata and submit the job
 if !haskey(ENV, "SLURM_ARRAY_TASK_ID")
 
-    @info "Square bells sweep submission" name mesh=basename(mesh_path) bias p_scatter total_cases
+    @info "Junction sweep submission" name mesh=basename(mesh_path) bias p_scatter total_cases
 
     timestamp = Dates.format(now(), "yyyy-mm-dd_HHMMSS")
     sweep_id = "$(name)_sweep_$(timestamp)"
@@ -124,7 +95,7 @@ if !haskey(ENV, "SLURM_ARRAY_TASK_ID")
     mkpath(data_dir)
     mkpath(log_dir)
 
-    # configure directory for logs 
+    # configure directory for logs
     sbatch_submit = copy(sbatch)
     sbatch_submit[:output] = joinpath(log_dir, "slurm-%A_%a.out")
     sbatch_submit[:error] = joinpath(log_dir, "slurm-%A_%a.err")
@@ -134,7 +105,6 @@ if !haskey(ENV, "SLURM_ARRAY_TASK_ID")
         script=abspath(@__FILE__),
         n_jobs=n_jobs,
         project_dir=main_project,
-        script_args=["--p_scatter=$(p_scatter)"],
         env=Dict("FERMI_SWEEP_DIR" => sweep_dir),
         sbatch=sbatch_submit,
     )
@@ -205,9 +175,9 @@ let
         @info "Case converged" iterations=sol.destats.naccept duration=Dates.canonicalize(
             Dates.CompoundPeriod(now() - case_start)
         )
-        
+
         # save a0, a1, b1 for analysis
-        file_params = (bias=bias, p_scatter=p_scatter, gamma_mr=gamma_mr, gamma_mc=gamma_mc)
+        file_params = (bias = bias, p_scatter = p_scatter, gamma_mr = gamma_mr, gamma_mc = gamma_mc)
         small_path = joinpath(data_dir, DrWatson.savename(file_params; connector="_", sort=true) * ".h5")
         save_for_analysis(sol, semi, small_path)
         @info "Saved" path=basename(small_path) small_mb=round(filesize(small_path) / 1e6, digits=2)
