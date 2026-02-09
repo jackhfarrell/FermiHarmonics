@@ -38,8 +38,8 @@ sbatch = Dict(
 )
 
 # grid of parameters
-gamma_mr_vals = 10 .^ range(log10(0.05), log10(100.0), length=50)
-gamma_mc_vals = 10 .^ range(log10(0.1), log10(200.0), length=50)
+gamma_mr_vals = 10 .^ range(log10(0.01), log10(100.0), length=50)
+gamma_mc_vals = 10 .^ range(log10(0.01), log10(200.0), length=50)
 total_cases = length(gamma_mr_vals) * length(gamma_mc_vals)
 @assert length(gamma_mr_vals) * length(gamma_mc_vals) == n_jobs * cases_per_job
 
@@ -47,8 +47,8 @@ boundary_conditions = Dict(
     :walls => MaxwellWallBC(p_scatter),
     :middle => OhmicContactBC(-bias / 2),
     :bottom => OhmicContactBC(bias / 2),
-    :left => OhmicContactBC(0.0),
-    :right => OhmicContactBC(0.0),
+    :left => OhmicContactBC(-bias / 2),
+    :right => OhmicContactBC(-bias / 2),
 )
 
 solve_params = SolveParams(;
