@@ -98,10 +98,6 @@ end
     return buf
 end
 
-@inline function projector_direction_index(orientation::Integer, direction::Integer)
-    return orientation == 1 ? (direction == 1 ? 1 : 2) : (direction == 3 ? 3 : 4)
-end
-
 @inline function apply_bc!(bc_type::Symbol, out, state, unit_n, P_in, bc, target)
     if bc_type === :maxwell
         maxwell_wall!(out, state, unit_n, P_in, bc.p_scatter, target)
@@ -111,6 +107,21 @@ end
     return out
 end
 
+"""
+    bc_callable(bc, bc_type, u_inner, normal_direction, x, t,
+                surface_flux_function, equations, boundary_index=0, node_index=0)
+
+Apply one kinetic boundary condition and return numerical surface flux.
+
+Physics/sign convention:
+- `normal_direction` is the outward element normal from Trixi,
+- incoming-to-domain characteristics satisfy `lambda(n) < 0`,
+- only those incoming components are replaced by BC target data.
+
+Cache policy:
+- boundary projectors must be prebuilt in `bc.cache.projectors` with key
+  `(boundary_index, node_index)`; this routine errors if cache entries are missing.
+"""
 @inline function bc_callable(bc, bc_type::Symbol, u_inner, normal_direction, x, t,
                              surface_flux_function, equations, 
                              boundary_index::Int=0, node_index::Int=0)
@@ -120,11 +131,24 @@ end
     nvars = length(state)
     target = get_thread_buffer!(bc.cache.target_buffers, nvars)
     out = get_thread_buffer!(bc.cache.out_buffers, nvars)
-    if bc.cache.initialized && boundary_index > 0 && haskey(bc.cache.projectors, boundary_index)
-        @inbounds P_in = bc.cache.projectors[boundary_index]
-    else
-        P_in = incoming_projector(equations.Ax, equations.Ay, unit_n; tol = bc.tol)
-    end
+    bc.cache.initialized || throw(ArgumentError(
+        "Boundary projector cache is not initialized for $(typeof(bc)). " *
+        "Call through `Trixi.semidiscretize` so `init_projector_cache!` runs first."
+    ))
+    boundary_index > 0 || throw(ArgumentError(
+        "Boundary projector cache lookup requires boundary_index > 0, got $boundary_index."
+    ))
+    node_index > 0 || throw(ArgumentError(
+        "Boundary projector cache lookup requires node_index > 0, got $node_index."
+    ))
+
+    key = projector_cache_key(boundary_index, node_index)
+    haskey(bc.cache.projectors, key) || throw(KeyError(
+        "Missing cached boundary projector for key $(key). " *
+        "Cache size=$(length(bc.cache.projectors)); rebuild via `init_projector_cache!`."
+    ))
+    @inbounds P_in = bc.cache.projectors[key]
+
     apply_bc!(bc_type, out, state, unit_n, P_in, bc, target)
     return surface_flux_function(state, out, normal_direction, equations)
 end

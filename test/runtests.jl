@@ -112,3 +112,5 @@ using Trixi
     @test sol_tomo.t[end] ≈ params.tspan_end atol=1e-12 rtol=1e-12
     @test all(isfinite, sol_tomo.u[end])
 end
+
+include("symmetry_consistency.jl")

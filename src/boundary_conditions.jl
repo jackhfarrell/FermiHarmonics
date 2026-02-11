@@ -18,7 +18,7 @@ mutable struct BCProjectorCache
     state_buffers::Vector{Vector{Float64}}
     target_buffers::Vector{Vector{Float64}}
     out_buffers::Vector{Vector{Float64}}
-    projectors::Dict{Int, SparseMatrixCSC{Float64, Int}}
+    projectors::Dict{Tuple{Int, Int}, SparseMatrixCSC{Float64, Int}}
     initialized::Bool
     nvars::Int
 end
@@ -26,7 +26,7 @@ BCProjectorCache() = BCProjectorCache(
     [Float64[] for _ in 1:Threads.nthreads()],
     [Float64[] for _ in 1:Threads.nthreads()],
     [Float64[] for _ in 1:Threads.nthreads()],
-    Dict{Int, SparseMatrixCSC{Float64, Int}}(),
+    Dict{Tuple{Int, Int}, SparseMatrixCSC{Float64, Int}}(),
     false,
     0)
 
@@ -237,17 +237,24 @@ end
 # number of degrees of freedom even in the hydro, diffusive regimes.  So we work instead in this harmonic basis.
 
 """
-    incoming_projector(Ax, Ay, unit_normal; tol=0.0) -> SparseMatrixCSC{Float64}
+    characteristic_spectral_data(Ax, Ay, unit_normal; tol=0.0)
+        -> (; eigvectors, eigenvalues, incoming_mask, outgoing_mask, grazing_mask, Dx, Dxinv, tol_effective)
 
-Compute incoming projector for flux Jacobian A = Ax*nx + Ay*ny as sparse matrix.
-Incoming modes are eigenvectors with eigenvalues <= -tol.
+Compute weighted characteristic data for boundary projectors.
+
+The weighted transform uses `A_s = Dxinv * A * Dx`, which is symmetric for this harmonic
+basis, so its eigenvectors define robust incoming/outgoing/grazing subspaces.
 """
-function incoming_projector(
+function characteristic_spectral_data(
     Ax::AbstractMatrix,
     Ay::AbstractMatrix,
     unit_normal::SVector{2, Float64},
     ;tol::Float64=0.0,
-)::SparseMatrixCSC{Float64, Int}
+)
+    tol >= 0 || throw(ArgumentError("tol must be >= 0"))
+
+    # Weighted similarity transform that symmetrizes the truncated harmonic transport operator.
+    # This lets us use an orthogonal eigendecomposition and build stable projectors.
     A = unit_normal[1] .* Ax .+ unit_normal[2] .* Ay
     n = size(A, 1)
     D = ones(Float64, n)
@@ -259,18 +266,154 @@ function incoming_projector(
     Dxinv = Diagonal(Dinv)
     A_s = Dxinv * A * Dx
     eig = eigen(Symmetric(A_s))
-    mask = eig.values .<= -tol
-    
+
+    # Roundoff-safe grazing band: exact zero-speed modes are physically tangential and should
+    # remain unconstrained by incoming BC projection.
+    tol_floor = 100.0 * eps(Float64) * max(1.0, opnorm(A_s, Inf))
+    tol_effective = max(tol, tol_floor)
+
+    incoming_mask = eig.values .< -tol_effective
+    outgoing_mask = eig.values .> tol_effective
+    grazing_mask = .!(incoming_mask .| outgoing_mask)
+
+    return (
+        eigvectors = eig.vectors,
+        eigenvalues = eig.values,
+        incoming_mask = incoming_mask,
+        outgoing_mask = outgoing_mask,
+        grazing_mask = grazing_mask,
+        Dx = Dx,
+        Dxinv = Dxinv,
+        tol_effective = tol_effective,
+    )
+end
+
+"""
+    projector_from_mask(eigvectors, mask, Dx, Dxinv) -> SparseMatrixCSC{Float64, Int}
+
+Construct one characteristic projector from a boolean eigenvector mask in weighted space.
+"""
+function projector_from_mask(
+    eigvectors::AbstractMatrix,
+    mask::AbstractVector{Bool},
+    Dx::Diagonal,
+    Dxinv::Diagonal,
+)::SparseMatrixCSC{Float64, Int}
+    n = size(eigvectors, 1)
     if !any(mask)
         return spzeros(Float64, n, n)
     end
 
-    Q_in = eig.vectors[:, mask]
-    P_s = Q_in * transpose(Q_in)
+    Q = eigvectors[:, mask]
+    P_s = Q * transpose(Q)
     P_dense = Dx * P_s * Dxinv
     P_sparse = sparse(P_dense)
     droptol!(P_sparse, 1e-12)
     return P_sparse
+end
+
+"""
+    incoming_projector(Ax, Ay, unit_normal; tol=0.0) -> SparseMatrixCSC{Float64}
+
+Compute incoming projector for flux Jacobian A = Ax*nx + Ay*ny as sparse matrix.
+Incoming modes are eigenvectors with eigenvalues strictly `< -tol`.
+Grazing modes with `|lambda| <= tol` are left untouched by the boundary projector.
+"""
+function incoming_projector(
+    Ax::AbstractMatrix,
+    Ay::AbstractMatrix,
+    unit_normal::SVector{2, Float64},
+    ;tol::Float64=0.0,
+)::SparseMatrixCSC{Float64, Int}
+    spec = characteristic_spectral_data(Ax, Ay, unit_normal; tol=tol)
+    return projector_from_mask(spec.eigvectors, spec.incoming_mask, spec.Dx, spec.Dxinv)
+end
+
+"""
+    characteristic_projectors(Ax, Ay, unit_normal; tol=0.0)
+        -> (; incoming, outgoing, grazing, eigenvalues, nincoming, noutgoing, ngrazing)
+
+Compute incoming/outgoing/grazing characteristic projectors for
+`A(unit_normal) = n_x A_x + n_y A_y`.
+
+Sign convention:
+- `lambda < -tol`: incoming-to-domain modes (constrained by BC targets),
+- `lambda > +tol`: outgoing-from-domain modes (left as interior state),
+- `|lambda| <= tol`: grazing/tangential modes (left untouched to avoid basis-dependent bias).
+
+Numerical note:
+- an internal roundoff floor is always applied to `tol` so machine-zero eigenvalues do not
+  get misclassified as incoming/outgoing when users pass `tol=0`.
+"""
+function characteristic_projectors(
+    Ax::AbstractMatrix,
+    Ay::AbstractMatrix,
+    unit_normal::SVector{2, Float64},
+    ;tol::Float64=0.0,
+)
+    spec = characteristic_spectral_data(Ax, Ay, unit_normal; tol=tol)
+    P_in = projector_from_mask(spec.eigvectors, spec.incoming_mask, spec.Dx, spec.Dxinv)
+    P_out = projector_from_mask(spec.eigvectors, spec.outgoing_mask, spec.Dx, spec.Dxinv)
+    P_g = projector_from_mask(spec.eigvectors, spec.grazing_mask, spec.Dx, spec.Dxinv)
+
+    return (
+        incoming = P_in,
+        outgoing = P_out,
+        grazing = P_g,
+        eigenvalues = spec.eigenvalues,
+        tol_effective = spec.tol_effective,
+        nincoming = count(spec.incoming_mask),
+        noutgoing = count(spec.outgoing_mask),
+        ngrazing = count(spec.grazing_mask),
+    )
+end
+
+"""
+    audit_characteristic_projectors(Ax, Ay, unit_normal; tol=0.0)
+        -> NamedTuple
+
+Audit projector algebra and opposite-normal consistency. Useful for checking BC operators:
+- idempotence (`P^2 = P`),
+- decomposition (`P_in + P_out + P_g = I`),
+- orthogonality between subspaces,
+- reciprocity under `n -> -n` (`P_in(n) ≈ P_out(-n)` and `P_g(n) ≈ P_g(-n)`).
+"""
+function audit_characteristic_projectors(
+    Ax::AbstractMatrix,
+    Ay::AbstractMatrix,
+    unit_normal::SVector{2, Float64},
+    ;tol::Float64=0.0,
+)
+    proj = characteristic_projectors(Ax, Ay, unit_normal; tol=tol)
+    proj_opposite = characteristic_projectors(Ax, Ay, -unit_normal; tol=tol)
+
+    n = size(Ax, 1)
+    Id = Matrix{Float64}(I, n, n)
+    P_in = Matrix(proj.incoming)
+    P_out = Matrix(proj.outgoing)
+    P_g = Matrix(proj.grazing)
+    P_in_opposite = Matrix(proj_opposite.incoming)
+    P_out_opposite = Matrix(proj_opposite.outgoing)
+    P_g_opposite = Matrix(proj_opposite.grazing)
+
+    return (
+        tol_effective = proj.tol_effective,
+        nincoming = proj.nincoming,
+        noutgoing = proj.noutgoing,
+        ngrazing = proj.ngrazing,
+        idempotence_in = opnorm(P_in * P_in - P_in, Inf),
+        idempotence_out = opnorm(P_out * P_out - P_out, Inf),
+        idempotence_grazing = opnorm(P_g * P_g - P_g, Inf),
+        decomposition_error = opnorm(P_in + P_out + P_g - Id, Inf),
+        orthogonality_error = max(
+            opnorm(P_in * P_out, Inf),
+            opnorm(P_in * P_g, Inf),
+            opnorm(P_out * P_g, Inf),
+        ),
+        opposite_incoming_outgoing_error = opnorm(P_in - P_out_opposite, Inf),
+        opposite_outgoing_incoming_error = opnorm(P_out - P_in_opposite, Inf),
+        opposite_grazing_error = opnorm(P_g - P_g_opposite, Inf),
+    )
 end
 
 """
@@ -313,8 +456,8 @@ end
 """
     build_projectors(equations, tol, mesh, dg, cache, boundary_indexing)
 
-Build sparse projector matrix for each boundary face in a P4est mesh.
-Returns Dict{Int, SparseMatrixCSC} mapping global boundary_index to projector.
+Build sparse projector matrices for each `(boundary face, node)` pair in a P4est mesh.
+Returns `Dict{Tuple{Int, Int}, SparseMatrixCSC}` keyed by `(boundary_index, node_index)`.
 """
 function build_projectors(
     equations::FermiHarmonics2D,
@@ -323,33 +466,32 @@ function build_projectors(
     solver,
     cache,
     boundary_indexing::Vector{Int},
-)::Dict{Int, SparseMatrixCSC{Float64, Int}}
+)::Dict{Tuple{Int, Int}, SparseMatrixCSC{Float64, Int}}
     n_nodes = Trixi.nnodes(solver)
     contravariant_vectors = cache.elements.contravariant_vectors
     boundaries = cache.boundaries
-    projectors = Dict{Int, SparseMatrixCSC{Float64, Int}}()
-    # Loop over all global boundary indices assigned to this BC type
+    projectors = Dict{Tuple{Int, Int}, SparseMatrixCSC{Float64, Int}}()
+
+    # Build projectors at each boundary node so the cached projector uses the same local
+    # normal as the runtime flux evaluation. Using one face-representative normal can
+    # create directional bias on warped/curved faces.
     for global_idx in boundary_indexing
         element = boundaries.neighbor_ids[global_idx]
         node_indices = boundaries.node_indices[global_idx]
         direction = Trixi.indices2direction(node_indices)
-        # Use first node to compute normal
-        if direction == 1 || direction == 2
-            i_index = (direction == 1) ? 1 : n_nodes
-            j_index = 1
-        else  # direction == 3 || direction == 4
-            i_index = 1
-            j_index = (direction == 3) ? 1 : n_nodes
+        for node_index in 1:n_nodes
+            i_index, j_index = boundary_node_ij(direction, node_index, n_nodes)
+            normal_direction = Trixi.get_normal_direction(
+                direction, contravariant_vectors, i_index, j_index, element
+            )
+            unit_n = unit_normal(
+                SVector(Float64(normal_direction[1]), Float64(normal_direction[2]))
+            )
+            key = projector_cache_key(global_idx, node_index)
+            projectors[key] = incoming_projector(
+                equations.Ax, equations.Ay, unit_n; tol = tol
+            )
         end
-        normal_direction = Trixi.get_normal_direction(
-            direction, contravariant_vectors, i_index, j_index, element
-        )
-        unit_n = unit_normal(
-            SVector(Float64(normal_direction[1]), Float64(normal_direction[2]))
-        )
-        projectors[global_idx] = incoming_projector(
-            equations.Ax, equations.Ay, unit_n; tol = tol
-        )
     end
     return projectors
 end
@@ -427,7 +569,7 @@ Normalize a normal vector to unit length.
 end
 
 """
-    _normal_cos_sin(normal) -> (cosine, sine)
+    normal_cos_sin(normal) -> (cosine, sine)
 
 Compute cosine and sine of the angle defined by the normal vector.
 """
@@ -439,4 +581,36 @@ Compute cosine and sine of the angle defined by the normal vector.
     else
         return nx / nrm, ny / nrm
     end
+end
+
+"""
+    projector_cache_key(boundary_index, node_index) -> (Int, Int)
+
+Canonical dictionary key for cached boundary projectors.
+"""
+@inline projector_cache_key(boundary_index::Int, node_index::Int) = (boundary_index, node_index)
+
+"""
+    boundary_node_ij(direction, node_index, n_nodes) -> (i_index, j_index)
+
+Map a boundary-local node number to `(i, j)` indices on a tensor-product P4est face.
+Direction follows Trixi convention:
+- `1,2`: x-normal faces (`i` fixed),
+- `3,4`: y-normal faces (`j` fixed).
+"""
+@inline function boundary_node_ij(
+    direction::Int,
+    node_index::Int,
+    n_nodes::Int,
+)::Tuple{Int, Int}
+    if direction == 1
+        return 1, node_index
+    elseif direction == 2
+        return n_nodes, node_index
+    elseif direction == 3
+        return node_index, 1
+    elseif direction == 4
+        return node_index, n_nodes
+    end
+    throw(ArgumentError("Unsupported boundary direction $direction"))
 end
