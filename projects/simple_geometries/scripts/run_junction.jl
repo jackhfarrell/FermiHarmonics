@@ -22,14 +22,14 @@ save_analysis = true
 bias = 1.0
 p_scatter = 1.0
 gamma_mr = 1e-3
-gamma_mc = 1e-3
+gamma_mc = 1e2
 
 boundary_conditions = Dict(
     :walls => MaxwellWallBC(p_scatter),
     :middle => OhmicContactBC(-bias / 2),
     :bottom => OhmicContactBC(bias / 2),
-    :left => OhmicContactBC(0.0),
-    :right => OhmicContactBC(0.0),
+    :left => OhmicContactBC(-bias / 2),
+    :right => OhmicContactBC(-bias / 2),
 )
 
 params = SolveParams(;
