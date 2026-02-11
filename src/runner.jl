@@ -8,7 +8,8 @@
 # Solver
 # ======================================================================================================================
 
-const AUTO_HARMONIC_GAMMA_HIGH = 300.0
+const AUTO_HARMONIC_GAMMA_LOW = 1.0
+const AUTO_HARMONIC_GAMMA_HIGH = 1000.0
 
 # ======================================================================================================================
 # Solver Configuration
@@ -22,7 +23,9 @@ Typed configuration for [`solve`](@ref).
 Fields:
 - `max_harmonic::Int=60`: default fixed harmonic cutoff used when `solve(...; max_harmonic=...)` is not provided.
 - `min_harmonic::Int=4`: lower bound for auto harmonic estimation.
-- `max_harmonic_auto::Int=100`: upper bound for auto harmonic estimation.
+- `max_harmonic_auto::Int=150`: upper bound for auto harmonic estimation.
+- `auto_harmonic_decay_power::Float64=1.6`: shape parameter for smooth auto-harmonic decrease.
+  Larger values decrease more aggressively once above `gamma_tot ~ 1`.
 - `polydeg::Int=3`: DGSEM polynomial degree.
 - `tspan_end::Float64=100.0`: final integration time.
 - `residual_tol::Float64=1e-5`: steady-state absolute tolerance.
@@ -32,7 +35,8 @@ Fields:
 Base.@kwdef struct SolveParams
     max_harmonic::Int = 60
     min_harmonic::Int = 4
-    max_harmonic_auto::Int = 100
+    max_harmonic_auto::Int = 150
+    auto_harmonic_decay_power::Float64 = 1.6
     polydeg::Int = 3
     tspan_end::Float64 = 100.0
     residual_tol::Float64 = 1e-5
@@ -45,6 +49,8 @@ function validate(params::SolveParams)
     params.min_harmonic >= 1 || throw(ArgumentError("params.min_harmonic must be >= 1"))
     params.max_harmonic_auto >= params.min_harmonic ||
         throw(ArgumentError("params.max_harmonic_auto must be >= params.min_harmonic"))
+    params.auto_harmonic_decay_power > 0 ||
+        throw(ArgumentError("params.auto_harmonic_decay_power must be > 0"))
     params.polydeg >= 1 || throw(ArgumentError("params.polydeg must be >= 1"))
     params.tspan_end > 0 || throw(ArgumentError("params.tspan_end must be > 0"))
     params.residual_tol > 0 || throw(ArgumentError("params.residual_tol must be > 0"))
@@ -58,36 +64,46 @@ end
 # ======================================================================================================================
 
 """
-    estimate_max_harmonic(gamma_mr, gamma_mc; min_harmonic=4, max_harmonic=100)
+    estimate_max_harmonic(gamma_mr, gamma_mc; min_harmonic=4, max_harmonic=150,
+                          decay_power=1.6)
 
 Estimate an efficient harmonic cutoff from physical scattering rates.
 
 The estimate uses the total scattering rate
 `gamma_total = gamma_mr + gamma_mc` and logarithmically interpolates:
 - `gamma_total = 0` -> `max_harmonic`,
-- `gamma_total >= 300` -> `min_harmonic`,
-- intermediate values map via `log1p(gamma_total)` between those endpoints.
+- `gamma_total >= 1000` -> `min_harmonic`,
+- for `1 < gamma_total < 1000`, values map via shifted powered-log progress:
+  `s = (log1p(gamma_total)-log1p(1))/(log1p(1000)-log1p(1))`,
+  then `M ~ min_harmonic + (max_harmonic-min_harmonic) * (1-s)^decay_power`.
 """
 function estimate_max_harmonic(
     gamma_mr::Real,
     gamma_mc::Real;
     min_harmonic::Integer = 4,
-    max_harmonic::Integer = 100,
+    max_harmonic::Integer = 150,
+    decay_power::Real = 1.6,
 )::Int
     gamma_mr < 0 && throw(ArgumentError("gamma_mr must be >= 0"))
     gamma_mc < 0 && throw(ArgumentError("gamma_mc must be >= 0"))
 
     min_h = Int(min_harmonic)
     max_h = Int(max_harmonic)
+    decay_power_f = Float64(decay_power)
     min_h >= 1 || throw(ArgumentError("min_harmonic must be >= 1"))
     max_h >= min_h || throw(ArgumentError("max_harmonic must be >= min_harmonic"))
+    decay_power_f > 0 || throw(ArgumentError("decay_power must be > 0"))
 
     gamma_total = Float64(gamma_mr) + Float64(gamma_mc)
     gamma_total <= 0 && return max_h
+    gamma_total <= AUTO_HARMONIC_GAMMA_LOW && return max_h
     gamma_total >= AUTO_HARMONIC_GAMMA_HIGH && return min_h
 
-    frac = log1p(gamma_total) / log1p(AUTO_HARMONIC_GAMMA_HIGH)
-    estimate = max_h - (max_h - min_h) * frac
+    s = (log1p(gamma_total) - log1p(AUTO_HARMONIC_GAMMA_LOW)) /
+        (log1p(AUTO_HARMONIC_GAMMA_HIGH) - log1p(AUTO_HARMONIC_GAMMA_LOW))
+    s = clamp(s, 0.0, 1.0)
+    tail_fraction = (1.0 - s)^decay_power_f
+    estimate = min_h + (max_h - min_h) * tail_fraction
     return clamp(ceil(Int, estimate), min_h, max_h)
 end
 
@@ -101,7 +117,8 @@ Resolve the harmonic cutoff for one solve.
 
 Auto mode can be tuned through optional `params` fields:
 - `min_harmonic` (default `4`)
-- `max_harmonic_auto` (default `100`)
+- `max_harmonic_auto` (default `150`)
+- `auto_harmonic_decay_power` (default `1.6`, larger is more aggressive)
 """
 function resolve_max_harmonic(max_harmonic_kw, params::SolveParams, gamma_mr::Real, gamma_mc::Real)
     if max_harmonic_kw isa Integer
@@ -118,6 +135,7 @@ function resolve_max_harmonic(max_harmonic_kw, params::SolveParams, gamma_mr::Re
             gamma_mc;
             min_harmonic=min_h,
             max_harmonic=max_h,
+            decay_power=params.auto_harmonic_decay_power,
         )
         return M, :auto
     end

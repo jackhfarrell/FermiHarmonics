@@ -11,7 +11,7 @@ The right hand side is the collision integral, featuring physical terms designed
 ```math
 \phi(x,y,\theta,t)=\frac{a_0}{2}+\sum_{m=1}^{M}\left[a_m\cos(m\theta)+b_m\sin(m\theta)\right].
 ```
-By default, we adaptively pick `M` based on how strong the damping is from collisions. The minimum `M` is `4` and the maximum `M` is `100`. This way, simulations in high damping regimes use fewer harmonics, while weakly damped cases keep higher angular resolution.
+By default, we adaptively pick `M` based on how strong the damping is from collisions. The minimum `M` is `4` and the maximum `M` is `150`. This way, simulations in high damping regimes use fewer harmonics, while weakly damped cases keep higher angular resolution.
 
 We adopt a relaxation-time-like (BGK) approximation for the collision integral, so that the Boltzmann equation in Harmonic basis reads, for $m=0$
 ```math
@@ -69,7 +69,7 @@ params = SolveParams(;
     residual_tol = 1e-5,
     log_every = 200,
     min_harmonic = 4,
-    max_harmonic_auto = 100,
+    max_harmonic_auto = 150,
 )
 
 sol, semi = solve(
