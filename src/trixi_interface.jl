@@ -27,6 +27,20 @@ end
 Trixi.varnames(::typeof(cons2prim), equations::FermiHarmonics2D) =
     Trixi.varnames(cons2cons, equations)
 
+"""
+    current_norm_variables(u, equations::FermiHarmonics2D) -> SVector{1, Float64}
+
+Derived visualization variable containing only current magnitude
+`|j| = sqrt(a1^2 + b1^2)` in the harmonic basis.
+"""
+@inline function current_norm_variables(u, equations::FermiHarmonics2D)
+    a1 = length(u) >= 2 ? u[2] : 0.0
+    b1 = length(u) >= 3 ? u[3] : 0.0
+    return SVector(hypot(a1, b1))
+end
+
+Trixi.varnames(::typeof(current_norm_variables), equations::FermiHarmonics2D) = ("j_norm",)
+
 @inline Trixi.cons2prim(u, equations::FermiHarmonics2D) = u
 
 @inline Trixi.cons2cons(u, equations::FermiHarmonics2D) = u

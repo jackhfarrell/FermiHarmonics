@@ -337,13 +337,15 @@ end
 """
     visualization_callback(params, semi, name::AbstractString)
 
-Create a live visualization callback for `a0`, `a1`, and `b1` every `params.log_every` accepted steps.
+Create a live visualization callback for current magnitude
+`j_norm = sqrt(a1^2 + b1^2)` every `params.log_every` accepted steps.
 """
 function visualization_callback(params, semi, name::AbstractString)
     return Trixi.VisualizationCallback(
         semi;
         interval=params.log_every,
-        variable_names=["a0", "a1", "b1"],
+        solution_variables=current_norm_variables,
+        variable_names=["j_norm"],
         filename="live_viz_$(name)",
         overwrite=true,
         seriescolor=:magma,
