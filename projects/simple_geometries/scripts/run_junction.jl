@@ -14,7 +14,7 @@ using DrWatson
 
 name = "simple_geometries_junction"
 project_root = normpath(joinpath(@__DIR__, ".."))
-mesh_path = joinpath(project_root, "meshes", "junction", "junction.inp")
+mesh_path = joinpath(project_root, "meshes", "junction", "junction_coarse.inp")
 
 visualize = true
 save_analysis = true
@@ -33,12 +33,12 @@ boundary_conditions = Dict(
 )
 
 params = SolveParams(;
-    max_harmonic = 60,
+    max_harmonic = 150,
     polydeg = 3,
     tspan_end = 100.0,
     residual_tol = 1e-5,
     cfl = 0.8,
-    log_every = 500,
+    log_every = 1000,
 )
 
 output_dir = joinpath(project_root, "data", "sims")
@@ -54,6 +54,7 @@ sol, semi = FermiHarmonics.solve(
     params,
     gamma_mr,
     gamma_mc;
+    max_harmonic = params.max_harmonic,
     visualize = visualize,
     name = name,
 )
