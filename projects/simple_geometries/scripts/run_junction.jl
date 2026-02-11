@@ -14,15 +14,15 @@ using DrWatson
 
 name = "simple_geometries_junction"
 project_root = normpath(joinpath(@__DIR__, ".."))
-mesh_path = joinpath(project_root, "meshes", "junction", "junction_updated.inp")
+mesh_path = joinpath(project_root, "meshes", "junction_updated", "junction_updated.inp")
 
 visualize = true
 save_analysis = true
 
 bias = 1.0
 p_scatter = 1.0
-gamma_mr = 0.01
-gamma_mc = 1.0
+gamma_mr = 1e-3
+gamma_mc = 1e-3
 
 boundary_conditions = Dict(
     :walls => MaxwellWallBC(p_scatter),
@@ -33,7 +33,6 @@ boundary_conditions = Dict(
 )
 
 params = SolveParams(;
-    max_harmonic = 47,
     polydeg = 3,
     tspan_end = 100.0,
     residual_tol = 1e-5,
