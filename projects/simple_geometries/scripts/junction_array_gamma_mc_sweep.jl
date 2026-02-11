@@ -20,7 +20,7 @@ mesh_path = joinpath(project_root, "meshes", "junction", "junction_coarse.inp")
 results_root = joinpath(project_root, "results")
 n_jobs = 5
 cases_per_job = 10
-n_threads = 10
+n_threads = 4
 mkpath(results_root)
 
 bias = 1.0 # change in a0 to drive flow
