@@ -14,7 +14,7 @@ using DrWatson
 
 name = "simple_geometries_junction"
 project_root = normpath(joinpath(@__DIR__, ".."))
-mesh_path = joinpath(project_root, "meshes", "junction_updated", "junction_updated.inp")
+mesh_path = joinpath(project_root, "meshes", "junction", "junction_coarse.inp")
 
 visualize = true
 save_analysis = true
@@ -22,7 +22,7 @@ save_analysis = true
 bias = 1.0
 p_scatter = 1.0
 gamma_mr = 1e-3
-gamma_mc = 1e2
+gamma_mc = 1e-3
 
 boundary_conditions = Dict(
     :walls => MaxwellWallBC(p_scatter),
