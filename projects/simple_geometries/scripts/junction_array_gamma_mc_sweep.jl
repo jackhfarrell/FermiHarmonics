@@ -16,7 +16,7 @@ using Sockets: gethostname
 name = "simple_geometries_junction_gamma_mc_sweep"
 project_root = normpath(joinpath(@__DIR__, ".."))
 main_project = normpath(joinpath(project_root, "..", ".."))
-mesh_path = joinpath(project_root, "meshes", "junction", "junction.inp")
+mesh_path = joinpath(project_root, "meshes", "junction", "junction_coarse.inp")
 results_root = joinpath(project_root, "results")
 n_jobs = 5
 cases_per_job = 10
@@ -61,7 +61,7 @@ solve_params = SolveParams(;
     max_harmonic_auto = 100,
     polydeg = 3,
     tspan_end = 100.0, # end time for simulation (if not converged earlier)
-    residual_tol = 1e-4,
+    residual_tol = 1e-5,
     cfl = 0.5,
     log_every = 500,
 )
