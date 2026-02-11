@@ -13,3 +13,5 @@ using Trixi
     eq = FermiHarmonics2D(9; gamma_mr=0.1, gamma_mc=1.0, max_harmonic=4)
     @test typeof(eq) <: Trixi.AbstractEquations{2, 9}
 end
+
+include("symmetry_consistency.jl")
