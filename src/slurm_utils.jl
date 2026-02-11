@@ -41,6 +41,17 @@ function submit_sweep!(;
                        dry_run::Bool=false)
     script_path = isabspath(script) ? script : joinpath(project_dir, script)
     isfile(script_path) || error("Script not found: $script_path")
+
+    has_cpus_per_task = haskey(sbatch, :cpus_per_task) &&
+                        sbatch[:cpus_per_task] !== nothing &&
+                        sbatch[:cpus_per_task] !== false
+    has_tres_per_task = haskey(sbatch, :tres_per_task) &&
+                        sbatch[:tres_per_task] !== nothing &&
+                        sbatch[:tres_per_task] !== false
+    if has_cpus_per_task && has_tres_per_task
+        error("Specify only one of :cpus_per_task or :tres_per_task in sbatch.")
+    end
+
     array_spec = array === nothing ? string(get(sbatch, :array, "1-$(n_jobs)")) : string(array)
     sbatch_args = String["--array=$(array_spec)"]
     export_val = get(sbatch, :export, nothing)
@@ -72,9 +83,15 @@ function submit_sweep!(;
     wrap_cmd = join(Base.shell_escape.(wrap_parts), " ")
 
     cmd = Cmd(["sbatch"; sbatch_args; "--wrap"; wrap_cmd])
+    run_env = copy(ENV)
+    if has_cpus_per_task
+        delete!(run_env, "SBATCH_TRES_PER_TASK")
+    elseif has_tres_per_task
+        delete!(run_env, "SBATCH_CPUS_PER_TASK")
+    end
     @info "Submitting SLURM sweep" script=script_path array=array_spec
     dry_run && return cmd
-    run(cmd)
+    run(setenv(cmd, run_env))
     return nothing
 end
 
