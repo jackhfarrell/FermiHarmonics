@@ -14,15 +14,15 @@ using DrWatson
 
 name = "simple_geometries_junction"
 project_root = normpath(joinpath(@__DIR__, ".."))
-mesh_path = joinpath(project_root, "meshes", "junction", "junction_coarse.inp")
+mesh_path = joinpath(project_root, "meshes", "junction", "junction_updated.inp")
 
 visualize = true
 save_analysis = true
 
 bias = 1.0
 p_scatter = 1.0
-gamma_mr = 0.0
-gamma_mc = 0.0
+gamma_mr = 0.01
+gamma_mc = 1.0
 
 boundary_conditions = Dict(
     :walls => MaxwellWallBC(p_scatter),
@@ -33,7 +33,7 @@ boundary_conditions = Dict(
 )
 
 params = SolveParams(;
-    max_harmonic = 150,
+    max_harmonic = 47,
     polydeg = 3,
     tspan_end = 100.0,
     residual_tol = 1e-5,
@@ -54,7 +54,7 @@ sol, semi = FermiHarmonics.solve(
     params,
     gamma_mr,
     gamma_mc;
-    max_harmonic = params.max_harmonic,
+    max_harmonic = :auto,
     visualize = visualize,
     name = name,
 )

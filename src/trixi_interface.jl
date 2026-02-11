@@ -28,18 +28,28 @@ Trixi.varnames(::typeof(cons2prim), equations::FermiHarmonics2D) =
     Trixi.varnames(cons2cons, equations)
 
 """
-    current_norm_variables(u, equations::FermiHarmonics2D) -> SVector{1, Float64}
+    current_norm_variables(u, equations::FermiHarmonics2D) -> SVector{NVARS, Float64}
 
-Derived visualization variable containing only current magnitude
-`|j| = sqrt(a1^2 + b1^2)` in the harmonic basis.
+Derived visualization state for live plots.
+
+Physics meaning:
+- component `1` stores current magnitude `j_norm = sqrt(a1^2 + b1^2)`,
+- remaining components are zero padding.
+
+Implementation note:
+- Trixi's in-place visualization transform expects the same vector length as the
+  conservative state (`NVARS`), so this function cannot return `SVector{1}`.
 """
-@inline function current_norm_variables(u, equations::FermiHarmonics2D)
+@inline function current_norm_variables(u, equations::FermiHarmonics2D{NVARS}) where {NVARS}
     a1 = length(u) >= 2 ? u[2] : 0.0
     b1 = length(u) >= 3 ? u[3] : 0.0
-    return SVector(hypot(a1, b1))
+    j_norm = hypot(a1, b1)
+    return SVector{NVARS, Float64}(ntuple(i -> i == 1 ? j_norm : 0.0, NVARS))
 end
 
-Trixi.varnames(::typeof(current_norm_variables), equations::FermiHarmonics2D) = ("j_norm",)
+function Trixi.varnames(::typeof(current_norm_variables), equations::FermiHarmonics2D{NVARS}) where {NVARS}
+    return ntuple(i -> i == 1 ? "j_norm" : "_viz_pad_$(i)", NVARS)
+end
 
 @inline Trixi.cons2prim(u, equations::FermiHarmonics2D) = u
 
