@@ -16,7 +16,7 @@ using Sockets: gethostname
 name = "simple_geometries_junction"
 project_root = normpath(joinpath(@__DIR__, ".."))
 main_project = normpath(joinpath(project_root, "..", ".."))
-mesh_path = joinpath(project_root, "meshes", "junction", "junction.inp")
+mesh_path = joinpath(project_root, "meshes", "junction", "junction_coarse.inp")
 results_root = joinpath(project_root, "results")
 n_jobs = 250
 cases_per_job = 10
@@ -38,8 +38,8 @@ sbatch = Dict(
 )
 
 # grid of parameters
-gamma_mr_vals = 10 .^ range(log10(0.01), log10(100.0), length=50)
-gamma_mc_vals = 10 .^ range(log10(0.01), log10(200.0), length=50)
+gamma_mr_vals = 10 .^ range(-3.0, 3.0, length=50)
+gamma_mc_vals = 10 .^ range(-3.0, 3.0, length=50)
 total_cases = length(gamma_mr_vals) * length(gamma_mc_vals)
 @assert length(gamma_mr_vals) * length(gamma_mc_vals) == n_jobs * cases_per_job
 
@@ -56,7 +56,7 @@ solve_params = SolveParams(;
     max_harmonic_auto = 100,
     polydeg = 3,
     tspan_end = 100.0, # end time for simulation (if not converged earlier)
-    residual_tol = 1e-4,
+    residual_tol = 1e-5,
     cfl = 0.5,
     log_every = 500,
 )
