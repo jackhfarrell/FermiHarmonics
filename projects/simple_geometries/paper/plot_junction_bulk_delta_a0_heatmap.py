@@ -61,9 +61,11 @@ for fpath in files:
     delta_a0 = a0_left_bulk - a0_right_bulk
 
     if not np.isfinite(a0_left_bulk) or not np.isfinite(a0_right_bulk):
-        delta_a0 = np.nan
+        delta_a0_mag = np.nan
+    else:
+        delta_a0_mag = np.abs(delta_a0)
 
-    rows.append((gamma_mr, gamma_mc, delta_a0))
+    rows.append((gamma_mr, gamma_mc, delta_a0_mag))
 
 if not rows:
     raise RuntimeError("No parseable files found (filename regex did not match).")
@@ -75,49 +77,50 @@ if not rows:
 gamma_mr_vals = np.array(sorted({r[0] for r in rows}))
 gamma_mc_vals = np.array(sorted({r[1] for r in rows}))
 
-delta_a0_grid = np.full((len(gamma_mr_vals), len(gamma_mc_vals)), np.nan)
+delta_a0_mag_grid = np.full((len(gamma_mr_vals), len(gamma_mc_vals)), np.nan)
 
-for gamma_mr, gamma_mc, delta_a0 in rows:
+for gamma_mr, gamma_mc, delta_a0_mag in rows:
     i = np.searchsorted(gamma_mr_vals, gamma_mr)
     j = np.searchsorted(gamma_mc_vals, gamma_mc)
-    delta_a0_grid[i, j] = delta_a0
+    delta_a0_mag_grid[i, j] = delta_a0_mag
 
 fig, ax = plt.subplots(figsize=(8, 6), constrained_layout=True)
 
-finite_delta = delta_a0_grid[np.isfinite(delta_a0_grid)]
+finite_delta = delta_a0_mag_grid[np.isfinite(delta_a0_mag_grid)]
 if finite_delta.size == 0:
-    raise RuntimeError("No finite bulk Δa0 values to plot.")
+    raise RuntimeError("No finite bulk |Δa0| values to plot.")
 
-v = float(np.quantile(np.abs(finite_delta), 0.99))
-if not np.isfinite(v) or np.isclose(v, 0.0):
-    v = float(np.nanmax(np.abs(finite_delta)))
-    if not np.isfinite(v) or np.isclose(v, 0.0):
-        v = 1.0
+vmax = float(np.quantile(finite_delta, 0.99))
+if not np.isfinite(vmax) or np.isclose(vmax, 0.0):
+    vmax = float(np.nanmax(finite_delta))
+    if not np.isfinite(vmax) or np.isclose(vmax, 0.0):
+        vmax = 1.0
 
-cmap = sns.color_palette("vlag", as_cmap=True).copy()
+cmap = sns.color_palette("rocket", as_cmap=True).copy()
 cmap.set_bad("0.85")
 pcm = ax.pcolormesh(
     gamma_mr_vals,
     gamma_mc_vals,
-    delta_a0_grid.T,
+    delta_a0_mag_grid.T,
     shading="auto",
     cmap=cmap,
-    vmin=-v,
-    vmax=v,
+    vmin=0.0,
+    vmax=vmax,
 )
 ax.set_xscale("log")
 ax.set_yscale("log")
 ax.set_xlim(GAMMA_MR_MIN, GAMMA_MR_MAX)
 ax.set_xlabel(r"$\gamma_{mr}$")
 ax.set_ylabel(r"$\gamma_{mc}$")
-ax.set_title(r"Bulk side potential difference: $\Delta a_0 = a_{0,\mathrm{left}} - a_{0,\mathrm{right}}$")
+ax.set_title(r"Bulk side potential difference magnitude: $|\Delta a_0|$")
 cb = fig.colorbar(pcm, ax=ax)
-cb.set_label(r"$\Delta a_0$")
+cb.set_label(r"$|\Delta a_0|$")
 
 fig.suptitle(
-    "Junction bulk side-to-side potential difference\n"
+    "Junction bulk side-to-side potential difference magnitude\n"
     + rf"$a_{{0,\mathrm{{left}}}}=\langle a_0(x={X_CUT_LEFT:.2f},y)\rangle_{{{BULK_Y_MIN:.2f}\leq y\leq {BULK_Y_MAX:.2f}}}$, "
-    + rf"$a_{{0,\mathrm{{right}}}}=\langle a_0(x={X_CUT_RIGHT:.2f},y)\rangle_{{{BULK_Y_MIN:.2f}\leq y\leq {BULK_Y_MAX:.2f}}}$"
+    + rf"$a_{{0,\mathrm{{right}}}}=\langle a_0(x={X_CUT_RIGHT:.2f},y)\rangle_{{{BULK_Y_MIN:.2f}\leq y\leq {BULK_Y_MAX:.2f}}}$, "
+    + r"$|\Delta a_0| = |a_{0,\mathrm{left}} - a_{0,\mathrm{right}}|$"
 )
 
 fig.savefig(OUTFILE, dpi=220)
