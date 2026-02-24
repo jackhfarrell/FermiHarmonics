@@ -149,6 +149,17 @@ function final_residual(sol, semi, tspan_end::Float64)
     return Trixi.residual_steady_state(du, semi.equations)
 end
 
+function accepted_steps(sol)
+    if hasproperty(sol, :destats)
+        stats = getproperty(sol, :destats)
+        return hasproperty(stats, :naccept) ? getproperty(stats, :naccept) : missing
+    elseif hasproperty(sol, :stats)
+        stats = getproperty(sol, :stats)
+        return hasproperty(stats, :naccept) ? getproperty(stats, :naccept) : missing
+    end
+    return missing
+end
+
 T_vals = build_T_grid(Tmin, Tmax, nT)
 gamma_mr_vals = map(T -> gamma_from_T(T, a_mc, a_mr)[1], T_vals)
 gamma_mc_vals = map(T -> gamma_from_T(T, a_mc, a_mr)[2], T_vals)
@@ -332,7 +343,7 @@ let
                 name="$(name)_T$(idx)",
             )
 
-            iters = sol.destats.naccept
+            iters = accepted_steps(sol)
             runtime_s = Dates.value(now() - case_start) / 1000.0
             residual = try
                 final_residual(sol, semi, solve_params.tspan_end)
