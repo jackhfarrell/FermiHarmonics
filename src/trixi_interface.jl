@@ -258,14 +258,63 @@ end
 # Convergence Monitoring
 # ======================================================================================================================
 
-# Infinity norm for single-node state vectors.
+# Infinity norm for selected low modes of single-node state vectors.
 @inline function Trixi.residual_steady_state(du::AbstractVector, equations::FermiHarmonics2D)
-    return maximum(abs, du)
+    n = min(length(du), equations.residual_nvars)
+    return maximum(abs, @view du[1:n])
 end
 
-# Infinity norm for full DG arrays.
+# Infinity norm for selected low modes of full DG arrays.
 @inline function Trixi.residual_steady_state(du::AbstractArray{<:Any, 4}, equations::FermiHarmonics2D)
-    return maximum(abs, du)
+    n = min(size(du, 1), equations.residual_nvars)
+    return maximum(abs, @view du[1:n, :, :, :])
+end
+
+"""
+    relative_residual_steady_state(du, u, equations::FermiHarmonics2D; scale_floor=0.0)
+
+Compute a low-mode relative steady-state residual
+`||du||_∞ / (||u||_∞ + scale_floor)`.
+
+For DG arrays, this returns the maximum nodal ratio over the whole mesh, matching the
+local nodal criterion used by Trixi's `SteadyStateCallback`.
+"""
+@inline function relative_residual_steady_state(
+    du::AbstractVector,
+    u::AbstractVector,
+    equations::FermiHarmonics2D;
+    scale_floor::Real = 0.0,
+)
+    n = min(length(du), length(u), equations.residual_nvars)
+    du_norm = maximum(abs, @view du[1:n])
+    u_norm = maximum(abs, @view u[1:n])
+    denom = u_norm + max(0.0, Float64(scale_floor))
+    return iszero(denom) ? (iszero(du_norm) ? 0.0 : Inf) : du_norm / denom
+end
+
+@inline function relative_residual_steady_state(
+    du::AbstractArray{<:Any, 4},
+    u::AbstractArray{<:Any, 4},
+    equations::FermiHarmonics2D;
+    scale_floor::Real = 0.0,
+)
+    n = min(size(du, 1), size(u, 1), equations.residual_nvars)
+    floor_f = max(0.0, Float64(scale_floor))
+    ratio_max = 0.0
+
+    @inbounds for e in axes(du, 4), j in axes(du, 3), i in axes(du, 2)
+        du_norm = 0.0
+        u_norm = 0.0
+        for v in 1:n
+            du_norm = max(du_norm, abs(du[v, i, j, e]))
+            u_norm = max(u_norm, abs(u[v, i, j, e]))
+        end
+        denom = u_norm + floor_f
+        ratio = iszero(denom) ? (iszero(du_norm) ? 0.0 : Inf) : du_norm / denom
+        ratio_max = max(ratio_max, ratio)
+    end
+
+    return ratio_max
 end
 
 # ======================================================================================================================

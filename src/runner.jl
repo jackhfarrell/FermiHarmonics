@@ -28,7 +28,12 @@ Fields:
   Larger values decrease more aggressively once above `gamma_tot ~ 1`.
 - `polydeg::Int=3`: DGSEM polynomial degree.
 - `tspan_end::Float64=100.0`: final integration time.
-- `residual_tol::Float64=1e-5`: steady-state absolute tolerance.
+- `residual_tol::Float64=1e-5`: steady-state tolerance; absolute for `:absolute_all`,
+  relative for `:relative_low_modes`.
+- `residual_mode::Symbol=:absolute_all`: residual definition used for stopping/logging.
+  Supported: `:absolute_all`, `:relative_low_modes`.
+- `residual_nvars::Int=0`: number of low modes included in residual norm (`0` means all).
+- `residual_scale_floor::Float64=1e-12`: denominator floor for relative residual.
 - `cfl::Float64=0.8`: CFL number for timestep control.
 - `log_every::Int=500`: monitor/visualization logging interval (accepted steps).
 """
@@ -40,6 +45,9 @@ Base.@kwdef struct SolveParams
     polydeg::Int = 3
     tspan_end::Float64 = 100.0
     residual_tol::Float64 = 1e-5
+    residual_mode::Symbol = :absolute_all
+    residual_nvars::Int = 0
+    residual_scale_floor::Float64 = 1e-12
     cfl::Float64 = 0.8
     log_every::Int = 500
 end
@@ -54,6 +62,11 @@ function validate(params::SolveParams)
     params.polydeg >= 1 || throw(ArgumentError("params.polydeg must be >= 1"))
     params.tspan_end > 0 || throw(ArgumentError("params.tspan_end must be > 0"))
     params.residual_tol > 0 || throw(ArgumentError("params.residual_tol must be > 0"))
+    params.residual_mode in (:absolute_all, :relative_low_modes) ||
+        throw(ArgumentError("params.residual_mode must be :absolute_all or :relative_low_modes"))
+    params.residual_nvars >= 0 || throw(ArgumentError("params.residual_nvars must be >= 0"))
+    params.residual_scale_floor >= 0 ||
+        throw(ArgumentError("params.residual_scale_floor must be >= 0"))
     params.cfl > 0 || throw(ArgumentError("params.cfl must be > 0"))
     params.log_every >= 1 || throw(ArgumentError("params.log_every must be >= 1"))
     return params
@@ -246,11 +259,13 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
 
     max_harmonic_resolved, harmonic_mode = resolve_max_harmonic(max_harmonic, params, gamma_mr, gamma_mc)
     nvars = 1 + 2 * max_harmonic_resolved
+    residual_nvars = params.residual_nvars <= 0 ? nvars : min(params.residual_nvars, nvars)
     equations = FermiHarmonics2D(
         nvars;
         gamma_mr=gamma_mr,
         gamma_mc=gamma_mc,
         max_harmonic=max_harmonic_resolved,
+        residual_nvars=residual_nvars,
     )
 
     boundary_symbols = sort(collect(keys(boundary_conditions)))
@@ -263,7 +278,7 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
     )
 
     boundary_types = Dict(key => boundary_condition_name(value) for (key, value) in boundary_conditions)
-    @info "Starting solve" name=name max_harmonic=max_harmonic_resolved harmonic_mode=harmonic_mode gamma_mr=gamma_mr gamma_mc=gamma_mc polydeg=params.polydeg cfl=params.cfl residual_tol=params.residual_tol boundaries=boundary_types
+    @info "Starting solve" name=name max_harmonic=max_harmonic_resolved harmonic_mode=harmonic_mode gamma_mr=gamma_mr gamma_mc=gamma_mc polydeg=params.polydeg cfl=params.cfl residual_tol=params.residual_tol residual_mode=params.residual_mode residual_nvars=residual_nvars residual_scale_floor=params.residual_scale_floor boundaries=boundary_types
     flush(stdout)
     flush(stderr)
 
@@ -288,7 +303,16 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
     # Callback assembly
     # ------------------------------------------------------------------------------------------------------------------
     stepsize_callback = Trixi.StepsizeCallback(cfl=params.cfl)
-    steady_state_callback = Trixi.SteadyStateCallback(abstol=params.residual_tol, reltol=0.0)
+    steady_state_callback = if params.residual_mode == :absolute_all
+        Trixi.SteadyStateCallback(abstol=params.residual_tol, reltol=0.0)
+    else
+        # Relative criterion using selected low-mode norm:
+        # ||du|| <= residual_tol * (||u|| + residual_scale_floor)
+        Trixi.SteadyStateCallback(
+            abstol=params.residual_tol * params.residual_scale_floor,
+            reltol=params.residual_tol,
+        )
+    end
     monitor = monitor_callback(params, semi)
 
     callbacks = Any[stepsize_callback, steady_state_callback, monitor]
@@ -338,8 +362,23 @@ function monitor_callback(params, semi)
             du_ode = Trixi.get_du(integrator)
             integrator.f(du_ode, integrator.u, integrator.p, integrator.t)
             du = Trixi.wrap_array(du_ode, semi)
-            residual = Trixi.residual_steady_state(du, semi.equations)
-            @info "Progress" iter=integrator.stats.naccept t=round(integrator.t, digits=4) dt=round(integrator.dt, digits=6) residual=round(residual, sigdigits=3) tolerance=params.residual_tol
+            du_norm = Trixi.residual_steady_state(du, semi.equations)
+
+            if params.residual_mode == :relative_low_modes
+                u_local = Trixi.wrap_array(integrator.u, semi)
+                u_norm = Trixi.residual_steady_state(u_local, semi.equations)
+                residual = relative_residual_steady_state(
+                    du,
+                    u_local,
+                    semi.equations;
+                    scale_floor=params.residual_scale_floor,
+                )
+                threshold = params.residual_tol * (u_norm + params.residual_scale_floor)
+                @info "Progress" iter=integrator.stats.naccept t=round(integrator.t, digits=4) dt=round(integrator.dt, digits=6) residual=round(residual, sigdigits=3) tolerance=params.residual_tol residual_mode=params.residual_mode du_norm=round(du_norm, sigdigits=3) u_norm=round(u_norm, sigdigits=3) du_threshold=round(threshold, sigdigits=3)
+            else
+                residual = du_norm
+                @info "Progress" iter=integrator.stats.naccept t=round(integrator.t, digits=4) dt=round(integrator.dt, digits=6) residual=round(residual, sigdigits=3) tolerance=params.residual_tol residual_mode=params.residual_mode
+            end
             flush(stdout)
             flush(stderr)
             nothing
