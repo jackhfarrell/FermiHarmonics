@@ -18,8 +18,8 @@ project_root = normpath(joinpath(@__DIR__, ".."))
 main_project = normpath(joinpath(project_root, "..", ".."))
 mesh_path = joinpath(project_root, "meshes", "chamber", "chamber.inp")
 results_root = joinpath(project_root, "results")
-n_jobs = 250
-cases_per_job = 10
+n_jobs = 125
+cases_per_job = 20
 mkpath(results_root)
 
 bias = 1.0 # nominal drive used for metadata/filenames
@@ -43,8 +43,8 @@ sbatch = Dict(
 )
 
 # grid of parameters
-gamma_mr_vals = 10 .^ range(-3.0, 3.0, length=50)
-gamma_mc_vals = 10 .^ range(-3.0, 3.0, length=50)
+gamma_mr_vals = 10 .^ range(log10(1e-2), log10(1e2), length=50)
+gamma_mc_vals = 10 .^ range(log10(1e-2), log10(1e2), length=50)
 total_cases = length(gamma_mr_vals) * length(gamma_mc_vals)
 @assert length(gamma_mr_vals) * length(gamma_mc_vals) == n_jobs * cases_per_job
 
