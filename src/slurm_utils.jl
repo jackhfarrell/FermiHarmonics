@@ -6,7 +6,15 @@ using TOML
 using Dates
 using Sockets
 
-solver_metadata_dict(params) = Dict(string(f) => getfield(params, f) for f in fieldnames(typeof(params)))
+toml_safe_value(x) = x
+toml_safe_value(x::Symbol) = String(x)
+toml_safe_value(x::Tuple) = [toml_safe_value(v) for v in x]
+toml_safe_value(x::AbstractVector) = [toml_safe_value(v) for v in x]
+toml_safe_value(x::AbstractDict) = Dict(string(k) => toml_safe_value(v) for (k, v) in x)
+
+solver_metadata_dict(params) = Dict(
+    string(f) => toml_safe_value(getfield(params, f)) for f in fieldnames(typeof(params))
+)
 
 
 """
