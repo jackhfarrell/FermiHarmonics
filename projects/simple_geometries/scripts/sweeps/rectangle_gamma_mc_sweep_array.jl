@@ -61,6 +61,7 @@ solve_params = SolveParams(;
     polydeg = 3,
     tspan_end = 100.0, # end time for simulation (if not converged earlier)
     residual_tol = 1e-5,
+    residual_mode = :absolute_all,
     cfl = 0.5,
     log_every = 500,
 )
