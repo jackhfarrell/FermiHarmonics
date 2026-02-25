@@ -1,4 +1,4 @@
-# run a large parameter sweep for the simple_geometries junction problem, sweeping over gamma_mr and gamma_mc using
+# run a large parameter sweep for the simple_geometries rectangle problem, sweeping over gamma_mr and gamma_mc using
 # SLURM array jobs. this script handles both the initial submission (writing shared metadata and submitting the array
 # job) and the worker logic. the parameter grid is defined in the script, and each worker picks which cases to run
 # based on its SLURM_ARRAY_TASK_ID. results are saved in a shared directory with one file per case.
@@ -13,10 +13,10 @@ using Sockets: gethostname
 # ======================================================================================================================
 
 # sweep configuration
-name = "simple_geometries_junction"
-project_root = normpath(joinpath(@__DIR__, ".."))
+name = "simple_geometries_rectangle"
+project_root = normpath(joinpath(@__DIR__, "..", ".."))
 main_project = normpath(joinpath(project_root, "..", ".."))
-mesh_path = joinpath(project_root, "meshes", "junction", "junction_coarse.inp")
+mesh_path = joinpath(project_root, "meshes", "rectangle", "rectangle.inp")
 results_root = joinpath(project_root, "results")
 n_jobs = 125
 cases_per_job = 20
@@ -45,10 +45,8 @@ total_cases = length(gamma_mr_vals) * length(gamma_mc_vals)
 
 boundary_conditions = Dict(
     :walls => MaxwellWallBC(p_scatter),
-    :middle => OhmicContactBC(-bias / 2),
-    :bottom => OhmicContactBC(bias / 2),
-    :left => OhmicContactBC(-bias / 2),
-    :right => OhmicContactBC(-bias / 2),
+    :contact_top => OhmicContactBC(-bias / 2),
+    :contact_bottom => OhmicContactBC(bias / 2),
 )
 
 solve_params = SolveParams(;
@@ -85,7 +83,7 @@ sweep_metadata = Dict(
 # if not running as part of SLURM array job (initial submission), write shared metadata and submit the job
 if !haskey(ENV, "SLURM_ARRAY_TASK_ID")
 
-    @info "Junction sweep submission" name mesh=basename(mesh_path) bias p_scatter total_cases
+    @info "Rectangle sweep submission" name mesh=basename(mesh_path) bias p_scatter total_cases
 
     timestamp = Dates.format(now(), "yyyy-mm-dd_HHMMSS")
     sweep_id = "$(name)_sweep_$(timestamp)"
