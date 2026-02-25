@@ -1,4 +1,4 @@
-# submit gamma_mc-only sweeps for rectangle and diverging nozzle with fixed p_scatter and gamma_mr.
+# submit gamma_mc-only sweeps for rectangle, diverging nozzle, and dogleg with fixed p_scatter and gamma_mr.
 
 project_root = normpath(joinpath(@__DIR__, "..", ".."))
 main_project = normpath(joinpath(project_root, "..", ".."))
@@ -14,6 +14,7 @@ common_env = Dict(
 sweep_scripts = [
     joinpath(@__DIR__, "rectangle_gamma_mc_sweep_array.jl"),
     joinpath(@__DIR__, "diverging_nozzle_gamma_mc_sweep_array.jl"),
+    joinpath(@__DIR__, "dogleg_gamma_mc_sweep_array.jl"),
 ]
 
 for script in sweep_scripts
