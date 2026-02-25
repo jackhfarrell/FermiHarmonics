@@ -33,10 +33,12 @@ a_mr = parse(Float64, get(ENV, "FH_RECT_T_A_MR", "1.0"))
 
 Tmin = parse(Float64, get(ENV, "FH_RECT_T_TMIN", "1e-3"))
 Tmax = parse(Float64, get(ENV, "FH_RECT_T_TMAX", "1e-1"))
-nT = parse(Int, get(ENV, "FH_RECT_T_NT", "40"))
-chunk_size = parse(Int, get(ENV, "FH_RECT_T_CHUNK_SIZE", "8"))
+nT = parse(Int, get(ENV, "FH_RECT_T_NT", "2500"))
+chunk_size = parse(Int, get(ENV, "FH_RECT_T_CHUNK_SIZE", "20"))
+nvisnodes = parse(Int, get(ENV, "FH_RECT_T_NVISNODES", "600"))
 
 warm_start = lowercase(get(ENV, "FH_RECT_T_WARM_START", "true")) in ("1", "true", "yes", "on")
+residual_mode = Symbol(lowercase(strip(get(ENV, "FH_RECT_T_RESIDUAL_MODE", "relative_low_modes"))))
 
 # solver parameters
 solve_params = SolveParams(;
@@ -44,7 +46,10 @@ solve_params = SolveParams(;
     max_harmonic_auto = parse(Int, get(ENV, "FH_RECT_T_MAX_HARMONIC_AUTO", "100")),
     polydeg = parse(Int, get(ENV, "FH_RECT_T_POLYDEG", "3")),
     tspan_end = parse(Float64, get(ENV, "FH_RECT_T_TSPAN_END", "100.0")),
-    residual_tol = parse(Float64, get(ENV, "FH_RECT_T_RESIDUAL_TOL", "1e-5")),
+    residual_tol = parse(Float64, get(ENV, "FH_RECT_T_RESIDUAL_TOL", "1e-4")),
+    residual_mode = residual_mode,
+    residual_nvars = parse(Int, get(ENV, "FH_RECT_T_RESIDUAL_NVARS", "3")),
+    residual_scale_floor = parse(Float64, get(ENV, "FH_RECT_T_RESIDUAL_SCALE_FLOOR", "1e-10")),
     cfl = parse(Float64, get(ENV, "FH_RECT_T_CFL", "0.5")),
     log_every = parse(Int, get(ENV, "FH_RECT_T_LOG_EVERY", "500")),
 )
@@ -141,12 +146,25 @@ function nearest_smaller_state(state_dir::AbstractString, T_target::Float64)
     return best_path, best_T
 end
 
-function final_residual(sol, semi, tspan_end::Float64)
+function final_residual(sol, semi, params::SolveParams)
+    tspan_end = params.tspan_end
     ode = Trixi.semidiscretize(semi, (0.0, tspan_end))
     du_ode = similar(sol.u[end])
     ode.f(du_ode, sol.u[end], ode.p, sol.t[end])
     du = Trixi.wrap_array(du_ode, semi)
-    return Trixi.residual_steady_state(du, semi.equations)
+    du_norm = Trixi.residual_steady_state(du, semi.equations)
+
+    if params.residual_mode == :relative_low_modes
+        u_local = Trixi.wrap_array(sol.u[end], semi)
+        return FermiHarmonics.relative_residual_steady_state(
+            du,
+            u_local,
+            semi.equations;
+            scale_floor=params.residual_scale_floor,
+        )
+    end
+
+    return du_norm
 end
 
 function accepted_steps(sol)
@@ -165,7 +183,10 @@ gamma_mr_vals = map(T -> gamma_from_T(T, a_mc, a_mr)[1], T_vals)
 gamma_mc_vals = map(T -> gamma_from_T(T, a_mc, a_mr)[2], T_vals)
 
 total_cases = length(T_vals)
-n_jobs = ceil(Int, total_cases / chunk_size)
+n_jobs = cld(total_cases, chunk_size)
+if total_cases % chunk_size != 0
+    @warn "total_cases is not divisible by chunk_size; last task will run fewer cases" total_cases chunk_size n_jobs
+end
 
 boundary_conditions = Dict(
     :walls => MaxwellWallBC(p_scatter),
@@ -201,6 +222,7 @@ sweep_metadata = Dict(
     "p_scatter" => p_scatter,
     "warm_start" => warm_start,
     "max_harmonic" => string(max_harmonic),
+    "nvisnodes_analysis" => nvisnodes,
 )
 
 # ======================================================================================================================
@@ -346,7 +368,7 @@ let
             iters = accepted_steps(sol)
             runtime_s = Dates.value(now() - case_start) / 1000.0
             residual = try
-                final_residual(sol, semi, solve_params.tspan_end)
+                final_residual(sol, semi, solve_params)
             catch err
                 @warn "Residual evaluation failed" T err=sprint(showerror, err)
                 NaN
@@ -365,7 +387,7 @@ let
             analysis_path = joinpath(data_dir, DrWatson.savename(file_params; connector="_", sort=true) * ".h5")
             state_path = joinpath(state_dir, "state_" * DrWatson.savename(file_params; connector="_", sort=true) * ".h5")
 
-            save_for_analysis(sol, semi, analysis_path)
+            save_for_analysis(sol, semi, analysis_path; nvisnodes=nvisnodes)
             save_warm_state(state_path, sol.u[end], T, gamma_mr, gamma_mc)
             output_file = relpath(analysis_path, sweep_dir)
 

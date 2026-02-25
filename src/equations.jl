@@ -24,6 +24,7 @@ struct FermiHarmonics2D{NVARS} <: Trixi.AbstractEquations{2, NVARS}
     gamma_3::Float64
     omega_c::Float64
     max_speed::Float64
+    residual_nvars::Int
     Ax::Matrix{Float64}
     Ay::Matrix{Float64}
 end
@@ -50,6 +51,7 @@ function FermiHarmonics2D(
     gamma_3::Real = 0.0,
     omega_c::Real = 0.0,
     max_harmonic::Integer = 0,
+    residual_nvars::Integer = 0,
 )
     nvars_int = Int(nvars)
     nvars_int >= 1 || throw(ArgumentError("nvars must be >= 1"))
@@ -63,6 +65,7 @@ function FermiHarmonics2D(
     Ax, Ay = streaming_matrices(M, vF)
     # Canonical LLF speed for this kinetic model: max |v · n| = vF (for unit normals).
     max_speed = vF
+    residual_nvars_int = residual_nvars <= 0 ? nvars_int : clamp(Int(residual_nvars), 1, nvars_int)
 
     return FermiHarmonics2D{nvars_int}(
         Float64(gamma_mr),
@@ -70,6 +73,7 @@ function FermiHarmonics2D(
         Float64(gamma_3),
         Float64(omega_c),
         max_speed,
+        residual_nvars_int,
         Ax,
         Ay,
     )
