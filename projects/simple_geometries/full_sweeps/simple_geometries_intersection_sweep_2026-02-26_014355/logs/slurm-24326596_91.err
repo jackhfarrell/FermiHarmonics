@@ -1,0 +1,3412 @@
+┌ Info: Worker starting
+│   job_id = "24326596"
+│   task_id = 91
+│   hostname = "c3cpu-c9-u1-2"
+│   julia = v"1.11.6"
+└   threads = 1
+┌ Info: Task assignment
+│   task_id = 91
+│   cases = 20
+└   position_range = (1801, 1820)
+┌ Info: Task ordered preview
+│   task_id = 91
+│   preview =
+│    5-element Vector{@NamedTuple{index::Int64, gamma_mr::Float64, gamma_mc::Float64, gamma_total::Float64}}:
+│     (index = 1318, gamma_mr = 1.3257113655901092, gamma_mc = 0.2442053094548651, gamma_total = 1.5699166750449742)
+│     (index = 877, gamma_mr = 0.2442053094548651, gamma_mc = 1.3257113655901092, gamma_total = 1.5699166750449742)
+│     ⋮
+└     (index = 1317, gamma_mr = 1.3257113655901092, gamma_mc = 0.20235896477251572, gamma_total = 1.5280703303626249)
+┌ Info: Mesh copied to scratch
+│   source = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/meshes/intersection/intersection.inp"
+└   scratch = "/tmp/fh_simple_geometries_intersection_iIhqTZ/intersection.inp"
+┌ Info: Starting case
+│   progress = "1/20"
+│   index = 1318
+│   gamma_mr = 1.3257113655901092
+│   gamma_mc = 0.2442053094548651
+│   gamma_total = 1.5699166750449742
+└   restart = "cold"
+┌ Info: Starting solve
+│   name = "simple_geometries_intersection_g1318"
+│   max_harmonic = 94
+│   harmonic_mode = :auto
+│   gamma_mr = 1.3257113655901092
+│   gamma_mc = 0.2442053094548651
+│   polydeg = 3
+│   cfl = 0.5
+│   residual_tol = 1.0e-5
+│   residual_mode = :absolute_all
+│   residual_nvars = 189
+│   residual_scale_floor = 1.0e-12
+└   boundaries = Dict{Symbol, Symbol} with 4 entries: …
+┌ Info: Progress
+│   iter = 500
+│   t = 0.833
+│   dt = 0.001666
+│   residual = 0.284
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1000
+│   t = 1.6659
+│   dt = 0.001666
+│   residual = 0.0775
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1500
+│   t = 2.4989
+│   dt = 0.001666
+│   residual = 0.0465
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2000
+│   t = 3.3319
+│   dt = 0.001666
+│   residual = 0.0313
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2500
+│   t = 4.1648
+│   dt = 0.001666
+│   residual = 0.0226
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3000
+│   t = 4.9978
+│   dt = 0.001666
+│   residual = 0.0171
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3500
+│   t = 5.8308
+│   dt = 0.001666
+│   residual = 0.0133
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4000
+│   t = 6.6638
+│   dt = 0.001666
+│   residual = 0.0104
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4500
+│   t = 7.4967
+│   dt = 0.001666
+│   residual = 0.0082
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5000
+│   t = 8.3297
+│   dt = 0.001666
+│   residual = 0.0065
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5500
+│   t = 9.1627
+│   dt = 0.001666
+│   residual = 0.00517
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6000
+│   t = 9.9956
+│   dt = 0.001666
+│   residual = 0.00411
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6500
+│   t = 10.8286
+│   dt = 0.001666
+│   residual = 0.00327
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7000
+│   t = 11.6616
+│   dt = 0.001666
+│   residual = 0.0026
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7500
+│   t = 12.4945
+│   dt = 0.001666
+│   residual = 0.00207
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 8000
+│   t = 13.3275
+│   dt = 0.001666
+│   residual = 0.00165
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 8500
+│   t = 14.1605
+│   dt = 0.001666
+│   residual = 0.00131
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 9000
+│   t = 14.9934
+│   dt = 0.001666
+│   residual = 0.00105
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 9500
+│   t = 15.8264
+│   dt = 0.001666
+│   residual = 0.000833
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 10000
+│   t = 16.6594
+│   dt = 0.001666
+│   residual = 0.000663
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 10500
+│   t = 17.4923
+│   dt = 0.001666
+│   residual = 0.000528
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 11000
+│   t = 18.3253
+│   dt = 0.001666
+│   residual = 0.00042
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 11500
+│   t = 19.1583
+│   dt = 0.001666
+│   residual = 0.000335
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 12000
+│   t = 19.9913
+│   dt = 0.001666
+│   residual = 0.000267
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 12500
+│   t = 20.8242
+│   dt = 0.001666
+│   residual = 0.000212
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 13000
+│   t = 21.6572
+│   dt = 0.001666
+│   residual = 0.000169
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 13500
+│   t = 22.4902
+│   dt = 0.001666
+│   residual = 0.000135
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 14000
+│   t = 23.3231
+│   dt = 0.001666
+│   residual = 0.000107
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 14500
+│   t = 24.1561
+│   dt = 0.001666
+│   residual = 8.54e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 15000
+│   t = 24.9891
+│   dt = 0.001666
+│   residual = 6.8e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 15500
+│   t = 25.822
+│   dt = 0.001666
+│   residual = 5.41e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 16000
+│   t = 26.655
+│   dt = 0.001666
+│   residual = 4.31e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 16500
+│   t = 27.488
+│   dt = 0.001666
+│   residual = 3.43e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 17000
+│   t = 28.3209
+│   dt = 0.001666
+│   residual = 2.73e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 17500
+│   t = 29.1539
+│   dt = 0.001666
+│   residual = 2.18e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 18000
+│   t = 29.9869
+│   dt = 0.001666
+│   residual = 1.73e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 18500
+│   t = 30.8199
+│   dt = 0.001666
+│   residual = 1.38e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 19000
+│   t = 31.6528
+│   dt = 0.001666
+│   residual = 1.1e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info:   Steady state tolerance reached
+│   steady_state_callback = Trixi.SteadyStateCallback{Float64}(1.0e-5, 0.0)
+└   t = 31.997671817073094
+┌ Error: Exception while generating log record in module Main at /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│   exception =
+│    type TimeIntegratorSolution has no field destats
+│    Stacktrace:
+│     [1] getproperty(x::Trixi.TimeIntegratorSolution{Tuple{Float64, Float64}, Tuple{Vector{Float64}, Vector{Float64}}, SciMLBase.ODEProblem{Vector{Float64}, Tuple{Float64, Float64}, true, Trixi.SemidiscretizationHyperbolic{Trixi.P4estMesh{2, 2, Float64, Static.False, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est}, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est_ghost_t}, 4, 2}, FermiHarmonics2D{189}, FermiHarmonics.var"#46#48"{Int64}, Trixi.UnstructuredSortedBoundaryTypes{4, Tuple{MaxwellWallBC, OhmicContactBC, OhmicContactBC, OhmicContactBC}, Vector{Int64}}, typeof(FermiHarmonics.source_terms), Trixi.DGSEM{Trixi.LobattoLegendreBasis{Float64, 4, StaticArraysCore.SVector{4, Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}}, Trixi.LobattoLegendreMortarL2{Float64, 4, Matrix{Float64}, Matrix{Float64}}, Trixi.SurfaceIntegralWeakForm{Trixi.FluxLaxFriedrichs{typeof(Trixi.max_abs_speed)}}, Trixi.VolumeIntegralWeakForm}, @NamedTuple{elements::Trixi.P4estElementContainer{2, Float64, Float64, 3, 4, 5, Array{Float64, 3}, Array{Float64, 4}, Array{Float64, 5}, Vector{Float64}, Array{Float64, 4}, Vector{Float64}}, interfaces::Trixi.P4estInterfaceContainer{2, Float64, 4, Array{Float64, 4}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, boundaries::Trixi.P4estBoundaryContainer{2, Float64, 3, Array{Float64, 3}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}, Vector{Float64}}, mortars::Trixi.P4estMortarContainer{2, Float64, 3, 5, Array{Float64, 5}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, fstar_primary_upper_threaded::Vector{StaticArraysCore.MMatrix{189, 4, Float64, 756}}, fstar_primary_lower_threaded::Vector{StaticArraysCore.MMatrix{189, 4, Float64, 756}}, fstar_secondary_upper_threaded::Vector{StaticArraysCore.MMatrix{189, 4, Float64, 756}}, fstar_secondary_lower_threaded::Vector{StaticArraysCore.MMatrix{189, 4, Float64, 756}}, u_threaded::Vector{StaticArraysCore.MMatrix{189, 4, Float64, 756}}}}, SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize, typeof(Trixi.rhs!), LinearAlgebra.UniformScaling{Bool}, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, typeof(SciMLBase.DEFAULT_OBSERVED), Nothing, Nothing, Nothing, Nothing}, @Kwargs{}, SciMLBase.StandardODEProblem}}, f::Symbol)
+│       @ Base ./Base.jl:49
+│     [2] macro expansion
+│       @ ./logging/logging.jl:386 [inlined]
+│     [3] top-level scope
+│       @ /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│     [4] include(mod::Module, _path::String)
+│       @ Base ./Base.jl:562
+│     [5] exec_options(opts::Base.JLOptions)
+│       @ Base ./client.jl:323
+│     [6] _start()
+│       @ Base ./client.jl:531
+└ @ Main /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+┌ Info: Analysis: direct grid evaluation
+└   nvisnodes = 400
+┌ Info: Analysis: writing HDF5
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=0.244_gamma_mr=1.33_p_scatter=1.0.h5"
+┌ Info: Analysis: write complete
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=0.244_gamma_mr=1.33_p_scatter=1.0.h5"
+┌ Info: Saved
+│   path = "bias=1.0_gamma_mc=0.244_gamma_mr=1.33_p_scatter=1.0.h5"
+└   small_mb = 4.01
+┌ Info: Starting case
+│   progress = "2/20"
+│   index = 877
+│   gamma_mr = 0.2442053094548651
+│   gamma_mc = 1.3257113655901092
+│   gamma_total = 1.5699166750449742
+└   restart = "warm"
+┌ Info: Starting solve
+│   name = "simple_geometries_intersection_g877"
+│   max_harmonic = 94
+│   harmonic_mode = :auto
+│   gamma_mr = 0.2442053094548651
+│   gamma_mc = 1.3257113655901092
+│   polydeg = 3
+│   cfl = 0.5
+│   residual_tol = 1.0e-5
+│   residual_mode = :absolute_all
+│   residual_nvars = 189
+│   residual_scale_floor = 1.0e-12
+└   boundaries = Dict{Symbol, Symbol} with 4 entries: …
+┌ Info: Progress
+│   iter = 500
+│   t = 0.833
+│   dt = 0.001666
+│   residual = 0.0321
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1000
+│   t = 1.6659
+│   dt = 0.001666
+│   residual = 0.0148
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1500
+│   t = 2.4989
+│   dt = 0.001666
+│   residual = 0.00418
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2000
+│   t = 3.3319
+│   dt = 0.001666
+│   residual = 0.00101
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2500
+│   t = 4.1648
+│   dt = 0.001666
+│   residual = 0.000349
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3000
+│   t = 4.9978
+│   dt = 0.001666
+│   residual = 0.000222
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3500
+│   t = 5.8308
+│   dt = 0.001666
+│   residual = 0.000148
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4000
+│   t = 6.6638
+│   dt = 0.001666
+│   residual = 0.000107
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4500
+│   t = 7.4967
+│   dt = 0.001666
+│   residual = 8.02e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5000
+│   t = 8.3297
+│   dt = 0.001666
+│   residual = 5.95e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5500
+│   t = 9.1627
+│   dt = 0.001666
+│   residual = 4.4e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6000
+│   t = 9.9956
+│   dt = 0.001666
+│   residual = 3.25e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6500
+│   t = 10.8286
+│   dt = 0.001666
+│   residual = 2.4e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7000
+│   t = 11.6616
+│   dt = 0.001666
+│   residual = 1.77e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7500
+│   t = 12.4945
+│   dt = 0.001666
+│   residual = 1.31e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info:   Steady state tolerance reached
+│   steady_state_callback = Trixi.SteadyStateCallback{Float64}(1.0e-5, 0.0)
+└   t = 13.235877679310189
+┌ Error: Exception while generating log record in module Main at /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│   exception =
+│    type TimeIntegratorSolution has no field destats
+│    Stacktrace:
+│     [1] getproperty(x::Trixi.TimeIntegratorSolution{Tuple{Float64, Float64}, Tuple{Vector{Float64}, Vector{Float64}}, SciMLBase.ODEProblem{Vector{Float64}, Tuple{Float64, Float64}, true, Trixi.SemidiscretizationHyperbolic{Trixi.P4estMesh{2, 2, Float64, Static.False, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est}, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est_ghost_t}, 4, 2}, FermiHarmonics2D{189}, FermiHarmonics.var"#46#48"{Int64}, Trixi.UnstructuredSortedBoundaryTypes{4, Tuple{MaxwellWallBC, OhmicContactBC, OhmicContactBC, OhmicContactBC}, Vector{Int64}}, typeof(FermiHarmonics.source_terms), Trixi.DGSEM{Trixi.LobattoLegendreBasis{Float64, 4, StaticArraysCore.SVector{4, Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}}, Trixi.LobattoLegendreMortarL2{Float64, 4, Matrix{Float64}, Matrix{Float64}}, Trixi.SurfaceIntegralWeakForm{Trixi.FluxLaxFriedrichs{typeof(Trixi.max_abs_speed)}}, Trixi.VolumeIntegralWeakForm}, @NamedTuple{elements::Trixi.P4estElementContainer{2, Float64, Float64, 3, 4, 5, Array{Float64, 3}, Array{Float64, 4}, Array{Float64, 5}, Vector{Float64}, Array{Float64, 4}, Vector{Float64}}, interfaces::Trixi.P4estInterfaceContainer{2, Float64, 4, Array{Float64, 4}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, boundaries::Trixi.P4estBoundaryContainer{2, Float64, 3, Array{Float64, 3}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}, Vector{Float64}}, mortars::Trixi.P4estMortarContainer{2, Float64, 3, 5, Array{Float64, 5}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, fstar_primary_upper_threaded::Vector{StaticArraysCore.MMatrix{189, 4, Float64, 756}}, fstar_primary_lower_threaded::Vector{StaticArraysCore.MMatrix{189, 4, Float64, 756}}, fstar_secondary_upper_threaded::Vector{StaticArraysCore.MMatrix{189, 4, Float64, 756}}, fstar_secondary_lower_threaded::Vector{StaticArraysCore.MMatrix{189, 4, Float64, 756}}, u_threaded::Vector{StaticArraysCore.MMatrix{189, 4, Float64, 756}}}}, SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize, typeof(Trixi.rhs!), LinearAlgebra.UniformScaling{Bool}, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, typeof(SciMLBase.DEFAULT_OBSERVED), Nothing, Nothing, Nothing, Nothing}, @Kwargs{}, SciMLBase.StandardODEProblem}}, f::Symbol)
+│       @ Base ./Base.jl:49
+│     [2] macro expansion
+│       @ ./logging/logging.jl:386 [inlined]
+│     [3] top-level scope
+│       @ /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│     [4] include(mod::Module, _path::String)
+│       @ Base ./Base.jl:562
+│     [5] exec_options(opts::Base.JLOptions)
+│       @ Base ./client.jl:323
+│     [6] _start()
+│       @ Base ./client.jl:531
+└ @ Main /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+┌ Info: Analysis: direct grid evaluation
+└   nvisnodes = 400
+┌ Info: Analysis: writing HDF5
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=1.33_gamma_mr=0.244_p_scatter=1.0.h5"
+┌ Info: Analysis: write complete
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=1.33_gamma_mr=0.244_p_scatter=1.0.h5"
+┌ Info: Saved
+│   path = "bias=1.0_gamma_mc=1.33_gamma_mr=0.244_p_scatter=1.0.h5"
+└   small_mb = 4.01
+┌ Info: Starting case
+│   progress = "3/20"
+│   index = 1223
+│   gamma_mr = 0.9102981779915219
+│   gamma_mc = 0.6250551925273973
+│   gamma_total = 1.5353533705189193
+└   restart = "warm"
+┌ Info: Starting solve
+│   name = "simple_geometries_intersection_g1223"
+│   max_harmonic = 95
+│   harmonic_mode = :auto
+│   gamma_mr = 0.9102981779915219
+│   gamma_mc = 0.6250551925273973
+│   polydeg = 3
+│   cfl = 0.5
+│   residual_tol = 1.0e-5
+│   residual_mode = :absolute_all
+│   residual_nvars = 191
+│   residual_scale_floor = 1.0e-12
+└   boundaries = Dict{Symbol, Symbol} with 4 entries: …
+┌ Info: Adjusted warm start for harmonic mismatch
+│   mode = :padded
+│   source_nvars = 189
+│   target_nvars = 191
+│   source_length = 746928
+└   target_length = 754832
+┌ Info: Progress
+│   iter = 500
+│   t = 0.833
+│   dt = 0.001666
+│   residual = 0.0214
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1000
+│   t = 1.6659
+│   dt = 0.001666
+│   residual = 0.00903
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1500
+│   t = 2.4989
+│   dt = 0.001666
+│   residual = 0.00318
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2000
+│   t = 3.3319
+│   dt = 0.001666
+│   residual = 0.00115
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2500
+│   t = 4.1648
+│   dt = 0.001666
+│   residual = 0.000465
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3000
+│   t = 4.9978
+│   dt = 0.001666
+│   residual = 0.000224
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3500
+│   t = 5.8308
+│   dt = 0.001666
+│   residual = 0.00013
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4000
+│   t = 6.6638
+│   dt = 0.001666
+│   residual = 8.91e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4500
+│   t = 7.4967
+│   dt = 0.001666
+│   residual = 6.56e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5000
+│   t = 8.3297
+│   dt = 0.001666
+│   residual = 5.14e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5500
+│   t = 9.1627
+│   dt = 0.001666
+│   residual = 4.02e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6000
+│   t = 9.9956
+│   dt = 0.001666
+│   residual = 3.14e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6500
+│   t = 10.8286
+│   dt = 0.001666
+│   residual = 2.45e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7000
+│   t = 11.6616
+│   dt = 0.001666
+│   residual = 1.91e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7500
+│   t = 12.4945
+│   dt = 0.001666
+│   residual = 1.48e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 8000
+│   t = 13.3275
+│   dt = 0.001666
+│   residual = 1.15e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info:   Steady state tolerance reached
+│   steady_state_callback = Trixi.SteadyStateCallback{Float64}(1.0e-5, 0.0)
+└   t = 13.802296610835104
+┌ Error: Exception while generating log record in module Main at /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│   exception =
+│    type TimeIntegratorSolution has no field destats
+│    Stacktrace:
+│     [1] getproperty(x::Trixi.TimeIntegratorSolution{Tuple{Float64, Float64}, Tuple{Vector{Float64}, Vector{Float64}}, SciMLBase.ODEProblem{Vector{Float64}, Tuple{Float64, Float64}, true, Trixi.SemidiscretizationHyperbolic{Trixi.P4estMesh{2, 2, Float64, Static.False, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est}, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est_ghost_t}, 4, 2}, FermiHarmonics2D{191}, FermiHarmonics.var"#46#48"{Int64}, Trixi.UnstructuredSortedBoundaryTypes{4, Tuple{MaxwellWallBC, OhmicContactBC, OhmicContactBC, OhmicContactBC}, Vector{Int64}}, typeof(FermiHarmonics.source_terms), Trixi.DGSEM{Trixi.LobattoLegendreBasis{Float64, 4, StaticArraysCore.SVector{4, Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}}, Trixi.LobattoLegendreMortarL2{Float64, 4, Matrix{Float64}, Matrix{Float64}}, Trixi.SurfaceIntegralWeakForm{Trixi.FluxLaxFriedrichs{typeof(Trixi.max_abs_speed)}}, Trixi.VolumeIntegralWeakForm}, @NamedTuple{elements::Trixi.P4estElementContainer{2, Float64, Float64, 3, 4, 5, Array{Float64, 3}, Array{Float64, 4}, Array{Float64, 5}, Vector{Float64}, Array{Float64, 4}, Vector{Float64}}, interfaces::Trixi.P4estInterfaceContainer{2, Float64, 4, Array{Float64, 4}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, boundaries::Trixi.P4estBoundaryContainer{2, Float64, 3, Array{Float64, 3}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}, Vector{Float64}}, mortars::Trixi.P4estMortarContainer{2, Float64, 3, 5, Array{Float64, 5}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, fstar_primary_upper_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_primary_lower_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_secondary_upper_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_secondary_lower_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, u_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}}}, SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize, typeof(Trixi.rhs!), LinearAlgebra.UniformScaling{Bool}, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, typeof(SciMLBase.DEFAULT_OBSERVED), Nothing, Nothing, Nothing, Nothing}, @Kwargs{}, SciMLBase.StandardODEProblem}}, f::Symbol)
+│       @ Base ./Base.jl:49
+│     [2] macro expansion
+│       @ ./logging/logging.jl:386 [inlined]
+│     [3] top-level scope
+│       @ /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│     [4] include(mod::Module, _path::String)
+│       @ Base ./Base.jl:562
+│     [5] exec_options(opts::Base.JLOptions)
+│       @ Base ./client.jl:323
+│     [6] _start()
+│       @ Base ./client.jl:531
+└ @ Main /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+┌ Info: Analysis: direct grid evaluation
+└   nvisnodes = 400
+┌ Info: Analysis: writing HDF5
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=0.625_gamma_mr=0.91_p_scatter=1.0.h5"
+┌ Info: Analysis: write complete
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=0.625_gamma_mr=0.91_p_scatter=1.0.h5"
+┌ Info: Saved
+│   path = "bias=1.0_gamma_mc=0.625_gamma_mr=0.91_p_scatter=1.0.h5"
+└   small_mb = 4.01
+┌ Info: Starting case
+│   progress = "4/20"
+│   index = 1125
+│   gamma_mr = 0.6250551925273973
+│   gamma_mc = 0.9102981779915219
+│   gamma_total = 1.5353533705189193
+└   restart = "warm"
+┌ Info: Starting solve
+│   name = "simple_geometries_intersection_g1125"
+│   max_harmonic = 95
+│   harmonic_mode = :auto
+│   gamma_mr = 0.6250551925273973
+│   gamma_mc = 0.9102981779915219
+│   polydeg = 3
+│   cfl = 0.5
+│   residual_tol = 1.0e-5
+│   residual_mode = :absolute_all
+│   residual_nvars = 191
+│   residual_scale_floor = 1.0e-12
+└   boundaries = Dict{Symbol, Symbol} with 4 entries: …
+┌ Info: Progress
+│   iter = 500
+│   t = 0.833
+│   dt = 0.001666
+│   residual = 0.00806
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1000
+│   t = 1.6659
+│   dt = 0.001666
+│   residual = 0.0035
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1500
+│   t = 2.4989
+│   dt = 0.001666
+│   residual = 0.00112
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2000
+│   t = 3.3319
+│   dt = 0.001666
+│   residual = 0.000359
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2500
+│   t = 4.1648
+│   dt = 0.001666
+│   residual = 0.000134
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3000
+│   t = 4.9978
+│   dt = 0.001666
+│   residual = 6.74e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3500
+│   t = 5.8308
+│   dt = 0.001666
+│   residual = 4.33e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4000
+│   t = 6.6638
+│   dt = 0.001666
+│   residual = 3.06e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4500
+│   t = 7.4967
+│   dt = 0.001666
+│   residual = 2.36e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5000
+│   t = 8.3297
+│   dt = 0.001666
+│   residual = 1.81e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5500
+│   t = 9.1627
+│   dt = 0.001666
+│   residual = 1.39e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6000
+│   t = 9.9956
+│   dt = 0.001666
+│   residual = 1.06e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info:   Steady state tolerance reached
+│   steady_state_callback = Trixi.SteadyStateCallback{Float64}(1.0e-5, 0.0)
+└   t = 10.18721107727903
+┌ Error: Exception while generating log record in module Main at /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│   exception =
+│    type TimeIntegratorSolution has no field destats
+│    Stacktrace:
+│     [1] getproperty(x::Trixi.TimeIntegratorSolution{Tuple{Float64, Float64}, Tuple{Vector{Float64}, Vector{Float64}}, SciMLBase.ODEProblem{Vector{Float64}, Tuple{Float64, Float64}, true, Trixi.SemidiscretizationHyperbolic{Trixi.P4estMesh{2, 2, Float64, Static.False, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est}, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est_ghost_t}, 4, 2}, FermiHarmonics2D{191}, FermiHarmonics.var"#46#48"{Int64}, Trixi.UnstructuredSortedBoundaryTypes{4, Tuple{MaxwellWallBC, OhmicContactBC, OhmicContactBC, OhmicContactBC}, Vector{Int64}}, typeof(FermiHarmonics.source_terms), Trixi.DGSEM{Trixi.LobattoLegendreBasis{Float64, 4, StaticArraysCore.SVector{4, Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}}, Trixi.LobattoLegendreMortarL2{Float64, 4, Matrix{Float64}, Matrix{Float64}}, Trixi.SurfaceIntegralWeakForm{Trixi.FluxLaxFriedrichs{typeof(Trixi.max_abs_speed)}}, Trixi.VolumeIntegralWeakForm}, @NamedTuple{elements::Trixi.P4estElementContainer{2, Float64, Float64, 3, 4, 5, Array{Float64, 3}, Array{Float64, 4}, Array{Float64, 5}, Vector{Float64}, Array{Float64, 4}, Vector{Float64}}, interfaces::Trixi.P4estInterfaceContainer{2, Float64, 4, Array{Float64, 4}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, boundaries::Trixi.P4estBoundaryContainer{2, Float64, 3, Array{Float64, 3}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}, Vector{Float64}}, mortars::Trixi.P4estMortarContainer{2, Float64, 3, 5, Array{Float64, 5}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, fstar_primary_upper_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_primary_lower_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_secondary_upper_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_secondary_lower_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, u_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}}}, SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize, typeof(Trixi.rhs!), LinearAlgebra.UniformScaling{Bool}, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, typeof(SciMLBase.DEFAULT_OBSERVED), Nothing, Nothing, Nothing, Nothing}, @Kwargs{}, SciMLBase.StandardODEProblem}}, f::Symbol)
+│       @ Base ./Base.jl:49
+│     [2] macro expansion
+│       @ ./logging/logging.jl:386 [inlined]
+│     [3] top-level scope
+│       @ /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│     [4] include(mod::Module, _path::String)
+│       @ Base ./Base.jl:562
+│     [5] exec_options(opts::Base.JLOptions)
+│       @ Base ./client.jl:323
+│     [6] _start()
+│       @ Base ./client.jl:531
+└ @ Main /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+┌ Info: Analysis: direct grid evaluation
+└   nvisnodes = 400
+┌ Info: Analysis: writing HDF5
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=0.91_gamma_mr=0.625_p_scatter=1.0.h5"
+┌ Info: Analysis: write complete
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=0.91_gamma_mr=0.625_p_scatter=1.0.h5"
+┌ Info: Saved
+│   path = "bias=1.0_gamma_mc=0.91_gamma_mr=0.625_p_scatter=1.0.h5"
+└   small_mb = 4.01
+┌ Info: Starting case
+│   progress = "5/20"
+│   index = 1317
+│   gamma_mr = 1.3257113655901092
+│   gamma_mc = 0.20235896477251572
+│   gamma_total = 1.5280703303626249
+└   restart = "warm"
+┌ Info: Starting solve
+│   name = "simple_geometries_intersection_g1317"
+│   max_harmonic = 95
+│   harmonic_mode = :auto
+│   gamma_mr = 1.3257113655901092
+│   gamma_mc = 0.20235896477251572
+│   polydeg = 3
+│   cfl = 0.5
+│   residual_tol = 1.0e-5
+│   residual_mode = :absolute_all
+│   residual_nvars = 191
+│   residual_scale_floor = 1.0e-12
+└   boundaries = Dict{Symbol, Symbol} with 4 entries: …
+┌ Info: Progress
+│   iter = 500
+│   t = 0.833
+│   dt = 0.001666
+│   residual = 0.0165
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1000
+│   t = 1.6659
+│   dt = 0.001666
+│   residual = 0.00676
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1500
+│   t = 2.4989
+│   dt = 0.001666
+│   residual = 0.00271
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2000
+│   t = 3.3319
+│   dt = 0.001666
+│   residual = 0.00113
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2500
+│   t = 4.1648
+│   dt = 0.001666
+│   residual = 0.000509
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3000
+│   t = 4.9978
+│   dt = 0.001666
+│   residual = 0.000253
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3500
+│   t = 5.8308
+│   dt = 0.001666
+│   residual = 0.000143
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4000
+│   t = 6.6638
+│   dt = 0.001666
+│   residual = 9.32e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4500
+│   t = 7.4967
+│   dt = 0.001666
+│   residual = 6.76e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5000
+│   t = 8.3297
+│   dt = 0.001666
+│   residual = 5.16e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5500
+│   t = 9.1627
+│   dt = 0.001666
+│   residual = 4.14e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6000
+│   t = 9.9956
+│   dt = 0.001666
+│   residual = 3.31e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6500
+│   t = 10.8286
+│   dt = 0.001666
+│   residual = 2.65e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7000
+│   t = 11.6616
+│   dt = 0.001666
+│   residual = 2.11e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7500
+│   t = 12.4945
+│   dt = 0.001666
+│   residual = 1.68e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 8000
+│   t = 13.3275
+│   dt = 0.001666
+│   residual = 1.34e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 8500
+│   t = 14.1605
+│   dt = 0.001666
+│   residual = 1.07e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info:   Steady state tolerance reached
+│   steady_state_callback = Trixi.SteadyStateCallback{Float64}(1.0e-5, 0.0)
+└   t = 14.407032117139645
+┌ Error: Exception while generating log record in module Main at /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│   exception =
+│    type TimeIntegratorSolution has no field destats
+│    Stacktrace:
+│     [1] getproperty(x::Trixi.TimeIntegratorSolution{Tuple{Float64, Float64}, Tuple{Vector{Float64}, Vector{Float64}}, SciMLBase.ODEProblem{Vector{Float64}, Tuple{Float64, Float64}, true, Trixi.SemidiscretizationHyperbolic{Trixi.P4estMesh{2, 2, Float64, Static.False, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est}, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est_ghost_t}, 4, 2}, FermiHarmonics2D{191}, FermiHarmonics.var"#46#48"{Int64}, Trixi.UnstructuredSortedBoundaryTypes{4, Tuple{MaxwellWallBC, OhmicContactBC, OhmicContactBC, OhmicContactBC}, Vector{Int64}}, typeof(FermiHarmonics.source_terms), Trixi.DGSEM{Trixi.LobattoLegendreBasis{Float64, 4, StaticArraysCore.SVector{4, Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}}, Trixi.LobattoLegendreMortarL2{Float64, 4, Matrix{Float64}, Matrix{Float64}}, Trixi.SurfaceIntegralWeakForm{Trixi.FluxLaxFriedrichs{typeof(Trixi.max_abs_speed)}}, Trixi.VolumeIntegralWeakForm}, @NamedTuple{elements::Trixi.P4estElementContainer{2, Float64, Float64, 3, 4, 5, Array{Float64, 3}, Array{Float64, 4}, Array{Float64, 5}, Vector{Float64}, Array{Float64, 4}, Vector{Float64}}, interfaces::Trixi.P4estInterfaceContainer{2, Float64, 4, Array{Float64, 4}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, boundaries::Trixi.P4estBoundaryContainer{2, Float64, 3, Array{Float64, 3}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}, Vector{Float64}}, mortars::Trixi.P4estMortarContainer{2, Float64, 3, 5, Array{Float64, 5}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, fstar_primary_upper_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_primary_lower_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_secondary_upper_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_secondary_lower_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, u_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}}}, SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize, typeof(Trixi.rhs!), LinearAlgebra.UniformScaling{Bool}, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, typeof(SciMLBase.DEFAULT_OBSERVED), Nothing, Nothing, Nothing, Nothing}, @Kwargs{}, SciMLBase.StandardODEProblem}}, f::Symbol)
+│       @ Base ./Base.jl:49
+│     [2] macro expansion
+│       @ ./logging/logging.jl:386 [inlined]
+│     [3] top-level scope
+│       @ /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│     [4] include(mod::Module, _path::String)
+│       @ Base ./Base.jl:562
+│     [5] exec_options(opts::Base.JLOptions)
+│       @ Base ./client.jl:323
+│     [6] _start()
+│       @ Base ./client.jl:531
+└ @ Main /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+┌ Info: Analysis: direct grid evaluation
+└   nvisnodes = 400
+┌ Info: Analysis: writing HDF5
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=0.202_gamma_mr=1.33_p_scatter=1.0.h5"
+┌ Info: Analysis: write complete
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=0.202_gamma_mr=1.33_p_scatter=1.0.h5"
+┌ Info: Saved
+│   path = "bias=1.0_gamma_mc=0.202_gamma_mr=1.33_p_scatter=1.0.h5"
+└   small_mb = 4.01
+┌ Info: Starting case
+│   progress = "6/20"
+│   index = 827
+│   gamma_mr = 0.20235896477251572
+│   gamma_mc = 1.3257113655901092
+│   gamma_total = 1.5280703303626249
+└   restart = "warm"
+┌ Info: Starting solve
+│   name = "simple_geometries_intersection_g827"
+│   max_harmonic = 95
+│   harmonic_mode = :auto
+│   gamma_mr = 0.20235896477251572
+│   gamma_mc = 1.3257113655901092
+│   polydeg = 3
+│   cfl = 0.5
+│   residual_tol = 1.0e-5
+│   residual_mode = :absolute_all
+│   residual_nvars = 191
+│   residual_scale_floor = 1.0e-12
+└   boundaries = Dict{Symbol, Symbol} with 4 entries: …
+┌ Info: Progress
+│   iter = 500
+│   t = 0.833
+│   dt = 0.001666
+│   residual = 0.034
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1000
+│   t = 1.6659
+│   dt = 0.001666
+│   residual = 0.0157
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1500
+│   t = 2.4989
+│   dt = 0.001666
+│   residual = 0.0044
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2000
+│   t = 3.3319
+│   dt = 0.001666
+│   residual = 0.00103
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2500
+│   t = 4.1648
+│   dt = 0.001666
+│   residual = 0.000368
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3000
+│   t = 4.9978
+│   dt = 0.001666
+│   residual = 0.000233
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3500
+│   t = 5.8308
+│   dt = 0.001666
+│   residual = 0.000153
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4000
+│   t = 6.6638
+│   dt = 0.001666
+│   residual = 0.00011
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4500
+│   t = 7.4967
+│   dt = 0.001666
+│   residual = 8.25e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5000
+│   t = 8.3297
+│   dt = 0.001666
+│   residual = 6.11e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5500
+│   t = 9.1627
+│   dt = 0.001666
+│   residual = 4.5e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6000
+│   t = 9.9956
+│   dt = 0.001666
+│   residual = 3.31e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6500
+│   t = 10.8286
+│   dt = 0.001666
+│   residual = 2.44e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7000
+│   t = 11.6616
+│   dt = 0.001666
+│   residual = 1.79e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7500
+│   t = 12.4945
+│   dt = 0.001666
+│   residual = 1.32e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info:   Steady state tolerance reached
+│   steady_state_callback = Trixi.SteadyStateCallback{Float64}(1.0e-5, 0.0)
+└   t = 13.247539245547467
+┌ Error: Exception while generating log record in module Main at /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│   exception =
+│    type TimeIntegratorSolution has no field destats
+│    Stacktrace:
+│     [1] getproperty(x::Trixi.TimeIntegratorSolution{Tuple{Float64, Float64}, Tuple{Vector{Float64}, Vector{Float64}}, SciMLBase.ODEProblem{Vector{Float64}, Tuple{Float64, Float64}, true, Trixi.SemidiscretizationHyperbolic{Trixi.P4estMesh{2, 2, Float64, Static.False, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est}, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est_ghost_t}, 4, 2}, FermiHarmonics2D{191}, FermiHarmonics.var"#46#48"{Int64}, Trixi.UnstructuredSortedBoundaryTypes{4, Tuple{MaxwellWallBC, OhmicContactBC, OhmicContactBC, OhmicContactBC}, Vector{Int64}}, typeof(FermiHarmonics.source_terms), Trixi.DGSEM{Trixi.LobattoLegendreBasis{Float64, 4, StaticArraysCore.SVector{4, Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}}, Trixi.LobattoLegendreMortarL2{Float64, 4, Matrix{Float64}, Matrix{Float64}}, Trixi.SurfaceIntegralWeakForm{Trixi.FluxLaxFriedrichs{typeof(Trixi.max_abs_speed)}}, Trixi.VolumeIntegralWeakForm}, @NamedTuple{elements::Trixi.P4estElementContainer{2, Float64, Float64, 3, 4, 5, Array{Float64, 3}, Array{Float64, 4}, Array{Float64, 5}, Vector{Float64}, Array{Float64, 4}, Vector{Float64}}, interfaces::Trixi.P4estInterfaceContainer{2, Float64, 4, Array{Float64, 4}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, boundaries::Trixi.P4estBoundaryContainer{2, Float64, 3, Array{Float64, 3}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}, Vector{Float64}}, mortars::Trixi.P4estMortarContainer{2, Float64, 3, 5, Array{Float64, 5}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, fstar_primary_upper_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_primary_lower_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_secondary_upper_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_secondary_lower_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, u_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}}}, SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize, typeof(Trixi.rhs!), LinearAlgebra.UniformScaling{Bool}, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, typeof(SciMLBase.DEFAULT_OBSERVED), Nothing, Nothing, Nothing, Nothing}, @Kwargs{}, SciMLBase.StandardODEProblem}}, f::Symbol)
+│       @ Base ./Base.jl:49
+│     [2] macro expansion
+│       @ ./logging/logging.jl:386 [inlined]
+│     [3] top-level scope
+│       @ /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│     [4] include(mod::Module, _path::String)
+│       @ Base ./Base.jl:562
+│     [5] exec_options(opts::Base.JLOptions)
+│       @ Base ./client.jl:323
+│     [6] _start()
+│       @ Base ./client.jl:531
+└ @ Main /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+┌ Info: Analysis: direct grid evaluation
+└   nvisnodes = 400
+┌ Info: Analysis: writing HDF5
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=1.33_gamma_mr=0.202_p_scatter=1.0.h5"
+┌ Info: Analysis: write complete
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=1.33_gamma_mr=0.202_p_scatter=1.0.h5"
+┌ Info: Saved
+│   path = "bias=1.0_gamma_mc=1.33_gamma_mr=0.202_p_scatter=1.0.h5"
+└   small_mb = 4.01
+┌ Info: Starting case
+│   progress = "7/20"
+│   index = 1271
+│   gamma_mr = 1.0985411419875581
+│   gamma_mc = 0.4291934260128778
+│   gamma_total = 1.527734568000436
+└   restart = "warm"
+┌ Info: Starting solve
+│   name = "simple_geometries_intersection_g1271"
+│   max_harmonic = 95
+│   harmonic_mode = :auto
+│   gamma_mr = 1.0985411419875581
+│   gamma_mc = 0.4291934260128778
+│   polydeg = 3
+│   cfl = 0.5
+│   residual_tol = 1.0e-5
+│   residual_mode = :absolute_all
+│   residual_nvars = 191
+│   residual_scale_floor = 1.0e-12
+└   boundaries = Dict{Symbol, Symbol} with 4 entries: …
+┌ Info: Progress
+│   iter = 500
+│   t = 0.833
+│   dt = 0.001666
+│   residual = 0.0269
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1000
+│   t = 1.6659
+│   dt = 0.001666
+│   residual = 0.0112
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1500
+│   t = 2.4989
+│   dt = 0.001666
+│   residual = 0.0042
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2000
+│   t = 3.3319
+│   dt = 0.001666
+│   residual = 0.00164
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2500
+│   t = 4.1648
+│   dt = 0.001666
+│   residual = 0.000705
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3000
+│   t = 4.9978
+│   dt = 0.001666
+│   residual = 0.000346
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3500
+│   t = 5.8308
+│   dt = 0.001666
+│   residual = 0.0002
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4000
+│   t = 6.6638
+│   dt = 0.001666
+│   residual = 0.000134
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4500
+│   t = 7.4967
+│   dt = 0.001666
+│   residual = 9.86e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5000
+│   t = 8.3297
+│   dt = 0.001666
+│   residual = 7.71e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5500
+│   t = 9.1627
+│   dt = 0.001666
+│   residual = 6.1e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6000
+│   t = 9.9956
+│   dt = 0.001666
+│   residual = 4.82e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6500
+│   t = 10.8286
+│   dt = 0.001666
+│   residual = 3.8e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7000
+│   t = 11.6616
+│   dt = 0.001666
+│   residual = 2.99e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7500
+│   t = 12.4945
+│   dt = 0.001666
+│   residual = 2.36e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 8000
+│   t = 13.3275
+│   dt = 0.001666
+│   residual = 1.86e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 8500
+│   t = 14.1605
+│   dt = 0.001666
+│   residual = 1.46e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 9000
+│   t = 14.9934
+│   dt = 0.001666
+│   residual = 1.15e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info:   Steady state tolerance reached
+│   steady_state_callback = Trixi.SteadyStateCallback{Float64}(1.0e-5, 0.0)
+└   t = 15.476564334901395
+┌ Error: Exception while generating log record in module Main at /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│   exception =
+│    type TimeIntegratorSolution has no field destats
+│    Stacktrace:
+│     [1] getproperty(x::Trixi.TimeIntegratorSolution{Tuple{Float64, Float64}, Tuple{Vector{Float64}, Vector{Float64}}, SciMLBase.ODEProblem{Vector{Float64}, Tuple{Float64, Float64}, true, Trixi.SemidiscretizationHyperbolic{Trixi.P4estMesh{2, 2, Float64, Static.False, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est}, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est_ghost_t}, 4, 2}, FermiHarmonics2D{191}, FermiHarmonics.var"#46#48"{Int64}, Trixi.UnstructuredSortedBoundaryTypes{4, Tuple{MaxwellWallBC, OhmicContactBC, OhmicContactBC, OhmicContactBC}, Vector{Int64}}, typeof(FermiHarmonics.source_terms), Trixi.DGSEM{Trixi.LobattoLegendreBasis{Float64, 4, StaticArraysCore.SVector{4, Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}}, Trixi.LobattoLegendreMortarL2{Float64, 4, Matrix{Float64}, Matrix{Float64}}, Trixi.SurfaceIntegralWeakForm{Trixi.FluxLaxFriedrichs{typeof(Trixi.max_abs_speed)}}, Trixi.VolumeIntegralWeakForm}, @NamedTuple{elements::Trixi.P4estElementContainer{2, Float64, Float64, 3, 4, 5, Array{Float64, 3}, Array{Float64, 4}, Array{Float64, 5}, Vector{Float64}, Array{Float64, 4}, Vector{Float64}}, interfaces::Trixi.P4estInterfaceContainer{2, Float64, 4, Array{Float64, 4}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, boundaries::Trixi.P4estBoundaryContainer{2, Float64, 3, Array{Float64, 3}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}, Vector{Float64}}, mortars::Trixi.P4estMortarContainer{2, Float64, 3, 5, Array{Float64, 5}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, fstar_primary_upper_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_primary_lower_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_secondary_upper_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_secondary_lower_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, u_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}}}, SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize, typeof(Trixi.rhs!), LinearAlgebra.UniformScaling{Bool}, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, typeof(SciMLBase.DEFAULT_OBSERVED), Nothing, Nothing, Nothing, Nothing}, @Kwargs{}, SciMLBase.StandardODEProblem}}, f::Symbol)
+│       @ Base ./Base.jl:49
+│     [2] macro expansion
+│       @ ./logging/logging.jl:386 [inlined]
+│     [3] top-level scope
+│       @ /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│     [4] include(mod::Module, _path::String)
+│       @ Base ./Base.jl:562
+│     [5] exec_options(opts::Base.JLOptions)
+│       @ Base ./client.jl:323
+│     [6] _start()
+│       @ Base ./client.jl:531
+└ @ Main /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+┌ Info: Analysis: direct grid evaluation
+└   nvisnodes = 400
+┌ Info: Analysis: writing HDF5
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=0.429_gamma_mr=1.1_p_scatter=1.0.h5"
+┌ Info: Analysis: write complete
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=0.429_gamma_mr=1.1_p_scatter=1.0.h5"
+┌ Info: Saved
+│   path = "bias=1.0_gamma_mc=0.429_gamma_mr=1.1_p_scatter=1.0.h5"
+└   small_mb = 4.01
+┌ Info: Starting case
+│   progress = "8/20"
+│   index = 1026
+│   gamma_mr = 0.4291934260128778
+│   gamma_mc = 1.0985411419875581
+│   gamma_total = 1.527734568000436
+└   restart = "warm"
+┌ Info: Starting solve
+│   name = "simple_geometries_intersection_g1026"
+│   max_harmonic = 95
+│   harmonic_mode = :auto
+│   gamma_mr = 0.4291934260128778
+│   gamma_mc = 1.0985411419875581
+│   polydeg = 3
+│   cfl = 0.5
+│   residual_tol = 1.0e-5
+│   residual_mode = :absolute_all
+│   residual_nvars = 191
+│   residual_scale_floor = 1.0e-12
+└   boundaries = Dict{Symbol, Symbol} with 4 entries: …
+┌ Info: Progress
+│   iter = 500
+│   t = 0.833
+│   dt = 0.001666
+│   residual = 0.0194
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1000
+│   t = 1.6659
+│   dt = 0.001666
+│   residual = 0.00866
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1500
+│   t = 2.4989
+│   dt = 0.001666
+│   residual = 0.00261
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2000
+│   t = 3.3319
+│   dt = 0.001666
+│   residual = 0.000742
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2500
+│   t = 4.1648
+│   dt = 0.001666
+│   residual = 0.000258
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3000
+│   t = 4.9978
+│   dt = 0.001666
+│   residual = 0.000143
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3500
+│   t = 5.8308
+│   dt = 0.001666
+│   residual = 9.43e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4000
+│   t = 6.6638
+│   dt = 0.001666
+│   residual = 6.97e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4500
+│   t = 7.4967
+│   dt = 0.001666
+│   residual = 5.31e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5000
+│   t = 8.3297
+│   dt = 0.001666
+│   residual = 4.02e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5500
+│   t = 9.1627
+│   dt = 0.001666
+│   residual = 3.03e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6000
+│   t = 9.9956
+│   dt = 0.001666
+│   residual = 2.28e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6500
+│   t = 10.8286
+│   dt = 0.001666
+│   residual = 1.71e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7000
+│   t = 11.6616
+│   dt = 0.001666
+│   residual = 1.29e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info:   Steady state tolerance reached
+│   steady_state_callback = Trixi.SteadyStateCallback{Float64}(1.0e-5, 0.0)
+└   t = 12.397910848260095
+┌ Error: Exception while generating log record in module Main at /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│   exception =
+│    type TimeIntegratorSolution has no field destats
+│    Stacktrace:
+│     [1] getproperty(x::Trixi.TimeIntegratorSolution{Tuple{Float64, Float64}, Tuple{Vector{Float64}, Vector{Float64}}, SciMLBase.ODEProblem{Vector{Float64}, Tuple{Float64, Float64}, true, Trixi.SemidiscretizationHyperbolic{Trixi.P4estMesh{2, 2, Float64, Static.False, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est}, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est_ghost_t}, 4, 2}, FermiHarmonics2D{191}, FermiHarmonics.var"#46#48"{Int64}, Trixi.UnstructuredSortedBoundaryTypes{4, Tuple{MaxwellWallBC, OhmicContactBC, OhmicContactBC, OhmicContactBC}, Vector{Int64}}, typeof(FermiHarmonics.source_terms), Trixi.DGSEM{Trixi.LobattoLegendreBasis{Float64, 4, StaticArraysCore.SVector{4, Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}}, Trixi.LobattoLegendreMortarL2{Float64, 4, Matrix{Float64}, Matrix{Float64}}, Trixi.SurfaceIntegralWeakForm{Trixi.FluxLaxFriedrichs{typeof(Trixi.max_abs_speed)}}, Trixi.VolumeIntegralWeakForm}, @NamedTuple{elements::Trixi.P4estElementContainer{2, Float64, Float64, 3, 4, 5, Array{Float64, 3}, Array{Float64, 4}, Array{Float64, 5}, Vector{Float64}, Array{Float64, 4}, Vector{Float64}}, interfaces::Trixi.P4estInterfaceContainer{2, Float64, 4, Array{Float64, 4}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, boundaries::Trixi.P4estBoundaryContainer{2, Float64, 3, Array{Float64, 3}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}, Vector{Float64}}, mortars::Trixi.P4estMortarContainer{2, Float64, 3, 5, Array{Float64, 5}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, fstar_primary_upper_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_primary_lower_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_secondary_upper_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_secondary_lower_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, u_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}}}, SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize, typeof(Trixi.rhs!), LinearAlgebra.UniformScaling{Bool}, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, typeof(SciMLBase.DEFAULT_OBSERVED), Nothing, Nothing, Nothing, Nothing}, @Kwargs{}, SciMLBase.StandardODEProblem}}, f::Symbol)
+│       @ Base ./Base.jl:49
+│     [2] macro expansion
+│       @ ./logging/logging.jl:386 [inlined]
+│     [3] top-level scope
+│       @ /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│     [4] include(mod::Module, _path::String)
+│       @ Base ./Base.jl:562
+│     [5] exec_options(opts::Base.JLOptions)
+│       @ Base ./client.jl:323
+│     [6] _start()
+│       @ Base ./client.jl:531
+└ @ Main /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+┌ Info: Analysis: direct grid evaluation
+└   nvisnodes = 400
+┌ Info: Analysis: writing HDF5
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=1.1_gamma_mr=0.429_p_scatter=1.0.h5"
+┌ Info: Analysis: write complete
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=1.1_gamma_mr=0.429_p_scatter=1.0.h5"
+┌ Info: Saved
+│   path = "bias=1.0_gamma_mc=1.1_gamma_mr=0.429_p_scatter=1.0.h5"
+└   small_mb = 4.01
+┌ Info: Starting case
+│   progress = "9/20"
+│   index = 1174
+│   gamma_mr = 0.7543120063354617
+│   gamma_mc = 0.7543120063354617
+│   gamma_total = 1.5086240126709234
+└   restart = "warm"
+┌ Info: Starting solve
+│   name = "simple_geometries_intersection_g1174"
+│   max_harmonic = 95
+│   harmonic_mode = :auto
+│   gamma_mr = 0.7543120063354617
+│   gamma_mc = 0.7543120063354617
+│   polydeg = 3
+│   cfl = 0.5
+│   residual_tol = 1.0e-5
+│   residual_mode = :absolute_all
+│   residual_nvars = 191
+│   residual_scale_floor = 1.0e-12
+└   boundaries = Dict{Symbol, Symbol} with 4 entries: …
+┌ Info: Progress
+│   iter = 500
+│   t = 0.833
+│   dt = 0.001666
+│   residual = 0.0104
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1000
+│   t = 1.6659
+│   dt = 0.001666
+│   residual = 0.00443
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1500
+│   t = 2.4989
+│   dt = 0.001666
+│   residual = 0.00148
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2000
+│   t = 3.3319
+│   dt = 0.001666
+│   residual = 0.000506
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2500
+│   t = 4.1648
+│   dt = 0.001666
+│   residual = 0.000195
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3000
+│   t = 4.9978
+│   dt = 0.001666
+│   residual = 9.43e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3500
+│   t = 5.8308
+│   dt = 0.001666
+│   residual = 5.68e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4000
+│   t = 6.6638
+│   dt = 0.001666
+│   residual = 3.96e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4500
+│   t = 7.4967
+│   dt = 0.001666
+│   residual = 2.97e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5000
+│   t = 8.3297
+│   dt = 0.001666
+│   residual = 2.31e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5500
+│   t = 9.1627
+│   dt = 0.001666
+│   residual = 1.79e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6000
+│   t = 9.9956
+│   dt = 0.001666
+│   residual = 1.38e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6500
+│   t = 10.8286
+│   dt = 0.001666
+│   residual = 1.07e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info:   Steady state tolerance reached
+│   steady_state_callback = Trixi.SteadyStateCallback{Float64}(1.0e-5, 0.0)
+└   t = 11.033507598498609
+┌ Error: Exception while generating log record in module Main at /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│   exception =
+│    type TimeIntegratorSolution has no field destats
+│    Stacktrace:
+│     [1] getproperty(x::Trixi.TimeIntegratorSolution{Tuple{Float64, Float64}, Tuple{Vector{Float64}, Vector{Float64}}, SciMLBase.ODEProblem{Vector{Float64}, Tuple{Float64, Float64}, true, Trixi.SemidiscretizationHyperbolic{Trixi.P4estMesh{2, 2, Float64, Static.False, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est}, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est_ghost_t}, 4, 2}, FermiHarmonics2D{191}, FermiHarmonics.var"#46#48"{Int64}, Trixi.UnstructuredSortedBoundaryTypes{4, Tuple{MaxwellWallBC, OhmicContactBC, OhmicContactBC, OhmicContactBC}, Vector{Int64}}, typeof(FermiHarmonics.source_terms), Trixi.DGSEM{Trixi.LobattoLegendreBasis{Float64, 4, StaticArraysCore.SVector{4, Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}}, Trixi.LobattoLegendreMortarL2{Float64, 4, Matrix{Float64}, Matrix{Float64}}, Trixi.SurfaceIntegralWeakForm{Trixi.FluxLaxFriedrichs{typeof(Trixi.max_abs_speed)}}, Trixi.VolumeIntegralWeakForm}, @NamedTuple{elements::Trixi.P4estElementContainer{2, Float64, Float64, 3, 4, 5, Array{Float64, 3}, Array{Float64, 4}, Array{Float64, 5}, Vector{Float64}, Array{Float64, 4}, Vector{Float64}}, interfaces::Trixi.P4estInterfaceContainer{2, Float64, 4, Array{Float64, 4}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, boundaries::Trixi.P4estBoundaryContainer{2, Float64, 3, Array{Float64, 3}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}, Vector{Float64}}, mortars::Trixi.P4estMortarContainer{2, Float64, 3, 5, Array{Float64, 5}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, fstar_primary_upper_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_primary_lower_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_secondary_upper_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_secondary_lower_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, u_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}}}, SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize, typeof(Trixi.rhs!), LinearAlgebra.UniformScaling{Bool}, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, typeof(SciMLBase.DEFAULT_OBSERVED), Nothing, Nothing, Nothing, Nothing}, @Kwargs{}, SciMLBase.StandardODEProblem}}, f::Symbol)
+│       @ Base ./Base.jl:49
+│     [2] macro expansion
+│       @ ./logging/logging.jl:386 [inlined]
+│     [3] top-level scope
+│       @ /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│     [4] include(mod::Module, _path::String)
+│       @ Base ./Base.jl:562
+│     [5] exec_options(opts::Base.JLOptions)
+│       @ Base ./client.jl:323
+│     [6] _start()
+│       @ Base ./client.jl:531
+└ @ Main /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+┌ Info: Analysis: direct grid evaluation
+└   nvisnodes = 400
+┌ Info: Analysis: writing HDF5
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=0.754_gamma_mr=0.754_p_scatter=1.0.h5"
+┌ Info: Analysis: write complete
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=0.754_gamma_mr=0.754_p_scatter=1.0.h5"
+┌ Info: Saved
+│   path = "bias=1.0_gamma_mc=0.754_gamma_mr=0.754_p_scatter=1.0.h5"
+└   small_mb = 4.01
+┌ Info: Starting case
+│   progress = "10/20"
+│   index = 1316
+│   gamma_mr = 1.3257113655901092
+│   gamma_mc = 0.16768329368110083
+│   gamma_total = 1.49339465927121
+└   restart = "warm"
+┌ Info: Starting solve
+│   name = "simple_geometries_intersection_g1316"
+│   max_harmonic = 95
+│   harmonic_mode = :auto
+│   gamma_mr = 1.3257113655901092
+│   gamma_mc = 0.16768329368110083
+│   polydeg = 3
+│   cfl = 0.5
+│   residual_tol = 1.0e-5
+│   residual_mode = :absolute_all
+│   residual_nvars = 191
+│   residual_scale_floor = 1.0e-12
+└   boundaries = Dict{Symbol, Symbol} with 4 entries: …
+┌ Info: Progress
+│   iter = 500
+│   t = 0.833
+│   dt = 0.001666
+│   residual = 0.0129
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1000
+│   t = 1.6659
+│   dt = 0.001666
+│   residual = 0.00527
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1500
+│   t = 2.4989
+│   dt = 0.001666
+│   residual = 0.00212
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2000
+│   t = 3.3319
+│   dt = 0.001666
+│   residual = 0.000892
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2500
+│   t = 4.1648
+│   dt = 0.001666
+│   residual = 0.000403
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3000
+│   t = 4.9978
+│   dt = 0.001666
+│   residual = 0.000202
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3500
+│   t = 5.8308
+│   dt = 0.001666
+│   residual = 0.000115
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4000
+│   t = 6.6638
+│   dt = 0.001666
+│   residual = 7.49e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4500
+│   t = 7.4967
+│   dt = 0.001666
+│   residual = 5.44e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5000
+│   t = 8.3297
+│   dt = 0.001666
+│   residual = 4.16e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5500
+│   t = 9.1627
+│   dt = 0.001666
+│   residual = 3.33e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6000
+│   t = 9.9956
+│   dt = 0.001666
+│   residual = 2.67e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6500
+│   t = 10.8286
+│   dt = 0.001666
+│   residual = 2.13e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7000
+│   t = 11.6616
+│   dt = 0.001666
+│   residual = 1.7e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7500
+│   t = 12.4945
+│   dt = 0.001666
+│   residual = 1.36e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 8000
+│   t = 13.3275
+│   dt = 0.001666
+│   residual = 1.08e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info:   Steady state tolerance reached
+│   steady_state_callback = Trixi.SteadyStateCallback{Float64}(1.0e-5, 0.0)
+└   t = 13.622375303174248
+┌ Error: Exception while generating log record in module Main at /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│   exception =
+│    type TimeIntegratorSolution has no field destats
+│    Stacktrace:
+│     [1] getproperty(x::Trixi.TimeIntegratorSolution{Tuple{Float64, Float64}, Tuple{Vector{Float64}, Vector{Float64}}, SciMLBase.ODEProblem{Vector{Float64}, Tuple{Float64, Float64}, true, Trixi.SemidiscretizationHyperbolic{Trixi.P4estMesh{2, 2, Float64, Static.False, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est}, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est_ghost_t}, 4, 2}, FermiHarmonics2D{191}, FermiHarmonics.var"#46#48"{Int64}, Trixi.UnstructuredSortedBoundaryTypes{4, Tuple{MaxwellWallBC, OhmicContactBC, OhmicContactBC, OhmicContactBC}, Vector{Int64}}, typeof(FermiHarmonics.source_terms), Trixi.DGSEM{Trixi.LobattoLegendreBasis{Float64, 4, StaticArraysCore.SVector{4, Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}}, Trixi.LobattoLegendreMortarL2{Float64, 4, Matrix{Float64}, Matrix{Float64}}, Trixi.SurfaceIntegralWeakForm{Trixi.FluxLaxFriedrichs{typeof(Trixi.max_abs_speed)}}, Trixi.VolumeIntegralWeakForm}, @NamedTuple{elements::Trixi.P4estElementContainer{2, Float64, Float64, 3, 4, 5, Array{Float64, 3}, Array{Float64, 4}, Array{Float64, 5}, Vector{Float64}, Array{Float64, 4}, Vector{Float64}}, interfaces::Trixi.P4estInterfaceContainer{2, Float64, 4, Array{Float64, 4}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, boundaries::Trixi.P4estBoundaryContainer{2, Float64, 3, Array{Float64, 3}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}, Vector{Float64}}, mortars::Trixi.P4estMortarContainer{2, Float64, 3, 5, Array{Float64, 5}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, fstar_primary_upper_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_primary_lower_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_secondary_upper_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_secondary_lower_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, u_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}}}, SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize, typeof(Trixi.rhs!), LinearAlgebra.UniformScaling{Bool}, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, typeof(SciMLBase.DEFAULT_OBSERVED), Nothing, Nothing, Nothing, Nothing}, @Kwargs{}, SciMLBase.StandardODEProblem}}, f::Symbol)
+│       @ Base ./Base.jl:49
+│     [2] macro expansion
+│       @ ./logging/logging.jl:386 [inlined]
+│     [3] top-level scope
+│       @ /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│     [4] include(mod::Module, _path::String)
+│       @ Base ./Base.jl:562
+│     [5] exec_options(opts::Base.JLOptions)
+│       @ Base ./client.jl:323
+│     [6] _start()
+│       @ Base ./client.jl:531
+└ @ Main /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+┌ Info: Analysis: direct grid evaluation
+└   nvisnodes = 400
+┌ Info: Analysis: writing HDF5
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=0.168_gamma_mr=1.33_p_scatter=1.0.h5"
+┌ Info: Analysis: write complete
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=0.168_gamma_mr=1.33_p_scatter=1.0.h5"
+┌ Info: Saved
+│   path = "bias=1.0_gamma_mc=0.168_gamma_mr=1.33_p_scatter=1.0.h5"
+└   small_mb = 4.01
+┌ Info: Starting case
+│   progress = "11/20"
+│   index = 777
+│   gamma_mr = 0.16768329368110083
+│   gamma_mc = 1.3257113655901092
+│   gamma_total = 1.49339465927121
+└   restart = "warm"
+┌ Info: Starting solve
+│   name = "simple_geometries_intersection_g777"
+│   max_harmonic = 95
+│   harmonic_mode = :auto
+│   gamma_mr = 0.16768329368110083
+│   gamma_mc = 1.3257113655901092
+│   polydeg = 3
+│   cfl = 0.5
+│   residual_tol = 1.0e-5
+│   residual_mode = :absolute_all
+│   residual_nvars = 191
+│   residual_scale_floor = 1.0e-12
+└   boundaries = Dict{Symbol, Symbol} with 4 entries: …
+┌ Info: Progress
+│   iter = 500
+│   t = 0.833
+│   dt = 0.001666
+│   residual = 0.0355
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1000
+│   t = 1.6659
+│   dt = 0.001666
+│   residual = 0.0165
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1500
+│   t = 2.4989
+│   dt = 0.001666
+│   residual = 0.00459
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2000
+│   t = 3.3319
+│   dt = 0.001666
+│   residual = 0.00106
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2500
+│   t = 4.1648
+│   dt = 0.001666
+│   residual = 0.000389
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3000
+│   t = 4.9978
+│   dt = 0.001666
+│   residual = 0.000245
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3500
+│   t = 5.8308
+│   dt = 0.001666
+│   residual = 0.000161
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4000
+│   t = 6.6638
+│   dt = 0.001666
+│   residual = 0.000115
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4500
+│   t = 7.4967
+│   dt = 0.001666
+│   residual = 8.6e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5000
+│   t = 8.3297
+│   dt = 0.001666
+│   residual = 6.35e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5500
+│   t = 9.1627
+│   dt = 0.001666
+│   residual = 4.66e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6000
+│   t = 9.9956
+│   dt = 0.001666
+│   residual = 3.42e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6500
+│   t = 10.8286
+│   dt = 0.001666
+│   residual = 2.51e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7000
+│   t = 11.6616
+│   dt = 0.001666
+│   residual = 1.84e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7500
+│   t = 12.4945
+│   dt = 0.001666
+│   residual = 1.35e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info:   Steady state tolerance reached
+│   steady_state_callback = Trixi.SteadyStateCallback{Float64}(1.0e-5, 0.0)
+└   t = 13.305847076733855
+┌ Error: Exception while generating log record in module Main at /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│   exception =
+│    type TimeIntegratorSolution has no field destats
+│    Stacktrace:
+│     [1] getproperty(x::Trixi.TimeIntegratorSolution{Tuple{Float64, Float64}, Tuple{Vector{Float64}, Vector{Float64}}, SciMLBase.ODEProblem{Vector{Float64}, Tuple{Float64, Float64}, true, Trixi.SemidiscretizationHyperbolic{Trixi.P4estMesh{2, 2, Float64, Static.False, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est}, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est_ghost_t}, 4, 2}, FermiHarmonics2D{191}, FermiHarmonics.var"#46#48"{Int64}, Trixi.UnstructuredSortedBoundaryTypes{4, Tuple{MaxwellWallBC, OhmicContactBC, OhmicContactBC, OhmicContactBC}, Vector{Int64}}, typeof(FermiHarmonics.source_terms), Trixi.DGSEM{Trixi.LobattoLegendreBasis{Float64, 4, StaticArraysCore.SVector{4, Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}}, Trixi.LobattoLegendreMortarL2{Float64, 4, Matrix{Float64}, Matrix{Float64}}, Trixi.SurfaceIntegralWeakForm{Trixi.FluxLaxFriedrichs{typeof(Trixi.max_abs_speed)}}, Trixi.VolumeIntegralWeakForm}, @NamedTuple{elements::Trixi.P4estElementContainer{2, Float64, Float64, 3, 4, 5, Array{Float64, 3}, Array{Float64, 4}, Array{Float64, 5}, Vector{Float64}, Array{Float64, 4}, Vector{Float64}}, interfaces::Trixi.P4estInterfaceContainer{2, Float64, 4, Array{Float64, 4}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, boundaries::Trixi.P4estBoundaryContainer{2, Float64, 3, Array{Float64, 3}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}, Vector{Float64}}, mortars::Trixi.P4estMortarContainer{2, Float64, 3, 5, Array{Float64, 5}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, fstar_primary_upper_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_primary_lower_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_secondary_upper_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_secondary_lower_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, u_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}}}, SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize, typeof(Trixi.rhs!), LinearAlgebra.UniformScaling{Bool}, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, typeof(SciMLBase.DEFAULT_OBSERVED), Nothing, Nothing, Nothing, Nothing}, @Kwargs{}, SciMLBase.StandardODEProblem}}, f::Symbol)
+│       @ Base ./Base.jl:49
+│     [2] macro expansion
+│       @ ./logging/logging.jl:386 [inlined]
+│     [3] top-level scope
+│       @ /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│     [4] include(mod::Module, _path::String)
+│       @ Base ./Base.jl:562
+│     [5] exec_options(opts::Base.JLOptions)
+│       @ Base ./client.jl:323
+│     [6] _start()
+│       @ Base ./client.jl:531
+└ @ Main /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+┌ Info: Analysis: direct grid evaluation
+└   nvisnodes = 400
+┌ Info: Analysis: writing HDF5
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=1.33_gamma_mr=0.168_p_scatter=1.0.h5"
+┌ Info: Analysis: write complete
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=1.33_gamma_mr=0.168_p_scatter=1.0.h5"
+┌ Info: Saved
+│   path = "bias=1.0_gamma_mc=1.33_gamma_mr=0.168_p_scatter=1.0.h5"
+└   small_mb = 4.01
+┌ Info: Starting case
+│   progress = "12/20"
+│   index = 1315
+│   gamma_mr = 1.3257113655901092
+│   gamma_mc = 0.13894954943731377
+│   gamma_total = 1.464660915027423
+└   restart = "warm"
+┌ Info: Starting solve
+│   name = "simple_geometries_intersection_g1315"
+│   max_harmonic = 95
+│   harmonic_mode = :auto
+│   gamma_mr = 1.3257113655901092
+│   gamma_mc = 0.13894954943731377
+│   polydeg = 3
+│   cfl = 0.5
+│   residual_tol = 1.0e-5
+│   residual_mode = :absolute_all
+│   residual_nvars = 191
+│   residual_scale_floor = 1.0e-12
+└   boundaries = Dict{Symbol, Symbol} with 4 entries: …
+┌ Info: Progress
+│   iter = 500
+│   t = 0.833
+│   dt = 0.001666
+│   residual = 0.0325
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1000
+│   t = 1.6659
+│   dt = 0.001666
+│   residual = 0.0133
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1500
+│   t = 2.4989
+│   dt = 0.001666
+│   residual = 0.00533
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2000
+│   t = 3.3319
+│   dt = 0.001666
+│   residual = 0.00225
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2500
+│   t = 4.1648
+│   dt = 0.001666
+│   residual = 0.00101
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3000
+│   t = 4.9978
+│   dt = 0.001666
+│   residual = 0.000503
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3500
+│   t = 5.8308
+│   dt = 0.001666
+│   residual = 0.000284
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4000
+│   t = 6.6638
+│   dt = 0.001666
+│   residual = 0.000183
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4500
+│   t = 7.4967
+│   dt = 0.001666
+│   residual = 0.000132
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5000
+│   t = 8.3297
+│   dt = 0.001666
+│   residual = 0.000101
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5500
+│   t = 9.1627
+│   dt = 0.001666
+│   residual = 8.08e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6000
+│   t = 9.9956
+│   dt = 0.001666
+│   residual = 6.47e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6500
+│   t = 10.8286
+│   dt = 0.001666
+│   residual = 5.17e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7000
+│   t = 11.6616
+│   dt = 0.001666
+│   residual = 4.13e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7500
+│   t = 12.4945
+│   dt = 0.001666
+│   residual = 3.3e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 8000
+│   t = 13.3275
+│   dt = 0.001666
+│   residual = 2.63e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 8500
+│   t = 14.1605
+│   dt = 0.001666
+│   residual = 2.1e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 9000
+│   t = 14.9934
+│   dt = 0.001666
+│   residual = 1.67e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 9500
+│   t = 15.8264
+│   dt = 0.001666
+│   residual = 1.33e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 10000
+│   t = 16.6594
+│   dt = 0.001666
+│   residual = 1.06e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info:   Steady state tolerance reached
+│   steady_state_callback = Trixi.SteadyStateCallback{Float64}(1.0e-5, 0.0)
+└   t = 16.877618221409545
+┌ Error: Exception while generating log record in module Main at /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│   exception =
+│    type TimeIntegratorSolution has no field destats
+│    Stacktrace:
+│     [1] getproperty(x::Trixi.TimeIntegratorSolution{Tuple{Float64, Float64}, Tuple{Vector{Float64}, Vector{Float64}}, SciMLBase.ODEProblem{Vector{Float64}, Tuple{Float64, Float64}, true, Trixi.SemidiscretizationHyperbolic{Trixi.P4estMesh{2, 2, Float64, Static.False, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est}, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est_ghost_t}, 4, 2}, FermiHarmonics2D{191}, FermiHarmonics.var"#46#48"{Int64}, Trixi.UnstructuredSortedBoundaryTypes{4, Tuple{MaxwellWallBC, OhmicContactBC, OhmicContactBC, OhmicContactBC}, Vector{Int64}}, typeof(FermiHarmonics.source_terms), Trixi.DGSEM{Trixi.LobattoLegendreBasis{Float64, 4, StaticArraysCore.SVector{4, Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}}, Trixi.LobattoLegendreMortarL2{Float64, 4, Matrix{Float64}, Matrix{Float64}}, Trixi.SurfaceIntegralWeakForm{Trixi.FluxLaxFriedrichs{typeof(Trixi.max_abs_speed)}}, Trixi.VolumeIntegralWeakForm}, @NamedTuple{elements::Trixi.P4estElementContainer{2, Float64, Float64, 3, 4, 5, Array{Float64, 3}, Array{Float64, 4}, Array{Float64, 5}, Vector{Float64}, Array{Float64, 4}, Vector{Float64}}, interfaces::Trixi.P4estInterfaceContainer{2, Float64, 4, Array{Float64, 4}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, boundaries::Trixi.P4estBoundaryContainer{2, Float64, 3, Array{Float64, 3}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}, Vector{Float64}}, mortars::Trixi.P4estMortarContainer{2, Float64, 3, 5, Array{Float64, 5}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, fstar_primary_upper_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_primary_lower_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_secondary_upper_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_secondary_lower_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, u_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}}}, SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize, typeof(Trixi.rhs!), LinearAlgebra.UniformScaling{Bool}, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, typeof(SciMLBase.DEFAULT_OBSERVED), Nothing, Nothing, Nothing, Nothing}, @Kwargs{}, SciMLBase.StandardODEProblem}}, f::Symbol)
+│       @ Base ./Base.jl:49
+│     [2] macro expansion
+│       @ ./logging/logging.jl:386 [inlined]
+│     [3] top-level scope
+│       @ /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│     [4] include(mod::Module, _path::String)
+│       @ Base ./Base.jl:562
+│     [5] exec_options(opts::Base.JLOptions)
+│       @ Base ./client.jl:323
+│     [6] _start()
+│       @ Base ./client.jl:531
+└ @ Main /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+┌ Info: Analysis: direct grid evaluation
+└   nvisnodes = 400
+┌ Info: Analysis: writing HDF5
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=0.139_gamma_mr=1.33_p_scatter=1.0.h5"
+┌ Info: Analysis: write complete
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=0.139_gamma_mr=1.33_p_scatter=1.0.h5"
+┌ Info: Saved
+│   path = "bias=1.0_gamma_mc=0.139_gamma_mr=1.33_p_scatter=1.0.h5"
+└   small_mb = 4.01
+┌ Info: Starting case
+│   progress = "13/20"
+│   index = 727
+│   gamma_mr = 0.13894954943731377
+│   gamma_mc = 1.3257113655901092
+│   gamma_total = 1.464660915027423
+└   restart = "warm"
+┌ Info: Starting solve
+│   name = "simple_geometries_intersection_g727"
+│   max_harmonic = 95
+│   harmonic_mode = :auto
+│   gamma_mr = 0.13894954943731377
+│   gamma_mc = 1.3257113655901092
+│   polydeg = 3
+│   cfl = 0.5
+│   residual_tol = 1.0e-5
+│   residual_mode = :absolute_all
+│   residual_nvars = 191
+│   residual_scale_floor = 1.0e-12
+└   boundaries = Dict{Symbol, Symbol} with 4 entries: …
+┌ Info: Progress
+│   iter = 500
+│   t = 0.833
+│   dt = 0.001666
+│   residual = 0.0368
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1000
+│   t = 1.6659
+│   dt = 0.001666
+│   residual = 0.0172
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1500
+│   t = 2.4989
+│   dt = 0.001666
+│   residual = 0.00475
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2000
+│   t = 3.3319
+│   dt = 0.001666
+│   residual = 0.00109
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2500
+│   t = 4.1648
+│   dt = 0.001666
+│   residual = 0.000408
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3000
+│   t = 4.9978
+│   dt = 0.001666
+│   residual = 0.000255
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3500
+│   t = 5.8308
+│   dt = 0.001666
+│   residual = 0.000167
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4000
+│   t = 6.6638
+│   dt = 0.001666
+│   residual = 0.00012
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4500
+│   t = 7.4967
+│   dt = 0.001666
+│   residual = 8.89e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5000
+│   t = 8.3297
+│   dt = 0.001666
+│   residual = 6.55e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5500
+│   t = 9.1627
+│   dt = 0.001666
+│   residual = 4.8e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6000
+│   t = 9.9956
+│   dt = 0.001666
+│   residual = 3.51e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6500
+│   t = 10.8286
+│   dt = 0.001666
+│   residual = 2.57e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7000
+│   t = 11.6616
+│   dt = 0.001666
+│   residual = 1.88e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7500
+│   t = 12.4945
+│   dt = 0.001666
+│   residual = 1.38e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 8000
+│   t = 13.3275
+│   dt = 0.001666
+│   residual = 1.01e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info:   Steady state tolerance reached
+│   steady_state_callback = Trixi.SteadyStateCallback{Float64}(1.0e-5, 0.0)
+└   t = 13.349161465615172
+┌ Error: Exception while generating log record in module Main at /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│   exception =
+│    type TimeIntegratorSolution has no field destats
+│    Stacktrace:
+│     [1] getproperty(x::Trixi.TimeIntegratorSolution{Tuple{Float64, Float64}, Tuple{Vector{Float64}, Vector{Float64}}, SciMLBase.ODEProblem{Vector{Float64}, Tuple{Float64, Float64}, true, Trixi.SemidiscretizationHyperbolic{Trixi.P4estMesh{2, 2, Float64, Static.False, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est}, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est_ghost_t}, 4, 2}, FermiHarmonics2D{191}, FermiHarmonics.var"#46#48"{Int64}, Trixi.UnstructuredSortedBoundaryTypes{4, Tuple{MaxwellWallBC, OhmicContactBC, OhmicContactBC, OhmicContactBC}, Vector{Int64}}, typeof(FermiHarmonics.source_terms), Trixi.DGSEM{Trixi.LobattoLegendreBasis{Float64, 4, StaticArraysCore.SVector{4, Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}}, Trixi.LobattoLegendreMortarL2{Float64, 4, Matrix{Float64}, Matrix{Float64}}, Trixi.SurfaceIntegralWeakForm{Trixi.FluxLaxFriedrichs{typeof(Trixi.max_abs_speed)}}, Trixi.VolumeIntegralWeakForm}, @NamedTuple{elements::Trixi.P4estElementContainer{2, Float64, Float64, 3, 4, 5, Array{Float64, 3}, Array{Float64, 4}, Array{Float64, 5}, Vector{Float64}, Array{Float64, 4}, Vector{Float64}}, interfaces::Trixi.P4estInterfaceContainer{2, Float64, 4, Array{Float64, 4}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, boundaries::Trixi.P4estBoundaryContainer{2, Float64, 3, Array{Float64, 3}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}, Vector{Float64}}, mortars::Trixi.P4estMortarContainer{2, Float64, 3, 5, Array{Float64, 5}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, fstar_primary_upper_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_primary_lower_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_secondary_upper_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_secondary_lower_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, u_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}}}, SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize, typeof(Trixi.rhs!), LinearAlgebra.UniformScaling{Bool}, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, typeof(SciMLBase.DEFAULT_OBSERVED), Nothing, Nothing, Nothing, Nothing}, @Kwargs{}, SciMLBase.StandardODEProblem}}, f::Symbol)
+│       @ Base ./Base.jl:49
+│     [2] macro expansion
+│       @ ./logging/logging.jl:386 [inlined]
+│     [3] top-level scope
+│       @ /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│     [4] include(mod::Module, _path::String)
+│       @ Base ./Base.jl:562
+│     [5] exec_options(opts::Base.JLOptions)
+│       @ Base ./client.jl:323
+│     [6] _start()
+│       @ Base ./client.jl:531
+└ @ Main /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+┌ Info: Analysis: direct grid evaluation
+└   nvisnodes = 400
+┌ Info: Analysis: writing HDF5
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=1.33_gamma_mr=0.139_p_scatter=1.0.h5"
+┌ Info: Analysis: write complete
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=1.33_gamma_mr=0.139_p_scatter=1.0.h5"
+┌ Info: Saved
+│   path = "bias=1.0_gamma_mc=1.33_gamma_mr=0.139_p_scatter=1.0.h5"
+└   small_mb = 4.01
+┌ Info: Starting case
+│   progress = "14/20"
+│   index = 1270
+│   gamma_mr = 1.0985411419875581
+│   gamma_mc = 0.35564803062231287
+│   gamma_total = 1.454189172609871
+└   restart = "warm"
+┌ Info: Starting solve
+│   name = "simple_geometries_intersection_g1270"
+│   max_harmonic = 95
+│   harmonic_mode = :auto
+│   gamma_mr = 1.0985411419875581
+│   gamma_mc = 0.35564803062231287
+│   polydeg = 3
+│   cfl = 0.5
+│   residual_tol = 1.0e-5
+│   residual_mode = :absolute_all
+│   residual_nvars = 191
+│   residual_scale_floor = 1.0e-12
+└   boundaries = Dict{Symbol, Symbol} with 4 entries: …
+┌ Info: Progress
+│   iter = 500
+│   t = 0.833
+│   dt = 0.001666
+│   residual = 0.0295
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1000
+│   t = 1.6659
+│   dt = 0.001666
+│   residual = 0.0122
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1500
+│   t = 2.4989
+│   dt = 0.001666
+│   residual = 0.00461
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2000
+│   t = 3.3319
+│   dt = 0.001666
+│   residual = 0.00182
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2500
+│   t = 4.1648
+│   dt = 0.001666
+│   residual = 0.000789
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3000
+│   t = 4.9978
+│   dt = 0.001666
+│   residual = 0.000389
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3500
+│   t = 5.8308
+│   dt = 0.001666
+│   residual = 0.000224
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4000
+│   t = 6.6638
+│   dt = 0.001666
+│   residual = 0.00015
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4500
+│   t = 7.4967
+│   dt = 0.001666
+│   residual = 0.00011
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5000
+│   t = 8.3297
+│   dt = 0.001666
+│   residual = 8.58e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5500
+│   t = 9.1627
+│   dt = 0.001666
+│   residual = 6.79e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6000
+│   t = 9.9956
+│   dt = 0.001666
+│   residual = 5.37e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6500
+│   t = 10.8286
+│   dt = 0.001666
+│   residual = 4.24e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7000
+│   t = 11.6616
+│   dt = 0.001666
+│   residual = 3.34e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7500
+│   t = 12.4945
+│   dt = 0.001666
+│   residual = 2.63e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 8000
+│   t = 13.3275
+│   dt = 0.001666
+│   residual = 2.07e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 8500
+│   t = 14.1605
+│   dt = 0.001666
+│   residual = 1.63e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 9000
+│   t = 14.9934
+│   dt = 0.001666
+│   residual = 1.29e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 9500
+│   t = 15.8264
+│   dt = 0.001666
+│   residual = 1.01e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info:   Steady state tolerance reached
+│   steady_state_callback = Trixi.SteadyStateCallback{Float64}(1.0e-5, 0.0)
+└   t = 15.868059772867145
+┌ Error: Exception while generating log record in module Main at /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│   exception =
+│    type TimeIntegratorSolution has no field destats
+│    Stacktrace:
+│     [1] getproperty(x::Trixi.TimeIntegratorSolution{Tuple{Float64, Float64}, Tuple{Vector{Float64}, Vector{Float64}}, SciMLBase.ODEProblem{Vector{Float64}, Tuple{Float64, Float64}, true, Trixi.SemidiscretizationHyperbolic{Trixi.P4estMesh{2, 2, Float64, Static.False, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est}, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est_ghost_t}, 4, 2}, FermiHarmonics2D{191}, FermiHarmonics.var"#46#48"{Int64}, Trixi.UnstructuredSortedBoundaryTypes{4, Tuple{MaxwellWallBC, OhmicContactBC, OhmicContactBC, OhmicContactBC}, Vector{Int64}}, typeof(FermiHarmonics.source_terms), Trixi.DGSEM{Trixi.LobattoLegendreBasis{Float64, 4, StaticArraysCore.SVector{4, Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}}, Trixi.LobattoLegendreMortarL2{Float64, 4, Matrix{Float64}, Matrix{Float64}}, Trixi.SurfaceIntegralWeakForm{Trixi.FluxLaxFriedrichs{typeof(Trixi.max_abs_speed)}}, Trixi.VolumeIntegralWeakForm}, @NamedTuple{elements::Trixi.P4estElementContainer{2, Float64, Float64, 3, 4, 5, Array{Float64, 3}, Array{Float64, 4}, Array{Float64, 5}, Vector{Float64}, Array{Float64, 4}, Vector{Float64}}, interfaces::Trixi.P4estInterfaceContainer{2, Float64, 4, Array{Float64, 4}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, boundaries::Trixi.P4estBoundaryContainer{2, Float64, 3, Array{Float64, 3}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}, Vector{Float64}}, mortars::Trixi.P4estMortarContainer{2, Float64, 3, 5, Array{Float64, 5}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, fstar_primary_upper_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_primary_lower_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_secondary_upper_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_secondary_lower_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, u_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}}}, SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize, typeof(Trixi.rhs!), LinearAlgebra.UniformScaling{Bool}, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, typeof(SciMLBase.DEFAULT_OBSERVED), Nothing, Nothing, Nothing, Nothing}, @Kwargs{}, SciMLBase.StandardODEProblem}}, f::Symbol)
+│       @ Base ./Base.jl:49
+│     [2] macro expansion
+│       @ ./logging/logging.jl:386 [inlined]
+│     [3] top-level scope
+│       @ /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│     [4] include(mod::Module, _path::String)
+│       @ Base ./Base.jl:562
+│     [5] exec_options(opts::Base.JLOptions)
+│       @ Base ./client.jl:323
+│     [6] _start()
+│       @ Base ./client.jl:531
+└ @ Main /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+┌ Info: Analysis: direct grid evaluation
+└   nvisnodes = 400
+┌ Info: Analysis: writing HDF5
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=0.356_gamma_mr=1.1_p_scatter=1.0.h5"
+┌ Info: Analysis: write complete
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=0.356_gamma_mr=1.1_p_scatter=1.0.h5"
+┌ Info: Saved
+│   path = "bias=1.0_gamma_mc=0.356_gamma_mr=1.1_p_scatter=1.0.h5"
+└   small_mb = 4.01
+┌ Info: Starting case
+│   progress = "15/20"
+│   index = 976
+│   gamma_mr = 0.35564803062231287
+│   gamma_mc = 1.0985411419875581
+│   gamma_total = 1.454189172609871
+└   restart = "warm"
+┌ Info: Starting solve
+│   name = "simple_geometries_intersection_g976"
+│   max_harmonic = 95
+│   harmonic_mode = :auto
+│   gamma_mr = 0.35564803062231287
+│   gamma_mc = 1.0985411419875581
+│   polydeg = 3
+│   cfl = 0.5
+│   residual_tol = 1.0e-5
+│   residual_mode = :absolute_all
+│   residual_nvars = 191
+│   residual_scale_floor = 1.0e-12
+└   boundaries = Dict{Symbol, Symbol} with 4 entries: …
+┌ Info: Progress
+│   iter = 500
+│   t = 0.833
+│   dt = 0.001666
+│   residual = 0.0222
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1000
+│   t = 1.6659
+│   dt = 0.001666
+│   residual = 0.00996
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1500
+│   t = 2.4989
+│   dt = 0.001666
+│   residual = 0.00295
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2000
+│   t = 3.3319
+│   dt = 0.001666
+│   residual = 0.00082
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2500
+│   t = 4.1648
+│   dt = 0.001666
+│   residual = 0.000281
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3000
+│   t = 4.9978
+│   dt = 0.001666
+│   residual = 0.000161
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3500
+│   t = 5.8308
+│   dt = 0.001666
+│   residual = 0.000108
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4000
+│   t = 6.6638
+│   dt = 0.001666
+│   residual = 8.0e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4500
+│   t = 7.4967
+│   dt = 0.001666
+│   residual = 6.06e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5000
+│   t = 8.3297
+│   dt = 0.001666
+│   residual = 4.56e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5500
+│   t = 9.1627
+│   dt = 0.001666
+│   residual = 3.42e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6000
+│   t = 9.9956
+│   dt = 0.001666
+│   residual = 2.56e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6500
+│   t = 10.8286
+│   dt = 0.001666
+│   residual = 1.91e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7000
+│   t = 11.6616
+│   dt = 0.001666
+│   residual = 1.43e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7500
+│   t = 12.4945
+│   dt = 0.001666
+│   residual = 1.07e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info:   Steady state tolerance reached
+│   steady_state_callback = Trixi.SteadyStateCallback{Float64}(1.0e-5, 0.0)
+└   t = 12.681120314022552
+┌ Error: Exception while generating log record in module Main at /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│   exception =
+│    type TimeIntegratorSolution has no field destats
+│    Stacktrace:
+│     [1] getproperty(x::Trixi.TimeIntegratorSolution{Tuple{Float64, Float64}, Tuple{Vector{Float64}, Vector{Float64}}, SciMLBase.ODEProblem{Vector{Float64}, Tuple{Float64, Float64}, true, Trixi.SemidiscretizationHyperbolic{Trixi.P4estMesh{2, 2, Float64, Static.False, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est}, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est_ghost_t}, 4, 2}, FermiHarmonics2D{191}, FermiHarmonics.var"#46#48"{Int64}, Trixi.UnstructuredSortedBoundaryTypes{4, Tuple{MaxwellWallBC, OhmicContactBC, OhmicContactBC, OhmicContactBC}, Vector{Int64}}, typeof(FermiHarmonics.source_terms), Trixi.DGSEM{Trixi.LobattoLegendreBasis{Float64, 4, StaticArraysCore.SVector{4, Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}}, Trixi.LobattoLegendreMortarL2{Float64, 4, Matrix{Float64}, Matrix{Float64}}, Trixi.SurfaceIntegralWeakForm{Trixi.FluxLaxFriedrichs{typeof(Trixi.max_abs_speed)}}, Trixi.VolumeIntegralWeakForm}, @NamedTuple{elements::Trixi.P4estElementContainer{2, Float64, Float64, 3, 4, 5, Array{Float64, 3}, Array{Float64, 4}, Array{Float64, 5}, Vector{Float64}, Array{Float64, 4}, Vector{Float64}}, interfaces::Trixi.P4estInterfaceContainer{2, Float64, 4, Array{Float64, 4}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, boundaries::Trixi.P4estBoundaryContainer{2, Float64, 3, Array{Float64, 3}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}, Vector{Float64}}, mortars::Trixi.P4estMortarContainer{2, Float64, 3, 5, Array{Float64, 5}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, fstar_primary_upper_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_primary_lower_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_secondary_upper_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, fstar_secondary_lower_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}, u_threaded::Vector{StaticArraysCore.MMatrix{191, 4, Float64, 764}}}}, SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize, typeof(Trixi.rhs!), LinearAlgebra.UniformScaling{Bool}, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, typeof(SciMLBase.DEFAULT_OBSERVED), Nothing, Nothing, Nothing, Nothing}, @Kwargs{}, SciMLBase.StandardODEProblem}}, f::Symbol)
+│       @ Base ./Base.jl:49
+│     [2] macro expansion
+│       @ ./logging/logging.jl:386 [inlined]
+│     [3] top-level scope
+│       @ /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│     [4] include(mod::Module, _path::String)
+│       @ Base ./Base.jl:562
+│     [5] exec_options(opts::Base.JLOptions)
+│       @ Base ./client.jl:323
+│     [6] _start()
+│       @ Base ./client.jl:531
+└ @ Main /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+┌ Info: Analysis: direct grid evaluation
+└   nvisnodes = 400
+┌ Info: Analysis: writing HDF5
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=1.1_gamma_mr=0.356_p_scatter=1.0.h5"
+┌ Info: Analysis: write complete
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=1.1_gamma_mr=0.356_p_scatter=1.0.h5"
+┌ Info: Saved
+│   path = "bias=1.0_gamma_mc=1.1_gamma_mr=0.356_p_scatter=1.0.h5"
+└   small_mb = 4.01
+┌ Info: Starting case
+│   progress = "16/20"
+│   index = 1314
+│   gamma_mr = 1.3257113655901092
+│   gamma_mc = 0.11513953993264472
+│   gamma_total = 1.4408509055227539
+└   restart = "warm"
+┌ Info: Starting solve
+│   name = "simple_geometries_intersection_g1314"
+│   max_harmonic = 96
+│   harmonic_mode = :auto
+│   gamma_mr = 1.3257113655901092
+│   gamma_mc = 0.11513953993264472
+│   polydeg = 3
+│   cfl = 0.5
+│   residual_tol = 1.0e-5
+│   residual_mode = :absolute_all
+│   residual_nvars = 193
+│   residual_scale_floor = 1.0e-12
+└   boundaries = Dict{Symbol, Symbol} with 4 entries: …
+┌ Info: Adjusted warm start for harmonic mismatch
+│   mode = :padded
+│   source_nvars = 191
+│   target_nvars = 193
+│   source_length = 754832
+└   target_length = 762736
+┌ Info: Progress
+│   iter = 500
+│   t = 0.833
+│   dt = 0.001666
+│   residual = 0.0252
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1000
+│   t = 1.6659
+│   dt = 0.001666
+│   residual = 0.0102
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1500
+│   t = 2.4989
+│   dt = 0.001666
+│   residual = 0.00413
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2000
+│   t = 3.3319
+│   dt = 0.001666
+│   residual = 0.00175
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2500
+│   t = 4.1648
+│   dt = 0.001666
+│   residual = 0.000795
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3000
+│   t = 4.9978
+│   dt = 0.001666
+│   residual = 0.000398
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3500
+│   t = 5.8308
+│   dt = 0.001666
+│   residual = 0.000226
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4000
+│   t = 6.6638
+│   dt = 0.001666
+│   residual = 0.000147
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4500
+│   t = 7.4967
+│   dt = 0.001666
+│   residual = 0.000106
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5000
+│   t = 8.3297
+│   dt = 0.001666
+│   residual = 8.13e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5500
+│   t = 9.1627
+│   dt = 0.001666
+│   residual = 6.51e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6000
+│   t = 9.9956
+│   dt = 0.001666
+│   residual = 5.22e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6500
+│   t = 10.8286
+│   dt = 0.001666
+│   residual = 4.17e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7000
+│   t = 11.6616
+│   dt = 0.001666
+│   residual = 3.33e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7500
+│   t = 12.4945
+│   dt = 0.001666
+│   residual = 2.66e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 8000
+│   t = 13.3275
+│   dt = 0.001666
+│   residual = 2.12e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 8500
+│   t = 14.1605
+│   dt = 0.001666
+│   residual = 1.69e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 9000
+│   t = 14.9934
+│   dt = 0.001666
+│   residual = 1.35e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 9500
+│   t = 15.8264
+│   dt = 0.001666
+│   residual = 1.08e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info:   Steady state tolerance reached
+│   steady_state_callback = Trixi.SteadyStateCallback{Float64}(1.0e-5, 0.0)
+└   t = 16.09462734547721
+┌ Error: Exception while generating log record in module Main at /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│   exception =
+│    type TimeIntegratorSolution has no field destats
+│    Stacktrace:
+│     [1] getproperty(x::Trixi.TimeIntegratorSolution{Tuple{Float64, Float64}, Tuple{Vector{Float64}, Vector{Float64}}, SciMLBase.ODEProblem{Vector{Float64}, Tuple{Float64, Float64}, true, Trixi.SemidiscretizationHyperbolic{Trixi.P4estMesh{2, 2, Float64, Static.False, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est}, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est_ghost_t}, 4, 2}, FermiHarmonics2D{193}, FermiHarmonics.var"#46#48"{Int64}, Trixi.UnstructuredSortedBoundaryTypes{4, Tuple{MaxwellWallBC, OhmicContactBC, OhmicContactBC, OhmicContactBC}, Vector{Int64}}, typeof(FermiHarmonics.source_terms), Trixi.DGSEM{Trixi.LobattoLegendreBasis{Float64, 4, StaticArraysCore.SVector{4, Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}}, Trixi.LobattoLegendreMortarL2{Float64, 4, Matrix{Float64}, Matrix{Float64}}, Trixi.SurfaceIntegralWeakForm{Trixi.FluxLaxFriedrichs{typeof(Trixi.max_abs_speed)}}, Trixi.VolumeIntegralWeakForm}, @NamedTuple{elements::Trixi.P4estElementContainer{2, Float64, Float64, 3, 4, 5, Array{Float64, 3}, Array{Float64, 4}, Array{Float64, 5}, Vector{Float64}, Array{Float64, 4}, Vector{Float64}}, interfaces::Trixi.P4estInterfaceContainer{2, Float64, 4, Array{Float64, 4}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, boundaries::Trixi.P4estBoundaryContainer{2, Float64, 3, Array{Float64, 3}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}, Vector{Float64}}, mortars::Trixi.P4estMortarContainer{2, Float64, 3, 5, Array{Float64, 5}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, fstar_primary_upper_threaded::Vector{StaticArraysCore.MMatrix{193, 4, Float64, 772}}, fstar_primary_lower_threaded::Vector{StaticArraysCore.MMatrix{193, 4, Float64, 772}}, fstar_secondary_upper_threaded::Vector{StaticArraysCore.MMatrix{193, 4, Float64, 772}}, fstar_secondary_lower_threaded::Vector{StaticArraysCore.MMatrix{193, 4, Float64, 772}}, u_threaded::Vector{StaticArraysCore.MMatrix{193, 4, Float64, 772}}}}, SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize, typeof(Trixi.rhs!), LinearAlgebra.UniformScaling{Bool}, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, typeof(SciMLBase.DEFAULT_OBSERVED), Nothing, Nothing, Nothing, Nothing}, @Kwargs{}, SciMLBase.StandardODEProblem}}, f::Symbol)
+│       @ Base ./Base.jl:49
+│     [2] macro expansion
+│       @ ./logging/logging.jl:386 [inlined]
+│     [3] top-level scope
+│       @ /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│     [4] include(mod::Module, _path::String)
+│       @ Base ./Base.jl:562
+│     [5] exec_options(opts::Base.JLOptions)
+│       @ Base ./client.jl:323
+│     [6] _start()
+│       @ Base ./client.jl:531
+└ @ Main /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+┌ Info: Analysis: direct grid evaluation
+└   nvisnodes = 400
+┌ Info: Analysis: writing HDF5
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=0.115_gamma_mr=1.33_p_scatter=1.0.h5"
+┌ Info: Analysis: write complete
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=0.115_gamma_mr=1.33_p_scatter=1.0.h5"
+┌ Info: Saved
+│   path = "bias=1.0_gamma_mc=0.115_gamma_mr=1.33_p_scatter=1.0.h5"
+└   small_mb = 4.01
+┌ Info: Starting case
+│   progress = "17/20"
+│   index = 677
+│   gamma_mr = 0.11513953993264472
+│   gamma_mc = 1.3257113655901092
+│   gamma_total = 1.4408509055227539
+└   restart = "warm"
+┌ Info: Starting solve
+│   name = "simple_geometries_intersection_g677"
+│   max_harmonic = 96
+│   harmonic_mode = :auto
+│   gamma_mr = 0.11513953993264472
+│   gamma_mc = 1.3257113655901092
+│   polydeg = 3
+│   cfl = 0.5
+│   residual_tol = 1.0e-5
+│   residual_mode = :absolute_all
+│   residual_nvars = 193
+│   residual_scale_floor = 1.0e-12
+└   boundaries = Dict{Symbol, Symbol} with 4 entries: …
+┌ Info: Progress
+│   iter = 500
+│   t = 0.833
+│   dt = 0.001666
+│   residual = 0.0379
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1000
+│   t = 1.6659
+│   dt = 0.001666
+│   residual = 0.0177
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1500
+│   t = 2.4989
+│   dt = 0.001666
+│   residual = 0.00488
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2000
+│   t = 3.3319
+│   dt = 0.001666
+│   residual = 0.00111
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2500
+│   t = 4.1648
+│   dt = 0.001666
+│   residual = 0.000424
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3000
+│   t = 4.9978
+│   dt = 0.001666
+│   residual = 0.000264
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3500
+│   t = 5.8308
+│   dt = 0.001666
+│   residual = 0.000172
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4000
+│   t = 6.6638
+│   dt = 0.001666
+│   residual = 0.000123
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4500
+│   t = 7.4967
+│   dt = 0.001666
+│   residual = 9.14e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5000
+│   t = 8.3297
+│   dt = 0.001666
+│   residual = 6.72e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5500
+│   t = 9.1627
+│   dt = 0.001666
+│   residual = 4.91e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6000
+│   t = 9.9956
+│   dt = 0.001666
+│   residual = 3.59e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6500
+│   t = 10.8286
+│   dt = 0.001666
+│   residual = 2.62e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7000
+│   t = 11.6616
+│   dt = 0.001666
+│   residual = 1.92e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7500
+│   t = 12.4945
+│   dt = 0.001666
+│   residual = 1.4e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 8000
+│   t = 13.3275
+│   dt = 0.001666
+│   residual = 1.02e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info:   Steady state tolerance reached
+│   steady_state_callback = Trixi.SteadyStateCallback{Float64}(1.0e-5, 0.0)
+└   t = 13.387478040394798
+┌ Error: Exception while generating log record in module Main at /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│   exception =
+│    type TimeIntegratorSolution has no field destats
+│    Stacktrace:
+│     [1] getproperty(x::Trixi.TimeIntegratorSolution{Tuple{Float64, Float64}, Tuple{Vector{Float64}, Vector{Float64}}, SciMLBase.ODEProblem{Vector{Float64}, Tuple{Float64, Float64}, true, Trixi.SemidiscretizationHyperbolic{Trixi.P4estMesh{2, 2, Float64, Static.False, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est}, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est_ghost_t}, 4, 2}, FermiHarmonics2D{193}, FermiHarmonics.var"#46#48"{Int64}, Trixi.UnstructuredSortedBoundaryTypes{4, Tuple{MaxwellWallBC, OhmicContactBC, OhmicContactBC, OhmicContactBC}, Vector{Int64}}, typeof(FermiHarmonics.source_terms), Trixi.DGSEM{Trixi.LobattoLegendreBasis{Float64, 4, StaticArraysCore.SVector{4, Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}}, Trixi.LobattoLegendreMortarL2{Float64, 4, Matrix{Float64}, Matrix{Float64}}, Trixi.SurfaceIntegralWeakForm{Trixi.FluxLaxFriedrichs{typeof(Trixi.max_abs_speed)}}, Trixi.VolumeIntegralWeakForm}, @NamedTuple{elements::Trixi.P4estElementContainer{2, Float64, Float64, 3, 4, 5, Array{Float64, 3}, Array{Float64, 4}, Array{Float64, 5}, Vector{Float64}, Array{Float64, 4}, Vector{Float64}}, interfaces::Trixi.P4estInterfaceContainer{2, Float64, 4, Array{Float64, 4}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, boundaries::Trixi.P4estBoundaryContainer{2, Float64, 3, Array{Float64, 3}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}, Vector{Float64}}, mortars::Trixi.P4estMortarContainer{2, Float64, 3, 5, Array{Float64, 5}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, fstar_primary_upper_threaded::Vector{StaticArraysCore.MMatrix{193, 4, Float64, 772}}, fstar_primary_lower_threaded::Vector{StaticArraysCore.MMatrix{193, 4, Float64, 772}}, fstar_secondary_upper_threaded::Vector{StaticArraysCore.MMatrix{193, 4, Float64, 772}}, fstar_secondary_lower_threaded::Vector{StaticArraysCore.MMatrix{193, 4, Float64, 772}}, u_threaded::Vector{StaticArraysCore.MMatrix{193, 4, Float64, 772}}}}, SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize, typeof(Trixi.rhs!), LinearAlgebra.UniformScaling{Bool}, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, typeof(SciMLBase.DEFAULT_OBSERVED), Nothing, Nothing, Nothing, Nothing}, @Kwargs{}, SciMLBase.StandardODEProblem}}, f::Symbol)
+│       @ Base ./Base.jl:49
+│     [2] macro expansion
+│       @ ./logging/logging.jl:386 [inlined]
+│     [3] top-level scope
+│       @ /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│     [4] include(mod::Module, _path::String)
+│       @ Base ./Base.jl:562
+│     [5] exec_options(opts::Base.JLOptions)
+│       @ Base ./client.jl:323
+│     [6] _start()
+│       @ Base ./client.jl:531
+└ @ Main /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+┌ Info: Analysis: direct grid evaluation
+└   nvisnodes = 400
+┌ Info: Analysis: writing HDF5
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=1.33_gamma_mr=0.115_p_scatter=1.0.h5"
+┌ Info: Analysis: write complete
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=1.33_gamma_mr=0.115_p_scatter=1.0.h5"
+┌ Info: Saved
+│   path = "bias=1.0_gamma_mc=1.33_gamma_mr=0.115_p_scatter=1.0.h5"
+└   small_mb = 4.01
+┌ Info: Starting case
+│   progress = "18/20"
+│   index = 1222
+│   gamma_mr = 0.9102981779915219
+│   gamma_mc = 0.5179474679231212
+│   gamma_total = 1.428245645914643
+└   restart = "warm"
+┌ Info: Starting solve
+│   name = "simple_geometries_intersection_g1222"
+│   max_harmonic = 96
+│   harmonic_mode = :auto
+│   gamma_mr = 0.9102981779915219
+│   gamma_mc = 0.5179474679231212
+│   polydeg = 3
+│   cfl = 0.5
+│   residual_tol = 1.0e-5
+│   residual_mode = :absolute_all
+│   residual_nvars = 193
+│   residual_scale_floor = 1.0e-12
+└   boundaries = Dict{Symbol, Symbol} with 4 entries: …
+┌ Info: Progress
+│   iter = 500
+│   t = 0.833
+│   dt = 0.001666
+│   residual = 0.0266
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1000
+│   t = 1.6659
+│   dt = 0.001666
+│   residual = 0.0112
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1500
+│   t = 2.4989
+│   dt = 0.001666
+│   residual = 0.00397
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2000
+│   t = 3.3319
+│   dt = 0.001666
+│   residual = 0.00148
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2500
+│   t = 4.1648
+│   dt = 0.001666
+│   residual = 0.000615
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3000
+│   t = 4.9978
+│   dt = 0.001666
+│   residual = 0.000302
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3500
+│   t = 5.8308
+│   dt = 0.001666
+│   residual = 0.000178
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4000
+│   t = 6.6638
+│   dt = 0.001666
+│   residual = 0.000122
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4500
+│   t = 7.4967
+│   dt = 0.001666
+│   residual = 9.07e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5000
+│   t = 8.3297
+│   dt = 0.001666
+│   residual = 7.11e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5500
+│   t = 9.1627
+│   dt = 0.001666
+│   residual = 5.57e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6000
+│   t = 9.9956
+│   dt = 0.001666
+│   residual = 4.35e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6500
+│   t = 10.8286
+│   dt = 0.001666
+│   residual = 3.4e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7000
+│   t = 11.6616
+│   dt = 0.001666
+│   residual = 2.65e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7500
+│   t = 12.4945
+│   dt = 0.001666
+│   residual = 2.06e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 8000
+│   t = 13.3275
+│   dt = 0.001666
+│   residual = 1.61e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 8500
+│   t = 14.1605
+│   dt = 0.001666
+│   residual = 1.25e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info:   Steady state tolerance reached
+│   steady_state_callback = Trixi.SteadyStateCallback{Float64}(1.0e-5, 0.0)
+└   t = 14.908479465342584
+┌ Error: Exception while generating log record in module Main at /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│   exception =
+│    type TimeIntegratorSolution has no field destats
+│    Stacktrace:
+│     [1] getproperty(x::Trixi.TimeIntegratorSolution{Tuple{Float64, Float64}, Tuple{Vector{Float64}, Vector{Float64}}, SciMLBase.ODEProblem{Vector{Float64}, Tuple{Float64, Float64}, true, Trixi.SemidiscretizationHyperbolic{Trixi.P4estMesh{2, 2, Float64, Static.False, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est}, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est_ghost_t}, 4, 2}, FermiHarmonics2D{193}, FermiHarmonics.var"#46#48"{Int64}, Trixi.UnstructuredSortedBoundaryTypes{4, Tuple{MaxwellWallBC, OhmicContactBC, OhmicContactBC, OhmicContactBC}, Vector{Int64}}, typeof(FermiHarmonics.source_terms), Trixi.DGSEM{Trixi.LobattoLegendreBasis{Float64, 4, StaticArraysCore.SVector{4, Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}}, Trixi.LobattoLegendreMortarL2{Float64, 4, Matrix{Float64}, Matrix{Float64}}, Trixi.SurfaceIntegralWeakForm{Trixi.FluxLaxFriedrichs{typeof(Trixi.max_abs_speed)}}, Trixi.VolumeIntegralWeakForm}, @NamedTuple{elements::Trixi.P4estElementContainer{2, Float64, Float64, 3, 4, 5, Array{Float64, 3}, Array{Float64, 4}, Array{Float64, 5}, Vector{Float64}, Array{Float64, 4}, Vector{Float64}}, interfaces::Trixi.P4estInterfaceContainer{2, Float64, 4, Array{Float64, 4}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, boundaries::Trixi.P4estBoundaryContainer{2, Float64, 3, Array{Float64, 3}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}, Vector{Float64}}, mortars::Trixi.P4estMortarContainer{2, Float64, 3, 5, Array{Float64, 5}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, fstar_primary_upper_threaded::Vector{StaticArraysCore.MMatrix{193, 4, Float64, 772}}, fstar_primary_lower_threaded::Vector{StaticArraysCore.MMatrix{193, 4, Float64, 772}}, fstar_secondary_upper_threaded::Vector{StaticArraysCore.MMatrix{193, 4, Float64, 772}}, fstar_secondary_lower_threaded::Vector{StaticArraysCore.MMatrix{193, 4, Float64, 772}}, u_threaded::Vector{StaticArraysCore.MMatrix{193, 4, Float64, 772}}}}, SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize, typeof(Trixi.rhs!), LinearAlgebra.UniformScaling{Bool}, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, typeof(SciMLBase.DEFAULT_OBSERVED), Nothing, Nothing, Nothing, Nothing}, @Kwargs{}, SciMLBase.StandardODEProblem}}, f::Symbol)
+│       @ Base ./Base.jl:49
+│     [2] macro expansion
+│       @ ./logging/logging.jl:386 [inlined]
+│     [3] top-level scope
+│       @ /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│     [4] include(mod::Module, _path::String)
+│       @ Base ./Base.jl:562
+│     [5] exec_options(opts::Base.JLOptions)
+│       @ Base ./client.jl:323
+│     [6] _start()
+│       @ Base ./client.jl:531
+└ @ Main /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+┌ Info: Analysis: direct grid evaluation
+└   nvisnodes = 400
+┌ Info: Analysis: writing HDF5
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=0.518_gamma_mr=0.91_p_scatter=1.0.h5"
+┌ Info: Analysis: write complete
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=0.518_gamma_mr=0.91_p_scatter=1.0.h5"
+┌ Info: Saved
+│   path = "bias=1.0_gamma_mc=0.518_gamma_mr=0.91_p_scatter=1.0.h5"
+└   small_mb = 4.01
+┌ Info: Starting case
+│   progress = "19/20"
+│   index = 1075
+│   gamma_mr = 0.5179474679231212
+│   gamma_mc = 0.9102981779915219
+│   gamma_total = 1.428245645914643
+└   restart = "warm"
+┌ Info: Starting solve
+│   name = "simple_geometries_intersection_g1075"
+│   max_harmonic = 96
+│   harmonic_mode = :auto
+│   gamma_mr = 0.5179474679231212
+│   gamma_mc = 0.9102981779915219
+│   polydeg = 3
+│   cfl = 0.5
+│   residual_tol = 1.0e-5
+│   residual_mode = :absolute_all
+│   residual_nvars = 193
+│   residual_scale_floor = 1.0e-12
+└   boundaries = Dict{Symbol, Symbol} with 4 entries: …
+┌ Info: Progress
+│   iter = 500
+│   t = 0.833
+│   dt = 0.001666
+│   residual = 0.0115
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1000
+│   t = 1.6659
+│   dt = 0.001666
+│   residual = 0.00503
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1500
+│   t = 2.4989
+│   dt = 0.001666
+│   residual = 0.00158
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2000
+│   t = 3.3319
+│   dt = 0.001666
+│   residual = 0.000493
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2500
+│   t = 4.1648
+│   dt = 0.001666
+│   residual = 0.000182
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3000
+│   t = 4.9978
+│   dt = 0.001666
+│   residual = 9.45e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3500
+│   t = 5.8308
+│   dt = 0.001666
+│   residual = 6.17e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4000
+│   t = 6.6638
+│   dt = 0.001666
+│   residual = 4.46e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4500
+│   t = 7.4967
+│   dt = 0.001666
+│   residual = 3.42e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5000
+│   t = 8.3297
+│   dt = 0.001666
+│   residual = 2.61e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5500
+│   t = 9.1627
+│   dt = 0.001666
+│   residual = 1.99e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6000
+│   t = 9.9956
+│   dt = 0.001666
+│   residual = 1.51e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6500
+│   t = 10.8286
+│   dt = 0.001666
+│   residual = 1.14e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info:   Steady state tolerance reached
+│   steady_state_callback = Trixi.SteadyStateCallback{Float64}(1.0e-5, 0.0)
+└   t = 11.23175422453233
+┌ Error: Exception while generating log record in module Main at /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│   exception =
+│    type TimeIntegratorSolution has no field destats
+│    Stacktrace:
+│     [1] getproperty(x::Trixi.TimeIntegratorSolution{Tuple{Float64, Float64}, Tuple{Vector{Float64}, Vector{Float64}}, SciMLBase.ODEProblem{Vector{Float64}, Tuple{Float64, Float64}, true, Trixi.SemidiscretizationHyperbolic{Trixi.P4estMesh{2, 2, Float64, Static.False, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est}, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est_ghost_t}, 4, 2}, FermiHarmonics2D{193}, FermiHarmonics.var"#46#48"{Int64}, Trixi.UnstructuredSortedBoundaryTypes{4, Tuple{MaxwellWallBC, OhmicContactBC, OhmicContactBC, OhmicContactBC}, Vector{Int64}}, typeof(FermiHarmonics.source_terms), Trixi.DGSEM{Trixi.LobattoLegendreBasis{Float64, 4, StaticArraysCore.SVector{4, Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}}, Trixi.LobattoLegendreMortarL2{Float64, 4, Matrix{Float64}, Matrix{Float64}}, Trixi.SurfaceIntegralWeakForm{Trixi.FluxLaxFriedrichs{typeof(Trixi.max_abs_speed)}}, Trixi.VolumeIntegralWeakForm}, @NamedTuple{elements::Trixi.P4estElementContainer{2, Float64, Float64, 3, 4, 5, Array{Float64, 3}, Array{Float64, 4}, Array{Float64, 5}, Vector{Float64}, Array{Float64, 4}, Vector{Float64}}, interfaces::Trixi.P4estInterfaceContainer{2, Float64, 4, Array{Float64, 4}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, boundaries::Trixi.P4estBoundaryContainer{2, Float64, 3, Array{Float64, 3}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}, Vector{Float64}}, mortars::Trixi.P4estMortarContainer{2, Float64, 3, 5, Array{Float64, 5}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, fstar_primary_upper_threaded::Vector{StaticArraysCore.MMatrix{193, 4, Float64, 772}}, fstar_primary_lower_threaded::Vector{StaticArraysCore.MMatrix{193, 4, Float64, 772}}, fstar_secondary_upper_threaded::Vector{StaticArraysCore.MMatrix{193, 4, Float64, 772}}, fstar_secondary_lower_threaded::Vector{StaticArraysCore.MMatrix{193, 4, Float64, 772}}, u_threaded::Vector{StaticArraysCore.MMatrix{193, 4, Float64, 772}}}}, SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize, typeof(Trixi.rhs!), LinearAlgebra.UniformScaling{Bool}, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, typeof(SciMLBase.DEFAULT_OBSERVED), Nothing, Nothing, Nothing, Nothing}, @Kwargs{}, SciMLBase.StandardODEProblem}}, f::Symbol)
+│       @ Base ./Base.jl:49
+│     [2] macro expansion
+│       @ ./logging/logging.jl:386 [inlined]
+│     [3] top-level scope
+│       @ /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│     [4] include(mod::Module, _path::String)
+│       @ Base ./Base.jl:562
+│     [5] exec_options(opts::Base.JLOptions)
+│       @ Base ./client.jl:323
+│     [6] _start()
+│       @ Base ./client.jl:531
+└ @ Main /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+┌ Info: Analysis: direct grid evaluation
+└   nvisnodes = 400
+┌ Info: Analysis: writing HDF5
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=0.91_gamma_mr=0.518_p_scatter=1.0.h5"
+┌ Info: Analysis: write complete
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=0.91_gamma_mr=0.518_p_scatter=1.0.h5"
+┌ Info: Saved
+│   path = "bias=1.0_gamma_mc=0.91_gamma_mr=0.518_p_scatter=1.0.h5"
+└   small_mb = 4.01
+┌ Info: Starting case
+│   progress = "20/20"
+│   index = 1313
+│   gamma_mr = 1.3257113655901092
+│   gamma_mc = 0.09540954763499938
+│   gamma_total = 1.4211209132251086
+└   restart = "warm"
+┌ Info: Starting solve
+│   name = "simple_geometries_intersection_g1313"
+│   max_harmonic = 96
+│   harmonic_mode = :auto
+│   gamma_mr = 1.3257113655901092
+│   gamma_mc = 0.09540954763499938
+│   polydeg = 3
+│   cfl = 0.5
+│   residual_tol = 1.0e-5
+│   residual_mode = :absolute_all
+│   residual_nvars = 193
+│   residual_scale_floor = 1.0e-12
+└   boundaries = Dict{Symbol, Symbol} with 4 entries: …
+┌ Info: Progress
+│   iter = 500
+│   t = 0.833
+│   dt = 0.001666
+│   residual = 0.0195
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1000
+│   t = 1.6659
+│   dt = 0.001666
+│   residual = 0.00797
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 1500
+│   t = 2.4989
+│   dt = 0.001666
+│   residual = 0.00323
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2000
+│   t = 3.3319
+│   dt = 0.001666
+│   residual = 0.00137
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 2500
+│   t = 4.1648
+│   dt = 0.001666
+│   residual = 0.000625
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3000
+│   t = 4.9978
+│   dt = 0.001666
+│   residual = 0.000314
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 3500
+│   t = 5.8308
+│   dt = 0.001666
+│   residual = 0.000179
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4000
+│   t = 6.6638
+│   dt = 0.001666
+│   residual = 0.000117
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 4500
+│   t = 7.4967
+│   dt = 0.001666
+│   residual = 8.45e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5000
+│   t = 8.3297
+│   dt = 0.001666
+│   residual = 6.46e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 5500
+│   t = 9.1627
+│   dt = 0.001666
+│   residual = 5.18e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6000
+│   t = 9.9956
+│   dt = 0.001666
+│   residual = 4.15e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 6500
+│   t = 10.8286
+│   dt = 0.001666
+│   residual = 3.32e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7000
+│   t = 11.6616
+│   dt = 0.001666
+│   residual = 2.65e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 7500
+│   t = 12.4945
+│   dt = 0.001666
+│   residual = 2.12e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 8000
+│   t = 13.3275
+│   dt = 0.001666
+│   residual = 1.69e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 8500
+│   t = 14.1605
+│   dt = 0.001666
+│   residual = 1.35e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info: Progress
+│   iter = 9000
+│   t = 14.9934
+│   dt = 0.001666
+│   residual = 1.07e-5
+│   tolerance = 1.0e-5
+└   residual_mode = :absolute_all
+┌ Info:   Steady state tolerance reached
+│   steady_state_callback = Trixi.SteadyStateCallback{Float64}(1.0e-5, 0.0)
+└   t = 15.256660514427017
+┌ Error: Exception while generating log record in module Main at /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│   exception =
+│    type TimeIntegratorSolution has no field destats
+│    Stacktrace:
+│     [1] getproperty(x::Trixi.TimeIntegratorSolution{Tuple{Float64, Float64}, Tuple{Vector{Float64}, Vector{Float64}}, SciMLBase.ODEProblem{Vector{Float64}, Tuple{Float64, Float64}, true, Trixi.SemidiscretizationHyperbolic{Trixi.P4estMesh{2, 2, Float64, Static.False, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est}, P4est.PointerWrappers.PointerWrapper{P4est.LibP4est.p4est_ghost_t}, 4, 2}, FermiHarmonics2D{193}, FermiHarmonics.var"#46#48"{Int64}, Trixi.UnstructuredSortedBoundaryTypes{4, Tuple{MaxwellWallBC, OhmicContactBC, OhmicContactBC, OhmicContactBC}, Vector{Int64}}, typeof(FermiHarmonics.source_terms), Trixi.DGSEM{Trixi.LobattoLegendreBasis{Float64, 4, StaticArraysCore.SVector{4, Float64}, Matrix{Float64}, Matrix{Float64}, Matrix{Float64}}, Trixi.LobattoLegendreMortarL2{Float64, 4, Matrix{Float64}, Matrix{Float64}}, Trixi.SurfaceIntegralWeakForm{Trixi.FluxLaxFriedrichs{typeof(Trixi.max_abs_speed)}}, Trixi.VolumeIntegralWeakForm}, @NamedTuple{elements::Trixi.P4estElementContainer{2, Float64, Float64, 3, 4, 5, Array{Float64, 3}, Array{Float64, 4}, Array{Float64, 5}, Vector{Float64}, Array{Float64, 4}, Vector{Float64}}, interfaces::Trixi.P4estInterfaceContainer{2, Float64, 4, Array{Float64, 4}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, boundaries::Trixi.P4estBoundaryContainer{2, Float64, 3, Array{Float64, 3}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}, Vector{Float64}}, mortars::Trixi.P4estMortarContainer{2, Float64, 3, 5, Array{Float64, 5}, Matrix{Int64}, Matrix{Tuple{Symbol, Symbol}}, Vector{Float64}, Vector{Int64}, Vector{Tuple{Symbol, Symbol}}}, fstar_primary_upper_threaded::Vector{StaticArraysCore.MMatrix{193, 4, Float64, 772}}, fstar_primary_lower_threaded::Vector{StaticArraysCore.MMatrix{193, 4, Float64, 772}}, fstar_secondary_upper_threaded::Vector{StaticArraysCore.MMatrix{193, 4, Float64, 772}}, fstar_secondary_lower_threaded::Vector{StaticArraysCore.MMatrix{193, 4, Float64, 772}}, u_threaded::Vector{StaticArraysCore.MMatrix{193, 4, Float64, 772}}}}, SciMLBase.ODEFunction{true, SciMLBase.FullSpecialize, typeof(Trixi.rhs!), LinearAlgebra.UniformScaling{Bool}, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, Nothing, typeof(SciMLBase.DEFAULT_OBSERVED), Nothing, Nothing, Nothing, Nothing}, @Kwargs{}, SciMLBase.StandardODEProblem}}, f::Symbol)
+│       @ Base ./Base.jl:49
+│     [2] macro expansion
+│       @ ./logging/logging.jl:386 [inlined]
+│     [3] top-level scope
+│       @ /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+│     [4] include(mod::Module, _path::String)
+│       @ Base ./Base.jl:562
+│     [5] exec_options(opts::Base.JLOptions)
+│       @ Base ./client.jl:323
+│     [6] _start()
+│       @ Base ./client.jl:531
+└ @ Main /gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/scripts/intersection_array_full_sweep.jl:174
+┌ Info: Analysis: direct grid evaluation
+└   nvisnodes = 400
+┌ Info: Analysis: writing HDF5
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=0.0954_gamma_mr=1.33_p_scatter=1.0.h5"
+┌ Info: Analysis: write complete
+└   file = "/gpfs/alpine1/scratch/jafa3629/FermiHarmonics/projects/simple_geometries/full_sweeps/simple_geometries_intersection_sweep_2026-02-26_014355/data/bias=1.0_gamma_mc=0.0954_gamma_mr=1.33_p_scatter=1.0.h5"
+┌ Info: Saved
+│   path = "bias=1.0_gamma_mc=0.0954_gamma_mr=1.33_p_scatter=1.0.h5"
+└   small_mb = 4.01
+┌ Info: Task complete
+│   task_id = 91
+│   cases = 20
+│   total_time = 4 hours, 37 minutes, 11 seconds, 997 milliseconds
+└   avg_per_case = 13 minutes, 51 seconds, 604 milliseconds

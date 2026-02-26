@@ -1,7 +1,8 @@
-# simple script to run a demo with three regimes:
+# simple script to run a demo with four regimes:
 # 1. ohmic/diffusive (gamma_mr=100, gamma_mc=0)
 # 2. hydrodynamic (gamma_mr=0, gamma_mc=100)
-# 3. ballistic (gamma_mr=0, gamma_mc=0)
+# 3. intermediate/mixed (gamma_mr=10, gamma_mc=10)
+# 4. ballistic (gamma_mr=0, gamma_mc=0)
 # runs are warm-started in sequence. harmonics are chosen automatically with
 # min_harmonic=4 and max_harmonic_auto=100.
 
@@ -40,8 +41,14 @@ function main()
     regimes = [
         (name = "diffusive", gamma_mr = 100.0, gamma_mc = 0.0),
         (name = "hydrodynamic", gamma_mr = 0.0, gamma_mc = 100.0),
+        (name = "intermediate", gamma_mr = 10.0, gamma_mc = 10.0),
         (name = "ballistic", gamma_mr = 0.0, gamma_mc = 0.0),
     ]
+    requested_regime = get(ENV, "FERMI_DEMO_REGIME", "")
+    if !isempty(requested_regime)
+        regimes = filter(r -> r.name == requested_regime, regimes)
+        isempty(regimes) && error("Unknown FERMI_DEMO_REGIME=$(requested_regime). Expected one of: diffusive, hydrodynamic, intermediate, ballistic")
+    end
 
 # ======================================================================================================================
 # Warm-Started Sweep

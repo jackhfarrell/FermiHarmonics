@@ -5,6 +5,20 @@ import h5py
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
 import numpy as np
+import seaborn as sns
+
+plt.rcParams.update(
+    {
+        "text.usetex": True,
+        "font.family": "serif",
+        "font.serif": ["Computer Modern Roman", "Times New Roman", "DejaVu Serif"],
+        "font.size": 24,
+        "axes.titlesize": 26,
+        "axes.labelsize": 24,
+        "xtick.labelsize": 20,
+        "ytick.labelsize": 20,
+    }
+)
 
 # Data/source configuration
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -14,7 +28,7 @@ X_CUT_WEST = -0.4
 X_CUT_EAST = 0.4
 Y_CUT_NORTH = 0.4
 GAMMA_MR_MIN = 1e-2
-GAMMA_MR_MAX = 1e2
+GAMMA_MR_MAX = 1e1
 GAMMA_MC_MIN = 1e-2
 GAMMA_MC_MAX = 1e2
 SMOOTHING_PASSES = 0
@@ -22,7 +36,12 @@ SMOOTHING_PASSES = 0
 # Output configuration
 OUT_DIR = Path(__file__).resolve().parent
 OUT_IN_OVER_IE = OUT_DIR / "junction_in_over_ie_heatmap_black.png"
-OUT_IW_OVER_IE = OUT_DIR / "junction_iw_over_ie_heatmap_black.png"
+OUT_IE_OVER_IW = OUT_DIR / "junction_ie_over_iw_heatmap_black.png"
+
+# Junction illustration contact colors
+WEST_COLOR = "#FAF278"
+NORTH_COLOR = "#87D5F8"
+EAST_COLOR = "#FA6977"
 
 
 def integrate_over_valid_segments(coord: np.ndarray, values: np.ndarray, valid: np.ndarray) -> float:
@@ -100,7 +119,7 @@ def build_rows(files):
         valid_x_north = np.isfinite(b1_north_line)
         i_n = np.abs(integrate_over_valid_segments(x, b1_north_line, valid_x_north)) if np.count_nonzero(valid_x_north) >= 2 else np.nan
 
-        rows.append((gamma_mr, gamma_mc, safe_ratio(i_n, i_e), safe_ratio(i_w, i_e)))
+        rows.append((gamma_mr, gamma_mc, safe_ratio(i_n, i_e), safe_ratio(i_e, i_w)))
     return rows
 
 
@@ -133,19 +152,19 @@ def style_dark():
             "ytick.color": "white",
             "text.color": "white",
             "axes.titlecolor": "white",
-            "font.size": 16,
-            "axes.titlesize": 20,
-            "axes.labelsize": 18,
-            "xtick.labelsize": 14,
-            "ytick.labelsize": 14,
+            "font.size": 24,
+            "axes.titlesize": 26,
+            "axes.labelsize": 24,
+            "xtick.labelsize": 20,
+            "ytick.labelsize": 20,
         }
     )
 
 
-def plot_single(gamma_mr_vals, gamma_mc_vals, grid, title, outfile):
+def plot_single(gamma_mr_vals, gamma_mc_vals, grid, outfile, num_style, den_style, cmap_name="magma"):
     finite = grid[np.isfinite(grid)]
     if finite.size == 0:
-        raise RuntimeError(f"No finite values to plot for {title}.")
+        raise RuntimeError("No finite values to plot for ratio heatmap.")
 
     vmin = float(np.quantile(finite, 0.01))
     vmax = float(np.quantile(finite, 0.99))
@@ -154,7 +173,10 @@ def plot_single(gamma_mr_vals, gamma_mc_vals, grid, title, outfile):
         if vmax <= vmin:
             vmin, vmax = 0.0, 1.0
 
-    cmap = plt.get_cmap("magma").copy()
+    if cmap_name in ("mako", "rocket", "flare", "crest"):
+        cmap = sns.color_palette(cmap_name, as_cmap=True).copy()
+    else:
+        cmap = plt.get_cmap(cmap_name).copy()
     cmap.set_bad("#202020")
 
     fig, ax = plt.subplots(figsize=(7.2, 6.4), constrained_layout=True)
@@ -177,10 +199,15 @@ def plot_single(gamma_mr_vals, gamma_mc_vals, grid, title, outfile):
     ax.set_ylim(GAMMA_MC_MIN, GAMMA_MC_MAX)
     ax.set_xlabel(r"$\gamma_{mr}$")
     ax.set_ylabel(r"$\gamma_{mc}$")
-    ax.set_title(title, pad=10)
     for spine in ax.spines.values():
         spine.set_color("white")
         spine.set_linewidth(1.2)
+
+    # Colored ratio label above each panel (matching junction contact colors).
+    x0 = 0.42
+    ax.text(x0, 1.03, num_style[0], transform=ax.transAxes, color=num_style[1], ha="center", va="bottom")
+    ax.text(x0 + 0.08, 1.03, r"$/$", transform=ax.transAxes, color="white", ha="center", va="bottom")
+    ax.text(x0 + 0.16, 1.03, den_style[0], transform=ax.transAxes, color=den_style[1], ha="center", va="bottom")
 
     cbar = fig.colorbar(pcm, ax=ax)
     cbar.outline.set_edgecolor("white")
@@ -188,9 +215,9 @@ def plot_single(gamma_mr_vals, gamma_mc_vals, grid, title, outfile):
     plt.setp(cbar.ax.get_yticklabels(), color="white")
     cbar.formatter = mticker.FormatStrFormatter("%.2g")
     cbar.update_ticks()
-    cbar.set_label(title, color="white")
+    cbar.set_label("")
 
-    fig.savefig(outfile, dpi=260, facecolor=fig.get_facecolor())
+    fig.savefig(outfile, dpi=1200, facecolor=fig.get_facecolor())
     print(f"Saved: {outfile}")
 
 
@@ -214,10 +241,26 @@ def main():
         raise RuntimeError("No parseable rows found (filename regex did not match).")
 
     gamma_mr_vals, gamma_mc_vals, in_over_ie_grid = build_grid(rows, col_idx=2)
-    _, _, iw_over_ie_grid = build_grid(rows, col_idx=3)
+    _, _, ie_over_iw_grid = build_grid(rows, col_idx=3)
 
-    plot_single(gamma_mr_vals, gamma_mc_vals, in_over_ie_grid, r"$I_N / I_E$", OUT_IN_OVER_IE)
-    plot_single(gamma_mr_vals, gamma_mc_vals, iw_over_ie_grid, r"$I_W / I_E$", OUT_IW_OVER_IE)
+    plot_single(
+        gamma_mr_vals,
+        gamma_mc_vals,
+        in_over_ie_grid,
+        OUT_IN_OVER_IE,
+        num_style=(r"$I_N$", NORTH_COLOR),
+        den_style=(r"$I_E$", EAST_COLOR),
+        cmap_name="rocket",
+    )
+    plot_single(
+        gamma_mr_vals,
+        gamma_mc_vals,
+        ie_over_iw_grid,
+        OUT_IE_OVER_IW,
+        num_style=(r"$I_E$", EAST_COLOR),
+        den_style=(r"$I_W$", WEST_COLOR),
+        cmap_name="rocket",
+    )
 
 
 if __name__ == "__main__":

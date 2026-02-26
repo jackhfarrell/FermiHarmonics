@@ -7,19 +7,37 @@ import matplotlib.ticker as mticker
 import numpy as np
 import seaborn as sns
 
+plt.rcParams.update(
+    {
+        "text.usetex": True,
+        "font.family": "serif",
+        "font.serif": ["Computer Modern Roman", "Times New Roman", "DejaVu Serif"],
+        "font.size": 15,
+        "axes.labelsize": 18,
+        "xtick.labelsize": 14,
+        "ytick.labelsize": 14,
+    }
+)
+
 # Research-style script: edit constants here as needed.
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RESULTS_ROOT = PROJECT_ROOT / "results"
+RESULTS_SWEEPS_ROOT = RESULTS_ROOT / "sweeps"
 SWEEP_GLOB = "simple_geometries_junction_sweep_*"
 X_CUT_WEST = -0.4
 X_CUT_EAST = 0.4
 Y_CUT_NORTH = 0.4
 GAMMA_MR_MIN = 1e-2
-GAMMA_MR_MAX = 1e2
+GAMMA_MR_MAX = 1e1
 GAMMA_MC_MIN = 1e-2
 GAMMA_MC_MAX = 1e2
 OUTFILE = Path(__file__).resolve().parent / "junction_terminal_ratios_ie_over_iw_in_over_ie_heatmap.png"
 SMOOTHING_PASSES = 0
+
+# Junction illustration contact colors
+WEST_COLOR = "#FAF278"
+NORTH_COLOR = "#87D5F8"
+EAST_COLOR = "#FA6977"
 
 
 def integrate_over_valid_segments(coord: np.ndarray, values: np.ndarray, valid: np.ndarray) -> float:
@@ -58,7 +76,10 @@ def smooth_nan_grid(grid: np.ndarray, passes: int = 1) -> np.ndarray:
     return out
 
 
-sweep_dirs = sorted([p for p in RESULTS_ROOT.glob(SWEEP_GLOB) if p.is_dir()], key=lambda p: p.stat().st_mtime)
+sweep_dirs = sorted(
+    [p for root in (RESULTS_ROOT, RESULTS_SWEEPS_ROOT) for p in root.glob(SWEEP_GLOB) if p.is_dir()],
+    key=lambda p: p.stat().st_mtime,
+)
 if not sweep_dirs:
     raise RuntimeError(f"No sweep directory matching {SWEEP_GLOB!r} found in {RESULTS_ROOT}")
 
@@ -147,15 +168,15 @@ for gamma_mr, gamma_mc, _, _, _, ie_over_iw, in_over_ie in rows:
 
 fig, axes = plt.subplots(1, 2, figsize=(8.2, 3.6), constrained_layout=True, sharex=True, sharey=True)
 plots = [
-    (ie_over_iw_grid, r"$I_E / I_W$", "rocket"),
-    (in_over_ie_grid, r"$I_N / I_E$", "mako"),
+    (ie_over_iw_grid, "rocket", (r"$I_E$", EAST_COLOR), (r"$I_W$", WEST_COLOR)),
+    (in_over_ie_grid, "mako", (r"$I_N$", NORTH_COLOR), (r"$I_E$", EAST_COLOR)),
 ]
 
-for ax, (grid, title, palette) in zip(axes, plots):
+for ax, (grid, palette, num_style, den_style) in zip(axes, plots):
     grid_smooth = smooth_nan_grid(grid, passes=SMOOTHING_PASSES)
     finite = grid_smooth[np.isfinite(grid_smooth)]
     if finite.size == 0:
-        raise RuntimeError(f"No finite values to plot for {title}.")
+        raise RuntimeError("No finite values to plot for one ratio panel.")
     vmin = float(np.quantile(finite, 0.01))
     vmax = float(np.quantile(finite, 0.99))
     if not np.isfinite(vmin) or not np.isfinite(vmax) or vmax <= vmin:
@@ -188,13 +209,18 @@ for ax, (grid, title, palette) in zip(axes, plots):
     ax.set_ylim(GAMMA_MC_MIN, GAMMA_MC_MAX)
     ax.set_box_aspect(domain_aspect)
     ax.set_xlabel(r"$\gamma_{mr}$")
-    ax.set_title(title)
     cb = fig.colorbar(pcm, ax=ax)
     cb.formatter = mticker.FormatStrFormatter("%.2g")
     cb.update_ticks()
-    cb.set_label(title)
+    cb.set_label("")
+
+    # Colored ratio label above each panel, matching junction contact colors.
+    x0 = 0.39
+    ax.text(x0, 1.04, num_style[0], transform=ax.transAxes, color=num_style[1], ha="center", va="bottom")
+    ax.text(x0 + 0.09, 1.04, r"$/$", transform=ax.transAxes, color="black", ha="center", va="bottom")
+    ax.text(x0 + 0.18, 1.04, den_style[0], transform=ax.transAxes, color=den_style[1], ha="center", va="bottom")
 
 axes[0].set_ylabel(r"$\gamma_{mc}$")
 
-fig.savefig(OUTFILE, dpi=220)
+fig.savefig(OUTFILE, dpi=700)
 print(f"Saved figure: {OUTFILE}")
