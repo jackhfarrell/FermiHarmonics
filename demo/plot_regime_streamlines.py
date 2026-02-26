@@ -28,7 +28,7 @@ def integrated_current_at_x(x: np.ndarray, y: np.ndarray, v: np.ndarray, x_cut: 
     valid = np.isfinite(v_line)
     if np.count_nonzero(valid) < 2:
         raise RuntimeError(f"Not enough valid points to integrate current at x={x[ix]:.6g}")
-    return float(np.trapz(v_line[valid], y[valid]))
+    return float(np.trapezoid(v_line[valid], y[valid]))
 
 
 def load_fields(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -48,22 +48,26 @@ data_dir = Path(__file__).resolve().parent / "data"
 out_path = Path(__file__).resolve().parent / "streamlines.png"
 hydro_out_path = Path(__file__).resolve().parent / "hydrodynamic_streamlines.png"
 dpi = 300
-regimes = ["diffusive", "hydrodynamic", "ballistic"]
+preferred_order = ["diffusive", "hydrodynamic", "intermediate", "ballistic"]
+regimes = [name for name in preferred_order if (data_dir / f"{name}.h5").is_file()]
+if not regimes:
+    raise FileNotFoundError(f"No regime files found in {data_dir}")
 x_cut = 0.4
 
-fig = plt.figure(figsize=(18, 5.6), constrained_layout=False)
+fig_width = 1.8 + 4.2 * len(regimes)
+fig = plt.figure(figsize=(fig_width, 5.6), constrained_layout=False)
 gs = fig.add_gridspec(
     1,
-    4,
-    width_ratios=[1.0, 1.0, 1.0, 0.05],
+    len(regimes) + 1,
+    width_ratios=[1.0] * len(regimes) + [0.05],
     wspace=0.18,
     left=0.06,
     right=0.94,
     bottom=0.08,
     top=0.92,
 )
-axes = [fig.add_subplot(gs[0, i]) for i in range(3)]
-cax = fig.add_subplot(gs[0, 3])
+axes = [fig.add_subplot(gs[0, i]) for i in range(len(regimes))]
+cax = fig.add_subplot(gs[0, len(regimes)])
 cmap_rocket = sns.color_palette("rocket", as_cmap=True)
 last_pcm = None
 
