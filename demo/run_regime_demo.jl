@@ -1,7 +1,7 @@
 # simple script to run a demo with four regimes:
 # 1. ohmic/diffusive (gamma_mr=100, gamma_mc=0)
 # 2. hydrodynamic (gamma_mr=0, gamma_mc=100)
-# 3. intermediate/mixed (gamma_mr=10, gamma_mc=10)
+# 3. intermediate/mixed, hydro-leaning (gamma_mr=0.05, gamma_mc=60)
 # 4. ballistic (gamma_mr=0, gamma_mc=0)
 # runs are warm-started in sequence. harmonics are chosen automatically with
 # min_harmonic=4 and max_harmonic_auto=100.
@@ -38,10 +38,17 @@ function main()
         log_every = 1000,
     )
 
+    # Keep the "intermediate" demo closer to hydrodynamic by default (gamma_mc >> gamma_mr).
+    # Optional overrides:
+    #   FERMI_DEMO_INTERMEDIATE_GAMMA_MR
+    #   FERMI_DEMO_INTERMEDIATE_GAMMA_MC
+    intermediate_gamma_mr = parse(Float64, get(ENV, "FERMI_DEMO_INTERMEDIATE_GAMMA_MR", "0.05"))
+    intermediate_gamma_mc = parse(Float64, get(ENV, "FERMI_DEMO_INTERMEDIATE_GAMMA_MC", "60.0"))
+
     regimes = [
         (name = "diffusive", gamma_mr = 100.0, gamma_mc = 0.0),
         (name = "hydrodynamic", gamma_mr = 0.0, gamma_mc = 100.0),
-        (name = "intermediate", gamma_mr = 10.0, gamma_mc = 10.0),
+        (name = "intermediate", gamma_mr = intermediate_gamma_mr, gamma_mc = intermediate_gamma_mc),
         (name = "ballistic", gamma_mr = 0.0, gamma_mc = 0.0),
     ]
     requested_regime = get(ENV, "FERMI_DEMO_REGIME", "")

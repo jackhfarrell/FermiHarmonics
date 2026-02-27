@@ -4,6 +4,7 @@ Plot current magnitude and streamlines for ballistic, hydrodynamic, and diffusiv
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import h5py
@@ -46,7 +47,8 @@ def load_fields(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
 
 data_dir = Path(__file__).resolve().parent / "data"
 out_path = Path(__file__).resolve().parent / "streamlines.png"
-hydro_out_path = Path(__file__).resolve().parent / "hydrodynamic_streamlines.png"
+single_regime = os.environ.get("FERMI_STREAM_SINGLE_REGIME", "hydrodynamic")
+single_out_path = Path(__file__).resolve().parent / f"{single_regime}_streamlines.png"
 dpi = 300
 preferred_order = ["diffusive", "hydrodynamic", "intermediate", "ballistic"]
 regimes = [name for name in preferred_order if (data_dir / f"{name}.h5").is_file()]
@@ -148,35 +150,35 @@ if last_pcm is not None:
 fig.savefig(out_path, dpi=dpi)
 print(f"saved: {out_path}")
 
-# Single-panel hydrodynamic image for presentations/figures.
-hydro_path = data_dir / "hydrodynamic.h5"
-if not hydro_path.is_file():
-    raise FileNotFoundError(f"Missing file: {hydro_path}")
+# Single-panel black-background image for presentations/figures.
+single_path = data_dir / f"{single_regime}.h5"
+if not single_path.is_file():
+    raise FileNotFoundError(f"Missing file: {single_path}")
 
-x_h, y_h, u_h, v_h = load_fields(hydro_path)
-line_current_h = integrated_current_at_x(x_h, y_h, v_h, x_cut=x_cut)
-line_scale_h = max(abs(line_current_h), 1e-14)
-u_h_norm = u_h / line_scale_h
-v_h_norm = v_h / line_scale_h
-speed_h = np.hypot(u_h_norm, v_h_norm)
-speed_h_masked = np.ma.masked_invalid(speed_h)
-u_h_masked = np.ma.masked_invalid(u_h_norm)
-v_h_masked = np.ma.masked_invalid(v_h_norm)
-local_h_max = float(np.nanmax(speed_h)) if np.isfinite(np.nanmax(speed_h)) else 1.0
-if local_h_max <= 0:
-    local_h_max = 1.0
+x_s, y_s, u_s, v_s = load_fields(single_path)
+line_current_s = integrated_current_at_x(x_s, y_s, v_s, x_cut=x_cut)
+line_scale_s = max(abs(line_current_s), 1e-14)
+u_s_norm = u_s / line_scale_s
+v_s_norm = v_s / line_scale_s
+speed_s = np.hypot(u_s_norm, v_s_norm)
+speed_s_masked = np.ma.masked_invalid(speed_s)
+u_s_masked = np.ma.masked_invalid(u_s_norm)
+v_s_masked = np.ma.masked_invalid(v_s_norm)
+local_s_max = float(np.nanmax(speed_s)) if np.isfinite(np.nanmax(speed_s)) else 1.0
+if local_s_max <= 0:
+    local_s_max = 1.0
 
-fig_h, ax_h = plt.subplots(figsize=(6.5, 5.0), constrained_layout=False)
-fig_h.patch.set_facecolor("black")
-ax_h.set_facecolor("black")
-ax_h.pcolormesh(
-    x_h, y_h, speed_h_masked, cmap=cmap_rocket, shading="auto", vmin=0.0, vmax=local_h_max
+fig_s, ax_s = plt.subplots(figsize=(6.5, 5.0), constrained_layout=False)
+fig_s.patch.set_facecolor("black")
+ax_s.set_facecolor("black")
+ax_s.pcolormesh(
+    x_s, y_s, speed_s_masked, cmap=cmap_rocket, shading="auto", vmin=0.0, vmax=local_s_max
 )
-ax_h.streamplot(
-    x_h,
-    y_h,
-    u_h_masked,
-    v_h_masked,
+ax_s.streamplot(
+    x_s,
+    y_s,
+    u_s_masked,
+    v_s_masked,
     color="white",
     density=1.0,
     linewidth=1.0,
@@ -184,13 +186,13 @@ ax_h.streamplot(
     minlength=0.2,
     integration_direction="both",
 )
-ax_h.set_xlim(float(x_h.min()), float(x_h.max()))
-ax_h.set_ylim(float(y_h.min()), float(y_h.max()))
-ax_h.set_xticks([])
-ax_h.set_yticks([])
-for spine in ax_h.spines.values():
+ax_s.set_xlim(float(x_s.min()), float(x_s.max()))
+ax_s.set_ylim(float(y_s.min()), float(y_s.max()))
+ax_s.set_xticks([])
+ax_s.set_yticks([])
+for spine in ax_s.spines.values():
     spine.set_visible(False)
-ax_h.set_aspect("equal")
+ax_s.set_aspect("equal")
 
-fig_h.savefig(hydro_out_path, dpi=600, facecolor=fig_h.get_facecolor(), edgecolor="none")
-print(f"saved: {hydro_out_path}")
+fig_s.savefig(single_out_path, dpi=600, facecolor=fig_s.get_facecolor(), edgecolor="none")
+print(f"saved: {single_out_path}")
