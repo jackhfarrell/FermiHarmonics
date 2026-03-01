@@ -288,48 +288,12 @@ def main() -> None:
 
     ax.set_xscale("log")
     ax.set_xlabel(r"$\gamma_{mc}$")
-    ax.set_ylabel("")
+    ax.set_ylabel(r"$I_E / I_N$")
     ax.grid(alpha=0.22, which="both", color="white")
     ax.tick_params(colors="white")
     ax.xaxis.label.set_color("white")
     for spine in ax.spines.values():
         spine.set_color("white")
-
-    # Colored y-label matching intersection contact colors.
-    xlab = -0.16
-    ax.text(
-        xlab,
-        0.58,
-        r"$I_E$",
-        transform=ax.transAxes,
-        rotation=90,
-        va="center",
-        ha="center",
-        color=EAST_COLOR,
-        fontsize=20,
-    )
-    ax.text(
-        xlab,
-        0.50,
-        r"$/$",
-        transform=ax.transAxes,
-        rotation=90,
-        va="center",
-        ha="center",
-        color="white",
-        fontsize=18,
-    )
-    ax.text(
-        xlab,
-        0.42,
-        r"$I_N$",
-        transform=ax.transAxes,
-        rotation=90,
-        va="center",
-        ha="center",
-        color=NORTH_COLOR,
-        fontsize=20,
-    )
 
     sm = ScalarMappable(norm=norm, cmap=cmap)
     sm.set_array([])
