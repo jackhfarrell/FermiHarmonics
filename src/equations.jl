@@ -24,6 +24,11 @@ struct FermiHarmonics2D{NVARS} <: Trixi.AbstractEquations{2, NVARS}
     max_speed::Float64
     Ax::Matrix{Float64}
     Ay::Matrix{Float64}
+    transport::Symbol
+    mu0::Float64
+    mass::Float64
+    theta_oversample::Int
+    nonlinear_data
 end
 
 """
@@ -45,6 +50,10 @@ function FermiHarmonics2D(
     gamma_mr::Real,
     gamma_mc::Real,
     max_harmonic::Integer = 0,
+    transport::Symbol = :linear,
+    mu0::Union{Nothing, Real} = nothing,
+    mass::Union{Nothing, Real} = nothing,
+    theta_oversample::Integer = 2,
 )
     nvars_int = Int(nvars)
     nvars_int >= 1 || throw(ArgumentError("nvars must be >= 1"))
@@ -54,9 +63,18 @@ function FermiHarmonics2D(
         throw(ArgumentError("max_harmonic ($max_harmonic) must match (nvars - 1) ÷ 2 = $M"))
     end
 
+    validate_transport_mode(transport, mu0, mass, theta_oversample)
+
+    nonlinear_transport_data = nothing
+    mu0_value = isnothing(mu0) ? NaN : Float64(mu0)
+    mass_value = isnothing(mass) ? NaN : Float64(mass)
     vF = 1.0
+    if transport === :parabolic_nonlinear
+        vF = zero_state_speed(mu0_value, mass_value)
+        nonlinear_transport_data = create_nonlinear_transport_data(M, Int(theta_oversample))
+    end
+
     Ax, Ay = streaming_matrices(M, vF)
-    # Canonical LLF speed for this kinetic model: max |v · n| = vF (for unit normals).
     max_speed = vF
 
     return FermiHarmonics2D{nvars_int}(
@@ -65,6 +83,11 @@ function FermiHarmonics2D(
         max_speed,
         Ax,
         Ay,
+        transport,
+        mu0_value,
+        mass_value,
+        Int(theta_oversample),
+        nonlinear_transport_data,
     )
 end
 
@@ -175,7 +198,11 @@ function Base.show(io::IO, equations::FermiHarmonics2D{NVARS}) where {NVARS}
     print(io, "FermiHarmonics2D{$NVARS}(")
     print(io, "max_harmonic=$max_harmonic, ")
     print(io, "γ_mr=$(equations.gamma_mr), ")
-    print(io, "γ_mc=$(equations.gamma_mc)")
+    print(io, "γ_mc=$(equations.gamma_mc), ")
+    print(io, "transport=$(equations.transport)")
+    if transport_is_nonlinear(equations)
+        print(io, ", mu0=$(equations.mu0), mass=$(equations.mass), theta_oversample=$(equations.theta_oversample)")
+    end
     print(io, ")")
 end
 
@@ -188,6 +215,13 @@ function Base.show(io::IO, ::MIME"text/plain", equations::FermiHarmonics2D{NVARS
         Trixi.summary_line(io, "max harmonic", max_harmonic)
         Trixi.summary_line(io, "γ_mr (momentum-relaxing)", equations.gamma_mr)
         Trixi.summary_line(io, "γ_mc (momentum-conserving)", equations.gamma_mc)
+        Trixi.summary_line(io, "transport", equations.transport)
+        if transport_is_nonlinear(equations)
+            Trixi.summary_line(io, "mu0", equations.mu0)
+            Trixi.summary_line(io, "mass", equations.mass)
+            Trixi.summary_line(io, "theta oversample", equations.theta_oversample)
+            Trixi.summary_line(io, "linearized vF", equations.max_speed)
+        end
         Trixi.summary_footer(io)
     end
 end

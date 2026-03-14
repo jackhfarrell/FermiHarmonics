@@ -24,9 +24,11 @@ using LinearAlgebra
 using SparseArrays
 using StaticArrays
 using HDF5
+using FFTW
 
 # Include core physics and interfaces
 include("equations.jl")
+include("nonlinear_transport.jl")
 include("source_terms.jl")
 include("boundary_conditions.jl")
 include("trixi_interface.jl")

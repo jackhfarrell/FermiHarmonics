@@ -26,7 +26,6 @@ Returns:
 - `filename::AbstractString`.
 """
 function save_for_analysis(sol, semi, filename; nvisnodes=400)
-    solution_vector = sol.u[end]
     final_time = sol.t[end]
     nvisnodes = Int(nvisnodes)
     mesh, equations, solver, cache = Trixi.mesh_equations_solver_cache(semi)
@@ -61,20 +60,28 @@ function save_for_analysis(sol, semi, filename; nvisnodes=400)
     a0_grid = fill(NaN, num_x, num_y)
     a1_grid = fill(NaN, num_x, num_y)
     b1_grid = fill(NaN, num_x, num_y)
+    nonlinear_currents = transport_is_nonlinear(equations)
+    jx_grid = nonlinear_currents ? fill(NaN, num_x, num_y) : nothing
+    jy_grid = nonlinear_currents ? fill(NaN, num_x, num_y) : nothing
     in_domain_mask = fill(false, num_x, num_y)
 
     @inbounds for y_index in 1:num_y, x_index in 1:num_x
         x_target = x_uniform[x_index]
         y_target = y_uniform[y_index]
-        a0_value, a1_value, b1_value, in_domain = evaluate_solution(sol, semi, x_target, y_target)
+        a0_value, a1_value, b1_value, jx_value, jy_value, in_domain =
+            evaluate_analysis_observables(sol, semi, x_target, y_target)
         a0_grid[x_index, y_index] = a0_value
         a1_grid[x_index, y_index] = a1_value
         b1_grid[x_index, y_index] = b1_value
+        if nonlinear_currents
+            jx_grid[x_index, y_index] = jx_value
+            jy_grid[x_index, y_index] = jy_value
+        end
         in_domain_mask[x_index, y_index] = in_domain
     end
     @info "Analysis: writing HDF5" file=filename
-    analysis_write_hdf5(filename, a0_grid, a1_grid, b1_grid, x_uniform, y_uniform,
-                        in_domain_mask, final_time)
+    analysis_write_hdf5(filename, a0_grid, a1_grid, b1_grid, jx_grid, jy_grid,
+                        x_uniform, y_uniform, in_domain_mask, final_time, equations)
     @info "Analysis: write complete" file=filename
     return filename
 end
@@ -233,22 +240,16 @@ end
 end
 
 
-"""
-    evaluate_solution(sol, semi, x_target, y_target; max_newton=10, tol=1e-12)
-
-Evaluate `(a0, a1, b1, in_domain)` at one Cartesian point by element search and
-reference-coordinate solve.
-"""
-function evaluate_solution(
+function interpolate_state_at_point(
     sol, 
     semi, 
     x_target, 
     y_target;
     max_newton::Int=10, tol::Float64=1e-12
 )
-    # Solution and mesh data.
     solution_vector = sol.u[end]
     mesh, equations, solver, cache = Trixi.mesh_equations_solver_cache(semi)
+    num_vars = Trixi.nvariables(equations)
     num_nodes = Trixi.nnodes(solver)
     num_elements = Trixi.nelements(solver, cache)
     nodes = solver.basis.nodes
@@ -258,7 +259,7 @@ function evaluate_solution(
     @inbounds for element_index in 1:num_elements
         element_x_coords = zeros(num_nodes, num_nodes)
         element_y_coords = zeros(num_nodes, num_nodes)
-        element_u_values = zeros(3, num_nodes, num_nodes)
+        element_u_values = zeros(num_vars, num_nodes, num_nodes)
         
         # Gather element coordinates and values.
         for node_j in 1:num_nodes, node_i in 1:num_nodes
@@ -267,9 +268,9 @@ function evaluate_solution(
             element_x_coords[node_i, node_j] = coords[1]
             element_y_coords[node_i, node_j] = coords[2]
             vars = Trixi.get_node_vars(solution_wrapped, equations, solver, node_i, node_j, element_index)
-            element_u_values[1, node_i, node_j] = vars[1]
-            element_u_values[2, node_i, node_j] = vars[2]
-            element_u_values[3, node_i, node_j] = vars[3]
+            for var_index in 1:num_vars
+                element_u_values[var_index, node_i, node_j] = vars[var_index]
+            end
         end
 
         # Fast bounding-box reject.
@@ -315,32 +316,73 @@ function evaluate_solution(
             if abs(xi) <= 1.0 + 1e-10 && abs(eta) <= 1.0 + 1e-10
                 basis_xi = lagrange_basis(nodes, xi)
                 basis_eta = lagrange_basis(nodes, eta)
-                a0_value = 0.0
-                a1_value = 0.0
-                b1_value = 0.0
+                state_value = zeros(Float64, num_vars)
                 for node_j in 1:num_nodes, node_i in 1:num_nodes
                     weight = basis_xi[node_i] * basis_eta[node_j]
-                    a0_value += weight * element_u_values[1, node_i, node_j]
-                    a1_value += weight * element_u_values[2, node_i, node_j]
-                    b1_value += weight * element_u_values[3, node_i, node_j]
+                    for var_index in 1:num_vars
+                        state_value[var_index] += weight * element_u_values[var_index, node_i, node_j]
+                    end
                 end
 
-                return a0_value, a1_value, b1_value, true
+                return state_value, true
             end
         end
     end
     
     # Point not in domain.
-    return NaN, NaN, NaN, false
+    return Float64[], false
 end
 
-function analysis_write_hdf5(filename, a0_grid, a1_grid, b1_grid, x_uniform, y_uniform,
-                              in_domain_mask, t)
+"""
+    evaluate_solution(sol, semi, x_target, y_target; max_newton=10, tol=1e-12)
+
+Evaluate `(a0, a1, b1, in_domain)` at one Cartesian point by element search and
+reference-coordinate solve.
+"""
+function evaluate_solution(sol, semi, x_target, y_target; max_newton::Int=10, tol::Float64=1e-12)
+    state_value, in_domain = interpolate_state_at_point(
+        sol, semi, x_target, y_target; max_newton=max_newton, tol=tol,
+    )
+    if !in_domain
+        return NaN, NaN, NaN, false
+    end
+    a0_value = state_value[1]
+    a1_value = length(state_value) >= 2 ? state_value[2] : 0.0
+    b1_value = length(state_value) >= 3 ? state_value[3] : 0.0
+    return a0_value, a1_value, b1_value, true
+end
+
+function evaluate_analysis_observables(sol, semi, x_target, y_target; max_newton::Int=10, tol::Float64=1e-12)
+    state_value, in_domain = interpolate_state_at_point(
+        sol, semi, x_target, y_target; max_newton=max_newton, tol=tol,
+    )
+    if !in_domain
+        return NaN, NaN, NaN, NaN, NaN, false
+    end
+
+    equations = semi.equations
+    a0_value = state_value[1]
+    a1_value = length(state_value) >= 2 ? state_value[2] : 0.0
+    b1_value = length(state_value) >= 3 ? state_value[3] : 0.0
+    if transport_is_nonlinear(equations)
+        jx_value, jy_value = nonlinear_current_components(state_value, equations)
+        return a0_value, a1_value, b1_value, jx_value, jy_value, true
+    end
+
+    return a0_value, a1_value, b1_value, a1_value, b1_value, true
+end
+
+function analysis_write_hdf5(filename, a0_grid, a1_grid, b1_grid, jx_grid, jy_grid, x_uniform, y_uniform,
+                              in_domain_mask, t, equations)
     h5open(filename, "w") do file
         # a0_grid[i, j] is at (x[i], y[j])
         file["a0"] = a0_grid
         file["a1"] = a1_grid
         file["b1"] = b1_grid
+        if !isnothing(jx_grid) && !isnothing(jy_grid)
+            file["jx"] = jx_grid
+            file["jy"] = jy_grid
+        end
         file["x"] = collect(x_uniform)
         file["y"] = collect(y_uniform)
         file["mask"] = collect(in_domain_mask)
@@ -350,6 +392,10 @@ function analysis_write_hdf5(filename, a0_grid, a1_grid, b1_grid, x_uniform, y_u
         attributes(file)["ny"] = length(y_uniform)
         attributes(file)["grid_type"] = "uniform_cartesian"
         attributes(file)["mask_method"] = "direct"
-        attributes(file)["description"] = "Observable harmonics: a0 (density), a1 (x-current), b1 (y-current)"
+        if transport_is_nonlinear(equations)
+            attributes(file)["description"] = "Harmonic observables: a0, a1, b1 and nonlinear currents jx, jy"
+        else
+            attributes(file)["description"] = "Observable harmonics: a0 (density), a1 (x-current), b1 (y-current)"
+        end
     end
 end

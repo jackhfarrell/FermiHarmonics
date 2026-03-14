@@ -216,6 +216,10 @@ Returns:
 function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any},
                params::SolveParams, gamma_mr::Real, gamma_mc::Real;
                max_harmonic::Union{Integer, Symbol, Nothing}=:auto,
+               transport::Symbol=:linear,
+               mu0::Union{Nothing, Real}=nothing,
+               mass::Union{Nothing, Real}=nothing,
+               theta_oversample::Integer=2,
                u0_override::Union{Nothing, AbstractVector}=nothing,
                visualize::Bool=false,
                name::AbstractString="run")
@@ -233,6 +237,10 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
         gamma_mr=gamma_mr,
         gamma_mc=gamma_mc,
         max_harmonic=max_harmonic_resolved,
+        transport=transport,
+        mu0=mu0,
+        mass=mass,
+        theta_oversample=theta_oversample,
     )
 
     boundary_symbols = sort(collect(keys(boundary_conditions)))
@@ -245,7 +253,7 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
     )
 
     boundary_types = Dict(key => boundary_condition_name(value) for (key, value) in boundary_conditions)
-    @info "Starting solve" name=name max_harmonic=max_harmonic_resolved harmonic_mode=harmonic_mode gamma_mr=gamma_mr gamma_mc=gamma_mc polydeg=params.polydeg cfl=params.cfl residual_tol=params.residual_tol boundaries=boundary_types
+    @info "Starting solve" name=name max_harmonic=max_harmonic_resolved harmonic_mode=harmonic_mode gamma_mr=gamma_mr gamma_mc=gamma_mc polydeg=params.polydeg cfl=params.cfl residual_tol=params.residual_tol boundaries=boundary_types transport=transport mu0=mu0 mass=mass theta_oversample=theta_oversample
     flush(stdout)
     flush(stderr)
 
@@ -340,10 +348,12 @@ end
 Create a live visualization callback for `a0`, `a1`, and `b1` every `params.log_every` accepted steps.
 """
 function visualization_callback(params, semi, name::AbstractString)
+    variable_names = transport_is_nonlinear(semi.equations) ? ["a0", "jx", "jy"] : ["a0", "a1", "b1"]
     return Trixi.VisualizationCallback(
         semi;
         interval=params.log_every,
-        variable_names=["a0", "a1", "b1"],
+        solution_variables=analysis_variables,
+        variable_names=variable_names,
         filename="live_viz_$(name)",
         overwrite=true,
         seriescolor=:magma,

@@ -148,6 +148,97 @@ function ohmic_contact!(out::AbstractVector{Float64},
     return out
 end
 
+function nonlinear_diffuse_incoming_value(
+    state_samples::Vector{ComplexF64},
+    unit_normal::SVector{2, Float64},
+    equations::FermiHarmonics2D,
+)
+    data = nonlinear_data(equations)
+    nx, ny = unit_normal
+    dtheta = 2.0 * pi / data.theta_count
+    outgoing_flux = 0.0
+    incoming_weight = 0.0
+
+    @inbounds for j in eachindex(state_samples)
+        projection = nx * data.cos_theta[j] + ny * data.sin_theta[j]
+        if projection > 0.0
+            outgoing_flux += projection * parabolic_shifted_flux(real(state_samples[j]), equations)
+        elseif projection < 0.0
+            incoming_weight -= projection
+        end
+    end
+
+    incoming_weight *= dtheta
+    incoming_weight > 0.0 || return 0.0
+    outgoing_flux *= dtheta
+    return parabolic_shifted_flux_inverse(outgoing_flux / incoming_weight, equations)
+end
+
+function nonlinear_maxwell_wall!(
+    out::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    unit_normal::SVector{2, Float64},
+    p_scatter::Real,
+    target::AbstractVector{Float64},
+    equations::FermiHarmonics2D,
+)
+    cache = get_nonlinear_cache(equations)
+    data = nonlinear_data(equations)
+    harmonic_state_to_samples!(cache.samples, state, equations)
+    diffuse_value = nonlinear_diffuse_incoming_value(cache.samples, unit_normal, equations)
+
+    specular_target!(target, state, unit_normal)
+    harmonic_state_to_samples!(cache.scratch_samples, target, equations)
+
+    p = Float64(p_scatter)
+    one_minus = 1.0 - p
+    nx, ny = unit_normal
+    @inbounds for j in eachindex(cache.scratch_samples)
+        projection = nx * data.cos_theta[j] + ny * data.sin_theta[j]
+        if projection < 0.0
+            specular_value = real(cache.scratch_samples[j])
+            cache.scratch_samples[j] = ComplexF64(p * diffuse_value + one_minus * specular_value, 0.0)
+        else
+            cache.scratch_samples[j] = ComplexF64(real(cache.samples[j]), 0.0)
+        end
+    end
+
+    return samples_to_harmonics!(out, cache.scratch_samples, equations)
+end
+
+function nonlinear_ohmic_contact!(
+    out::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    unit_normal::SVector{2, Float64},
+    p_ohmic_absorb::Real,
+    bias::Real,
+    target::AbstractVector{Float64},
+    equations::FermiHarmonics2D,
+)
+    cache = get_nonlinear_cache(equations)
+    data = nonlinear_data(equations)
+    harmonic_state_to_samples!(cache.samples, state, equations)
+
+    specular_target!(target, state, unit_normal)
+    harmonic_state_to_samples!(cache.scratch_samples, target, equations)
+
+    imposed_value = 0.5 * Float64(bias)
+    p = Float64(p_ohmic_absorb)
+    one_minus = 1.0 - p
+    nx, ny = unit_normal
+    @inbounds for j in eachindex(cache.scratch_samples)
+        projection = nx * data.cos_theta[j] + ny * data.sin_theta[j]
+        if projection < 0.0
+            specular_value = real(cache.scratch_samples[j])
+            cache.scratch_samples[j] = ComplexF64(p * imposed_value + one_minus * specular_value, 0.0)
+        else
+            cache.scratch_samples[j] = ComplexF64(real(cache.samples[j]), 0.0)
+        end
+    end
+
+    return samples_to_harmonics!(out, cache.scratch_samples, equations)
+end
+
 
 # ======================================================================================================================
 # Diffuse and Specular Target Computation
@@ -373,6 +464,15 @@ function init_projector_cache!(
 )::Trixi.SemidiscretizationHyperbolic{<:Any, <:FermiHarmonics2D}
     boundary_conditions = semi.boundary_conditions
     nvars = Trixi.nvariables(semi.equations)
+
+    if transport_is_nonlinear(semi.equations)
+        for bc in boundary_conditions.boundary_condition_types
+            empty!(bc.cache.projectors)
+            bc.cache.initialized = false
+            bc.cache.nvars = nvars
+        end
+        return semi
+    end
     
     # Reset caches if number of variables changed (e.g., adaptive harmonics in sweeps)
     for bc in boundary_conditions.boundary_condition_types
