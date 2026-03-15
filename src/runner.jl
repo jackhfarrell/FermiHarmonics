@@ -345,7 +345,7 @@ end
 """
     visualization_callback(params, semi, name::AbstractString)
 
-Create a live visualization callback for `a0`, `a1`, and `b1` every `params.log_every` accepted steps.
+Create a live visualization callback every `params.log_every` accepted steps.
 """
 function visualization_callback(params, semi, name::AbstractString)
     if transport_is_nonlinear(semi.equations)
@@ -382,14 +382,14 @@ function nonlinear_visualization_callback(params, semi, name::AbstractString)
         integrator -> begin
             grids = compute_analysis_grids(integrator.u, semi; nvisnodes=nvisnodes)
             mask = grids.mask
-            a0 = ifelse.(mask, grids.a0, NaN)
+            density = ifelse.(mask, grids.density, NaN)
             a1 = ifelse.(mask, grids.a1, NaN)
             jx = ifelse.(mask, something(grids.jx, grids.a1), NaN)
             jy = ifelse.(mask, something(grids.jy, grids.b1), NaN)
 
             p1 = Plots.heatmap(
-                grids.x, grids.y, permutedims(a0);
-                title = "a0",
+                grids.x, grids.y, permutedims(density);
+                title = "n",
                 aspect_ratio = :equal,
                 color = :magma,
                 colorbar = true,

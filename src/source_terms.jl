@@ -36,6 +36,10 @@ Source terms from a BGK-type approximation to the collision integral.  We do not
 ``\\gamma_mr + \\gamma_mc``.
 """
 @inline function physical_sources(u, x, t, equations::FermiHarmonics2D)::SVector
+    if nonlinear_collision_is_exact_bgk(equations)
+        return nonlinear_bgk_sources(u, equations)
+    end
+
     n = length(u)
     out = MVector{n, Float64}(undef)
     @inbounds begin
@@ -60,6 +64,25 @@ Source terms from a BGK-type approximation to the collision integral.  We do not
                 out[si] = -gamma_hi * u[si]
             end
         end
+    end
+    return SVector(out)
+end
+
+@inline function nonlinear_bgk_sources(u, equations::FermiHarmonics2D)::SVector
+    n = length(u)
+    out = MVector{n, Float64}(undef)
+    drift_equilibrium = MVector{n, Float64}(undef)
+    isotropic_equilibrium = MVector{n, Float64}(undef)
+
+    mu, velocity = recover_mu_u(u, equations)
+    local_equilibrium_state!(drift_equilibrium, mu, velocity, equations)
+    isotropic_equilibrium_state!(isotropic_equilibrium, mu, equations)
+
+    gamma_mr = equations.gamma_mr
+    gamma_mc = equations.gamma_mc
+    @inbounds for i in 1:n
+        out[i] = -gamma_mr * (u[i] - isotropic_equilibrium[i]) -
+                 gamma_mc * (u[i] - drift_equilibrium[i])
     end
     return SVector(out)
 end

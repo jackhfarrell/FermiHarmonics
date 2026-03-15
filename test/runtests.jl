@@ -44,6 +44,7 @@ end
         mass=8.0,
         theta_oversample=2,
     )
+    @test eq.collision_model === :exact_bgk
 
     state = [0.3, -0.08, 0.05, 0.03, -0.02, 0.015, -0.01, 0.005, -0.004]
     cache = FermiHarmonics.get_nonlinear_cache(eq)
@@ -65,6 +66,32 @@ end
     @test nonlinear_x ≈ Ax * state atol=1e-6 rtol=1e-6
     @test nonlinear_y ≈ Ay * state atol=1e-6 rtol=1e-6
 
+    expected_density = eq.mass * (eq.mu0 + 0.5 * state[1]) / (2.0 * pi)
+    @test FermiHarmonics.nonlinear_density(state, eq) ≈ expected_density atol=1e-12 rtol=1e-12
+    @test collect(FermiHarmonics.nonlinear_current([state[1]; zeros(8)], eq)) ≈ [0.0, 0.0] atol=1e-12 rtol=1e-12
+
+    mu_target = 2.15
+    velocity_target = SVector(0.12, -0.05)
+    equilibrium_state = zeros(Float64, 9)
+    FermiHarmonics.local_equilibrium_state!(equilibrium_state, mu_target, velocity_target, eq)
+    recovered_mu, recovered_velocity = FermiHarmonics.recover_mu_u(equilibrium_state, eq)
+    expected_density_eq = eq.mass * mu_target / (2.0 * pi)
+    @test FermiHarmonics.nonlinear_density(equilibrium_state, eq) ≈ expected_density_eq atol=2e-10 rtol=2e-10
+    expected_current_eq = 0.25 * eq.mass * mu_target .* velocity_target
+    @test collect(FermiHarmonics.nonlinear_current(equilibrium_state, eq)) ≈ collect(expected_current_eq) atol=5e-9 rtol=5e-9
+    @test recovered_mu ≈ mu_target atol=2e-10 rtol=2e-10
+    @test recovered_velocity ≈ velocity_target atol=5e-9 rtol=5e-9
+
+    reconstructed_state = zeros(Float64, 9)
+    FermiHarmonics.local_equilibrium_state!(reconstructed_state, equilibrium_state, eq)
+    @test reconstructed_state ≈ equilibrium_state atol=5e-9 rtol=5e-9
+
+    small_velocity = SVector(0.03, 0.0)
+    small_drift_state = zeros(Float64, 9)
+    FermiHarmonics.local_equilibrium_state!(small_drift_state, eq.mu0, small_velocity, eq)
+    @test small_drift_state[FermiHarmonics.cosine_index(2)] ≈
+          small_drift_state[FermiHarmonics.cosine_index(1)]^2 / (4.0 * eq.mu0) atol=2e-4 rtol=2e-3
+
     @test_throws ArgumentError FermiHarmonics2D(
         3;
         gamma_mr=0.1,
@@ -81,6 +108,44 @@ end
         mu0=1.0,
         mass=1.0,
     ))
+end
+
+@testset "Nonlinear BGK source terms" begin
+    eq_bgk = FermiHarmonics2D(
+        9;
+        gamma_mr=0.0,
+        gamma_mc=0.8,
+        max_harmonic=4,
+        transport=:parabolic_nonlinear,
+        mu0=2.0,
+        mass=8.0,
+        theta_oversample=2,
+    )
+    equilibrium_state = zeros(Float64, 9)
+    FermiHarmonics.local_equilibrium_state!(equilibrium_state, 2.1, SVector(0.08, -0.03), eq_bgk)
+    source_eq = FermiHarmonics.physical_sources(equilibrium_state, nothing, 0.0, eq_bgk)
+    @test source_eq ≈ zeros(9) atol=5e-9 rtol=5e-9
+
+    perturbed = copy(equilibrium_state)
+    perturbed[FermiHarmonics.cosine_index(3)] += 0.04
+    source_perturbed = FermiHarmonics.physical_sources(perturbed, nothing, 0.0, eq_bgk)
+    @test source_perturbed[FermiHarmonics.cosine_index(3)] < 0.0
+
+    eq_two_rate = FermiHarmonics2D(
+        9;
+        gamma_mr=0.2,
+        gamma_mc=0.5,
+        max_harmonic=4,
+        transport=:parabolic_nonlinear,
+        mu0=2.0,
+        mass=8.0,
+        theta_oversample=2,
+    )
+    two_rate_state = zeros(Float64, 9)
+    FermiHarmonics.local_equilibrium_state!(two_rate_state, 2.05, SVector(0.07, 0.01), eq_two_rate)
+    two_rate_source = FermiHarmonics.physical_sources(two_rate_state, nothing, 0.0, eq_two_rate)
+    @test norm(two_rate_source[2:3]) > 0.0
+    @test norm(two_rate_source[4:end]) > 0.0
 end
 
 @testset "Nonlinear boundary conditions" begin
@@ -167,6 +232,7 @@ end
         name="test_nonlinear",
     )
     @test semi_nonlinear.equations.transport === :parabolic_nonlinear
+    @test semi_nonlinear.equations.collision_model === :exact_bgk
     @test length(sol_nonlinear.u[end]) == length(Trixi.wrap_array(sol_nonlinear.u[end], semi_nonlinear))
 
     linear_probe = evaluate_observables(sol_linear, semi_linear, 0.0, 0.0)
@@ -176,6 +242,8 @@ end
 
     nonlinear_probe = evaluate_observables(sol_nonlinear, semi_nonlinear, 0.0, 0.0)
     @test nonlinear_probe.in_domain
+    @test isfinite(nonlinear_probe.n)
     @test isfinite(nonlinear_probe.jx)
     @test isfinite(nonlinear_probe.jy)
+    @test Trixi.varnames(FermiHarmonics.analysis_variables, semi_nonlinear.equations) == ("n", "jx", "jy")
 end

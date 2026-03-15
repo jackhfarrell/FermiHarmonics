@@ -13,8 +13,8 @@ using Trixi
 """
     save_for_analysis(sol, semi, filename; nvisnodes=400)
 
-Save ``a0``, ``a1``, ``b1`` observables on a uniform Cartesian grid in a lightweight HDF5 format
-for post-processing and analysis.  The grid is determined from the simulation domain bounds.
+Save observables on a uniform Cartesian grid in a lightweight HDF5 format for post-processing
+and analysis. The grid is determined from the simulation domain bounds.
 
 Arguments:
 - `sol`: time integration solution.
@@ -29,7 +29,7 @@ function save_for_analysis(sol, semi, filename; nvisnodes=400)
     final_time = sol.t[end]
     grids = compute_analysis_grids(sol.u[end], semi; nvisnodes=nvisnodes)
     @info "Analysis: writing HDF5" file=filename
-    analysis_write_hdf5(filename, grids.a0, grids.a1, grids.b1, grids.jx, grids.jy,
+    analysis_write_hdf5(filename, grids.density, grids.a1, grids.b1, grids.jx, grids.jy,
                         grids.x, grids.y, grids.mask, final_time, grids.equations)
     @info "Analysis: write complete" file=filename
     return filename
@@ -83,7 +83,7 @@ function compute_analysis_grids(solution_vector, semi; nvisnodes=400)
     @info "Analysis: direct grid evaluation" nvisnodes
     num_x = length(x_uniform)
     num_y = length(y_uniform)
-    a0_grid = fill(NaN, num_x, num_y)
+    density_grid = fill(NaN, num_x, num_y)
     a1_grid = fill(NaN, num_x, num_y)
     b1_grid = fill(NaN, num_x, num_y)
     nonlinear_currents = transport_is_nonlinear(equations)
@@ -94,9 +94,9 @@ function compute_analysis_grids(solution_vector, semi; nvisnodes=400)
     @inbounds for y_index in 1:num_y, x_index in 1:num_x
         x_target = x_uniform[x_index]
         y_target = y_uniform[y_index]
-        a0_value, a1_value, b1_value, jx_value, jy_value, in_domain =
+        density_value, a1_value, b1_value, jx_value, jy_value, in_domain =
             evaluate_analysis_observables(solution_vector, semi, x_target, y_target)
-        a0_grid[x_index, y_index] = a0_value
+        density_grid[x_index, y_index] = density_value
         a1_grid[x_index, y_index] = a1_value
         b1_grid[x_index, y_index] = b1_value
         if nonlinear_currents
@@ -107,7 +107,8 @@ function compute_analysis_grids(solution_vector, semi; nvisnodes=400)
     end
 
     return (
-        a0 = a0_grid,
+        density = density_grid,
+        a0 = density_grid,
         a1 = a1_grid,
         b1 = b1_grid,
         jx = jx_grid,
@@ -385,7 +386,7 @@ end
 Evaluate the physical observables at one Cartesian point.
 
 Returns a named tuple with:
-- `a0`
+- `n`
 - `a1`
 - `b1`
 - `jx`
@@ -395,11 +396,12 @@ Returns a named tuple with:
 For linear transport, `jx == a1` and `jy == b1`.
 """
 function evaluate_observables(sol, semi, x_target, y_target; max_newton::Int=10, tol::Float64=1e-12)
-    a0_value, a1_value, b1_value, jx_value, jy_value, in_domain = evaluate_analysis_observables(
+    density_value, a1_value, b1_value, jx_value, jy_value, in_domain = evaluate_analysis_observables(
         sol.u[end], semi, x_target, y_target; max_newton=max_newton, tol=tol,
     )
     return (
-        a0 = a0_value,
+        n = density_value,
+        a0 = density_value,
         a1 = a1_value,
         b1 = b1_value,
         jx = jx_value,
@@ -417,22 +419,26 @@ function evaluate_analysis_observables(solution_vector, semi, x_target, y_target
     end
 
     equations = semi.equations
-    a0_value = state_value[1]
+    density_value = transport_is_nonlinear(equations) ?
+        nonlinear_density(state_value, equations) : state_value[1]
     a1_value = length(state_value) >= 2 ? state_value[2] : 0.0
     b1_value = length(state_value) >= 3 ? state_value[3] : 0.0
     if transport_is_nonlinear(equations)
-        jx_value, jy_value = nonlinear_current_components(state_value, equations)
-        return a0_value, a1_value, b1_value, jx_value, jy_value, true
+        jx_value, jy_value = nonlinear_current(state_value, equations)
+        return density_value, a1_value, b1_value, jx_value, jy_value, true
     end
 
-    return a0_value, a1_value, b1_value, a1_value, b1_value, true
+    return density_value, a1_value, b1_value, a1_value, b1_value, true
 end
 
-function analysis_write_hdf5(filename, a0_grid, a1_grid, b1_grid, jx_grid, jy_grid, x_uniform, y_uniform,
+function analysis_write_hdf5(filename, density_grid, a1_grid, b1_grid, jx_grid, jy_grid, x_uniform, y_uniform,
                               in_domain_mask, t, equations)
     h5open(filename, "w") do file
-        # a0_grid[i, j] is at (x[i], y[j])
-        file["a0"] = a0_grid
+        if transport_is_nonlinear(equations)
+            file["n"] = density_grid
+        else
+            file["a0"] = density_grid
+        end
         file["a1"] = a1_grid
         file["b1"] = b1_grid
         if !isnothing(jx_grid) && !isnothing(jy_grid)
@@ -449,7 +455,7 @@ function analysis_write_hdf5(filename, a0_grid, a1_grid, b1_grid, jx_grid, jy_gr
         attributes(file)["grid_type"] = "uniform_cartesian"
         attributes(file)["mask_method"] = "direct"
         if transport_is_nonlinear(equations)
-            attributes(file)["description"] = "Harmonic observables: a0, a1, b1 and nonlinear currents jx, jy"
+            attributes(file)["description"] = "Nonlinear observables: density n, currents jx and jy, plus harmonic reference fields a1 and b1"
         else
             attributes(file)["description"] = "Observable harmonics: a0 (density), a1 (x-current), b1 (y-current)"
         end

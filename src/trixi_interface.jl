@@ -29,7 +29,7 @@ Trixi.varnames(::typeof(cons2prim), equations::FermiHarmonics2D) =
 
 function Trixi.varnames(::typeof(analysis_variables), equations::FermiHarmonics2D)
     if transport_is_nonlinear(equations)
-        return ("a0", "jx", "jy")
+        return ("n", "jx", "jy")
     end
     return ("a0", "a1", "b1")
 end

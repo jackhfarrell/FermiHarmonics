@@ -25,6 +25,7 @@ struct FermiHarmonics2D{NVARS, TNonlinear} <: Trixi.AbstractEquations{2, NVARS}
     Ax::Matrix{Float64}
     Ay::Matrix{Float64}
     transport::Symbol
+    collision_model::Symbol
     mu0::Float64
     mass::Float64
     theta_oversample::Int
@@ -32,7 +33,8 @@ struct FermiHarmonics2D{NVARS, TNonlinear} <: Trixi.AbstractEquations{2, NVARS}
 end
 
 """
-    FermiHarmonics2D(nvars; gamma_mr, gamma_mc, max_harmonic=0)
+    FermiHarmonics2D(nvars; gamma_mr, gamma_mc, max_harmonic=0, transport=:linear,
+                     collision_model=nothing, mu0=nothing, mass=nothing, theta_oversample=2)
 
 Construct `FermiHarmonics2D`.
 
@@ -41,6 +43,9 @@ Parameters:
 - `gamma_mr`: momentum-relaxing scattering rate.
 - `gamma_mc`: momentum-conserving scattering rate.
 - `max_harmonic`: optional explicit harmonic cutoff; if set, must satisfy `nvars == 1 + 2*max_harmonic`.
+- `transport`: `:linear` or `:parabolic_nonlinear`.
+- `collision_model`: defaults to `:linear_mrt` for linear transport and `:exact_bgk` for nonlinear transport.
+- `mu0`, `mass`, `theta_oversample`: required nonlinear-transport parameters.
 
 Returns:
 - `FermiHarmonics2D{nvars}` equations object.
@@ -51,6 +56,7 @@ function FermiHarmonics2D(
     gamma_mc::Real,
     max_harmonic::Integer = 0,
     transport::Symbol = :linear,
+    collision_model::Union{Nothing, Symbol} = nothing,
     mu0::Union{Nothing, Real} = nothing,
     mass::Union{Nothing, Real} = nothing,
     theta_oversample::Integer = 2,
@@ -64,6 +70,7 @@ function FermiHarmonics2D(
     end
 
     validate_transport_mode(transport, mu0, mass, theta_oversample)
+    collision_model_value = validate_collision_model(transport, collision_model)
 
     nonlinear_transport_data = nothing
     mu0_value = isnothing(mu0) ? NaN : Float64(mu0)
@@ -84,6 +91,7 @@ function FermiHarmonics2D(
         Ax,
         Ay,
         transport,
+        collision_model_value,
         mu0_value,
         mass_value,
         Int(theta_oversample),
@@ -199,7 +207,8 @@ function Base.show(io::IO, equations::FermiHarmonics2D{NVARS}) where {NVARS}
     print(io, "max_harmonic=$max_harmonic, ")
     print(io, "γ_mr=$(equations.gamma_mr), ")
     print(io, "γ_mc=$(equations.gamma_mc), ")
-    print(io, "transport=$(equations.transport)")
+    print(io, "transport=$(equations.transport), ")
+    print(io, "collision_model=$(equations.collision_model)")
     if transport_is_nonlinear(equations)
         print(io, ", mu0=$(equations.mu0), mass=$(equations.mass), theta_oversample=$(equations.theta_oversample)")
     end
@@ -216,6 +225,7 @@ function Base.show(io::IO, ::MIME"text/plain", equations::FermiHarmonics2D{NVARS
         Trixi.summary_line(io, "γ_mr (momentum-relaxing)", equations.gamma_mr)
         Trixi.summary_line(io, "γ_mc (momentum-conserving)", equations.gamma_mc)
         Trixi.summary_line(io, "transport", equations.transport)
+        Trixi.summary_line(io, "collision model", equations.collision_model)
         if transport_is_nonlinear(equations)
             Trixi.summary_line(io, "mu0", equations.mu0)
             Trixi.summary_line(io, "mass", equations.mass)

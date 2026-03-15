@@ -13,7 +13,7 @@ The right hand side is the collision integral, featuring physical terms designed
 ```
 By default, we adaptively pick `M` based on how strong the damping is from collisions. The minimum `M` is `4` and the maximum `M` is `100`. This way, simulations in high damping regimes use fewer harmonics, while weakly damped cases keep higher angular resolution.
 
-We adopt a relaxation-time-like (BGK) approximation for the collision integral, so that the Boltzmann equation in Harmonic basis reads, for $m=0$
+For linear transport we adopt a relaxation-time-like (BGK) approximation for the collision integral, so that the Boltzmann equation in harmonic basis reads, for $m=0$
 ```math
 \partial_t a_0 + v_F\left(\partial_x a_1 + \partial_y b_1\right) = -\gamma_0 a_0,
 ```
@@ -42,6 +42,10 @@ For the scattering rates, we adopt a two-time (linearized BGK) model to capture 
 ```
 
 In this code release, source terms are purely physical; we do not apply additional numerical tail damping.
+
+For `transport = :parabolic_nonlinear`, the streaming term is evaluated from the exact parabolic-band flux
+and the collision term relaxes toward local equilibrium on the drifting Fermi-disk manifold. The nonlinear
+solver reports physical observables `n`, `jx`, and `jy` in analysis output.
 
 ## BLG Reference Convention
 

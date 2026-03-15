@@ -19,6 +19,8 @@ end
 
 @inline transport_is_nonlinear(equations::FermiHarmonics2D) = equations.transport === :parabolic_nonlinear
 @inline nonlinear_data(equations::FermiHarmonics2D) = something(equations.nonlinear_data)
+@inline nonlinear_collision_is_exact_bgk(equations::FermiHarmonics2D) =
+    transport_is_nonlinear(equations) && equations.collision_model === :exact_bgk
 
 function validate_transport_mode(
     transport::Symbol,
@@ -39,6 +41,20 @@ function validate_transport_mode(
     Float64(mu0) > 0 || throw(ArgumentError("mu0 must be > 0 for :parabolic_nonlinear transport"))
     Float64(mass) > 0 || throw(ArgumentError("mass must be > 0 for :parabolic_nonlinear transport"))
     return nothing
+end
+
+function validate_collision_model(transport::Symbol, collision_model::Union{Nothing, Symbol})
+    default_model = transport === :parabolic_nonlinear ? :exact_bgk : :linear_mrt
+    model = something(collision_model, default_model)
+    if transport === :linear
+        model === :linear_mrt ||
+            throw(ArgumentError("collision_model must be :linear_mrt for :linear transport"))
+        return model
+    end
+
+    model in (:linear_mrt, :exact_bgk) ||
+        throw(ArgumentError("collision_model must be :linear_mrt or :exact_bgk for :parabolic_nonlinear transport"))
+    return model
 end
 
 @inline function zero_state_speed(mu0::Real, mass::Real)
@@ -230,10 +246,84 @@ function nonlinear_current_components(
     return (2.0 * real(coeff), -2.0 * imag(coeff))
 end
 
+@inline nonlinear_density(state::AbstractVector{<:Real}, equations::FermiHarmonics2D) =
+    equations.mass * (equations.mu0 + 0.5 * Float64(state[1])) / (2.0 * pi)
+
+@inline nonlinear_current(state::AbstractVector{<:Real}, equations::FermiHarmonics2D) =
+    nonlinear_current_components(state, equations)
+
+function recover_mu_u(state::AbstractVector{<:Real}, equations::FermiHarmonics2D)
+    density = nonlinear_density(state, equations)
+    density > 0.0 || throw(DomainError(density, "recover_mu_u requires positive density"))
+    mu = 2.0 * pi * density / equations.mass
+    jx, jy = nonlinear_current(state, equations)
+    current_scale = 0.25 * equations.mass * mu
+    current_scale > 0.0 || throw(DomainError(current_scale, "recover_mu_u requires positive current scale"))
+    ux = jx / current_scale
+    uy = jy / current_scale
+    return mu, SVector(ux, uy)
+end
+
+function isotropic_equilibrium_state!(
+    out::AbstractVector{Float64},
+    mu::Real,
+    equations::FermiHarmonics2D,
+)
+    fill!(out, 0.0)
+    out[1] = 2.0 * (Float64(mu) - equations.mu0)
+    return out
+end
+
+function local_equilibrium_samples!(
+    samples::Vector{ComplexF64},
+    mu::Real,
+    velocity::SVector{2, Float64},
+    equations::FermiHarmonics2D,
+)
+    data = nonlinear_data(equations)
+    mu_value = Float64(mu)
+    ux, uy = velocity
+    u_sq = ux * ux + uy * uy
+    @inbounds for j in eachindex(samples)
+        u_dot_hat = ux * data.cos_theta[j] + uy * data.sin_theta[j]
+        radicand = 2.0 * equations.mass * mu_value -
+                   equations.mass^2 * (u_sq - u_dot_hat^2)
+        radicand >= 0.0 || throw(DomainError(
+            radicand,
+            "drifting local equilibrium is undefined because the Fermi-disk radicand became negative",
+        ))
+        p_eq = equations.mass * u_dot_hat + sqrt(radicand)
+        phi_eq = p_eq^2 / (2.0 * equations.mass) - equations.mu0
+        samples[j] = ComplexF64(phi_eq, 0.0)
+    end
+    return samples
+end
+
+function local_equilibrium_state!(
+    out::AbstractVector{Float64},
+    mu::Real,
+    velocity::SVector{2, Float64},
+    equations::FermiHarmonics2D,
+)
+    cache = get_nonlinear_cache(equations)
+    local_equilibrium_samples!(cache.samples, mu, velocity, equations)
+    return samples_to_harmonics!(out, cache.samples, equations)
+end
+
+function local_equilibrium_state!(
+    out::AbstractVector{Float64},
+    state::AbstractVector{<:Real},
+    equations::FermiHarmonics2D,
+)
+    mu, velocity = recover_mu_u(state, equations)
+    return local_equilibrium_state!(out, mu, velocity, equations)
+end
+
 @inline function analysis_variables(u, equations::FermiHarmonics2D)
     if transport_is_nonlinear(equations)
-        jx, jy = nonlinear_current_components(u, equations)
-        return SVector(u[1], jx, jy)
+        density = nonlinear_density(u, equations)
+        jx, jy = nonlinear_current(u, equations)
+        return SVector(density, jx, jy)
     end
 
     a1 = length(u) >= 2 ? u[2] : 0.0
