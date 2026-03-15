@@ -348,11 +348,10 @@ end
 Create a live visualization callback for `a0`, `a1`, and `b1` every `params.log_every` accepted steps.
 """
 function visualization_callback(params, semi, name::AbstractString)
-    variable_names = transport_is_nonlinear(semi.equations) ? ["a0", "jx", "jy"] : ["a0", "a1", "b1"]
+    variable_names = ["a0", "a1", "b1"]
     return Trixi.VisualizationCallback(
         semi;
         interval=params.log_every,
-        solution_variables=analysis_variables,
         variable_names=variable_names,
         filename="live_viz_$(name)",
         overwrite=true,

@@ -159,16 +159,21 @@ end
     target = get_thread_buffer!(bc.cache.target_buffers, nvars)
     out = get_thread_buffer!(bc.cache.out_buffers, nvars)
     if transport_is_nonlinear(equations)
-        if bc_type === :maxwell
-            nonlinear_maxwell_wall!(out, state, unit_n, bc.p_scatter, target, equations)
+        if bc.cache.initialized && boundary_index > 0 && haskey(bc.cache.projectors, boundary_index)
+            @inbounds P_in = bc.cache.projectors[boundary_index]
         else
-            nonlinear_ohmic_contact!(out, state, unit_n, bc.p_ohmic_absorb, bc.bias, target, equations)
+            P_in = incoming_projector(equations, unit_n; tol = bc.tol)
+        end
+        if bc_type === :maxwell
+            nonlinear_maxwell_wall!(out, state, unit_n, P_in, bc.p_scatter, target, equations)
+        else
+            nonlinear_ohmic_contact!(out, state, unit_n, P_in, bc.p_ohmic_absorb, bc.bias, target)
         end
     elseif bc.cache.initialized && boundary_index > 0 && haskey(bc.cache.projectors, boundary_index)
         @inbounds P_in = bc.cache.projectors[boundary_index]
         apply_bc!(bc_type, out, state, unit_n, P_in, bc, target)
     else
-        P_in = incoming_projector(equations.Ax, equations.Ay, unit_n; tol = bc.tol)
+        P_in = incoming_projector(equations, unit_n; tol = bc.tol)
         apply_bc!(bc_type, out, state, unit_n, P_in, bc, target)
     end
     return surface_flux_function(state, out, normal_direction, equations)

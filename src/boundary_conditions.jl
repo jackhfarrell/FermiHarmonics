@@ -21,6 +21,7 @@ mutable struct BCProjectorCache
     projectors::Dict{Int, SparseMatrixCSC{Float64, Int}}
     initialized::Bool
     nvars::Int
+    signature::Tuple{Symbol, Int, Int}
 end
 BCProjectorCache() = BCProjectorCache(
     [Float64[] for _ in 1:Threads.nthreads()],
@@ -28,7 +29,8 @@ BCProjectorCache() = BCProjectorCache(
     [Float64[] for _ in 1:Threads.nthreads()],
     Dict{Int, SparseMatrixCSC{Float64, Int}}(),
     false,
-    0)
+    0,
+    (:unset, 0, 0))
 
 
 # ======================================================================================================================
@@ -174,69 +176,59 @@ function nonlinear_diffuse_incoming_value(
     return parabolic_shifted_flux_inverse(outgoing_flux / incoming_weight, equations)
 end
 
+function nonlinear_diffuse_target!(
+    target::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    unit_normal::SVector{2, Float64},
+    equations::FermiHarmonics2D,
+)
+    cache = get_nonlinear_cache(equations)
+    harmonic_state_to_samples!(cache.samples, state, equations)
+    diffuse_value = nonlinear_diffuse_incoming_value(cache.samples, unit_normal, equations)
+    fill!(target, 0.0)
+    target[1] = 2.0 * diffuse_value
+    return target
+end
+
 function nonlinear_maxwell_wall!(
     out::AbstractVector{Float64},
     state::AbstractVector{Float64},
     unit_normal::SVector{2, Float64},
+    P_in::AbstractSparseMatrix,
     p_scatter::Real,
     target::AbstractVector{Float64},
     equations::FermiHarmonics2D,
 )
-    cache = get_nonlinear_cache(equations)
-    data = nonlinear_data(equations)
-    harmonic_state_to_samples!(cache.samples, state, equations)
-    diffuse_value = nonlinear_diffuse_incoming_value(cache.samples, unit_normal, equations)
-
-    specular_target!(target, state, unit_normal)
-    harmonic_state_to_samples!(cache.scratch_samples, target, equations)
-
+    nonlinear_diffuse_target!(target, state, unit_normal, equations)
+    specular_target!(out, state, unit_normal)
     p = Float64(p_scatter)
     one_minus = 1.0 - p
-    nx, ny = unit_normal
-    @inbounds for j in eachindex(cache.scratch_samples)
-        projection = nx * data.cos_theta[j] + ny * data.sin_theta[j]
-        if projection < 0.0
-            specular_value = real(cache.scratch_samples[j])
-            cache.scratch_samples[j] = ComplexF64(p * diffuse_value + one_minus * specular_value, 0.0)
-        else
-            cache.scratch_samples[j] = ComplexF64(real(cache.samples[j]), 0.0)
-        end
+    @inbounds for i in eachindex(target)
+        target[i] = p * target[i] + one_minus * out[i]
     end
-
-    return samples_to_harmonics!(out, cache.scratch_samples, equations)
+    apply_projector!(out, state, target, P_in)
+    return out
 end
 
 function nonlinear_ohmic_contact!(
     out::AbstractVector{Float64},
     state::AbstractVector{Float64},
     unit_normal::SVector{2, Float64},
+    P_in::AbstractSparseMatrix,
     p_ohmic_absorb::Real,
     bias::Real,
     target::AbstractVector{Float64},
-    equations::FermiHarmonics2D,
 )
-    cache = get_nonlinear_cache(equations)
-    data = nonlinear_data(equations)
-    harmonic_state_to_samples!(cache.samples, state, equations)
-
-    specular_target!(target, state, unit_normal)
-    harmonic_state_to_samples!(cache.scratch_samples, target, equations)
-
-    imposed_value = 0.5 * Float64(bias)
+    fill!(target, 0.0)
+    target[1] = Float64(bias)
+    specular_target!(out, state, unit_normal)
     p = Float64(p_ohmic_absorb)
     one_minus = 1.0 - p
-    nx, ny = unit_normal
-    @inbounds for j in eachindex(cache.scratch_samples)
-        projection = nx * data.cos_theta[j] + ny * data.sin_theta[j]
-        if projection < 0.0
-            specular_value = real(cache.scratch_samples[j])
-            cache.scratch_samples[j] = ComplexF64(p * imposed_value + one_minus * specular_value, 0.0)
-        else
-            cache.scratch_samples[j] = ComplexF64(real(cache.samples[j]), 0.0)
-        end
+    @inbounds for i in eachindex(target)
+        target[i] = p * target[i] + one_minus * out[i]
     end
-
-    return samples_to_harmonics!(out, cache.scratch_samples, equations)
+    apply_projector!(out, state, target, P_in)
+    return out
 end
 
 
@@ -364,6 +356,42 @@ function incoming_projector(
     return P_sparse
 end
 
+function incoming_projector(
+    equations::FermiHarmonics2D,
+    unit_normal::SVector{2, Float64};
+    tol::Float64 = 0.0,
+)::SparseMatrixCSC{Float64, Int}
+    if !transport_is_nonlinear(equations)
+        return incoming_projector(equations.Ax, equations.Ay, unit_normal; tol=tol)
+    end
+
+    nvars = Trixi.nvariables(equations)
+    theta_count = nonlinear_data(equations).theta_count
+    dense = zeros(Float64, nvars, nvars)
+    state_basis = zeros(Float64, nvars)
+    samples = Vector{ComplexF64}(undef, theta_count)
+    scratch = Vector{ComplexF64}(undef, theta_count)
+    column = zeros(Float64, nvars)
+    nx, ny = unit_normal
+    data = nonlinear_data(equations)
+
+    @inbounds for col in 1:nvars
+        fill!(state_basis, 0.0)
+        state_basis[col] = 1.0
+        harmonic_state_to_samples!(samples, state_basis, equations)
+        for j in 1:theta_count
+            projection = nx * data.cos_theta[j] + ny * data.sin_theta[j]
+            scratch[j] = projection <= -tol ? samples[j] : 0.0 + 0.0im
+        end
+        samples_to_harmonics!(column, scratch, equations)
+        dense[:, col] .= column
+    end
+
+    P_sparse = sparse(dense)
+    droptol!(P_sparse, 1e-12)
+    return P_sparse
+end
+
 """
     apply_projector!(out, state, target, P_in) -> out
 
@@ -438,9 +466,7 @@ function build_projectors(
         unit_n = unit_normal(
             SVector(Float64(normal_direction[1]), Float64(normal_direction[2]))
         )
-        projectors[global_idx] = incoming_projector(
-            equations.Ax, equations.Ay, unit_n; tol = tol
-        )
+        projectors[global_idx] = incoming_projector(equations, unit_n; tol = tol)
     end
     return projectors
 end
@@ -464,23 +490,18 @@ function init_projector_cache!(
 )::Trixi.SemidiscretizationHyperbolic{<:Any, <:FermiHarmonics2D}
     boundary_conditions = semi.boundary_conditions
     nvars = Trixi.nvariables(semi.equations)
-
-    if transport_is_nonlinear(semi.equations)
-        for bc in boundary_conditions.boundary_condition_types
-            empty!(bc.cache.projectors)
-            bc.cache.initialized = false
-            bc.cache.nvars = nvars
-        end
-        return semi
-    end
+    desired_signature = transport_is_nonlinear(semi.equations) ?
+        (semi.equations.transport, nvars, nonlinear_data(semi.equations).theta_count) :
+        (semi.equations.transport, nvars, 0)
     
     # Reset caches if number of variables changed (e.g., adaptive harmonics in sweeps)
     for bc in boundary_conditions.boundary_condition_types
-        if bc.cache.nvars != 0 && bc.cache.nvars != nvars
+        if bc.cache.signature != desired_signature
             empty!(bc.cache.projectors)
             bc.cache.initialized = false
         end
         bc.cache.nvars = nvars
+        bc.cache.signature = desired_signature
     end
 
     # Check if cache already initialized - reuse if possible

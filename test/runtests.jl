@@ -79,11 +79,12 @@ end
     state = zeros(Float64, 5)
     out = similar(state)
     scratch = similar(state)
+    P_in = FermiHarmonics.incoming_projector(eq, unit_normal)
 
-    FermiHarmonics.nonlinear_maxwell_wall!(out, state, unit_normal, 1.0, scratch, eq)
+    FermiHarmonics.nonlinear_maxwell_wall!(out, state, unit_normal, P_in, 1.0, scratch, eq)
     @test out ≈ zeros(5)
 
-    FermiHarmonics.nonlinear_ohmic_contact!(out, state, unit_normal, 1.0, 1.0, scratch, eq)
+    FermiHarmonics.nonlinear_ohmic_contact!(out, state, unit_normal, P_in, 1.0, 1.0, scratch)
     cache = FermiHarmonics.get_nonlinear_cache(eq)
     FermiHarmonics.harmonic_state_to_samples!(cache.samples, out, eq)
     data = FermiHarmonics.nonlinear_data(eq)

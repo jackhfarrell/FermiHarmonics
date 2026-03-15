@@ -2,17 +2,19 @@
 Utilities for the opt-in nonlinear parabolic-band transport mode.
 """
 
-mutable struct NonlinearThreadCache
+mutable struct NonlinearThreadCache{PF, PI}
     samples::Vector{ComplexF64}
     scratch_samples::Vector{ComplexF64}
+    fft_plan::PF
+    ifft_plan::PI
 end
 
-struct NonlinearTransportData
+struct NonlinearTransportData{TC<:NonlinearThreadCache}
     theta_count::Int
     theta::Vector{Float64}
     cos_theta::Vector{Float64}
     sin_theta::Vector{Float64}
-    thread_caches::Vector{NonlinearThreadCache}
+    thread_caches::Vector{TC}
 end
 
 @inline transport_is_nonlinear(equations::FermiHarmonics2D) = equations.transport === :parabolic_nonlinear
@@ -52,11 +54,22 @@ function create_nonlinear_transport_data(max_harmonic::Int, theta_oversample::In
     theta = collect(range(0.0, 2.0 * pi, length=ntheta + 1))[1:end-1]
     cos_theta = cos.(theta)
     sin_theta = sin.(theta)
-    thread_caches = Vector{NonlinearThreadCache}(undef, Threads.nthreads())
-    for tid in eachindex(thread_caches)
+    samples = Vector{ComplexF64}(undef, ntheta)
+    scratch_samples = Vector{ComplexF64}(undef, ntheta)
+    fft_plan = FFTW.plan_fft!(scratch_samples; flags=FFTW.ESTIMATE)
+    ifft_plan = FFTW.plan_ifft!(samples; flags=FFTW.ESTIMATE)
+    cache_template = NonlinearThreadCache(samples, scratch_samples, fft_plan, ifft_plan)
+    TC = typeof(cache_template)
+    thread_caches = Vector{TC}(undef, Threads.nthreads())
+    thread_caches[1] = cache_template
+    for tid in 2:length(thread_caches)
+        samples_tid = Vector{ComplexF64}(undef, ntheta)
+        scratch_samples_tid = Vector{ComplexF64}(undef, ntheta)
         thread_caches[tid] = NonlinearThreadCache(
-            Vector{ComplexF64}(undef, ntheta),
-            Vector{ComplexF64}(undef, ntheta),
+            samples_tid,
+            scratch_samples_tid,
+            FFTW.plan_fft!(scratch_samples_tid; flags=FFTW.ESTIMATE),
+            FFTW.plan_ifft!(samples_tid; flags=FFTW.ESTIMATE),
         )
     end
     return NonlinearTransportData(ntheta, theta, cos_theta, sin_theta, thread_caches)
@@ -81,12 +94,15 @@ end
 @inline function parabolic_shifted_flux(phi::Real, equations::FermiHarmonics2D)
     arg = parabolic_argument(phi, equations)
     prefactor = (2.0 / 3.0) * sqrt(2.0 / equations.mass)
-    return prefactor * (arg^(3 / 2) - equations.mu0^(3 / 2))
+    arg32 = arg * sqrt(arg)
+    mu032 = equations.mu0 * sqrt(equations.mu0)
+    return prefactor * (arg32 - mu032)
 end
 
 @inline function parabolic_shifted_flux_inverse(flux_value::Real, equations::FermiHarmonics2D)
     prefactor = (2.0 / 3.0) * sqrt(2.0 / equations.mass)
-    base = equations.mu0^(3 / 2) + Float64(flux_value) / prefactor
+    mu032 = equations.mu0 * sqrt(equations.mu0)
+    base = mu032 + Float64(flux_value) / prefactor
     if !(base > 0.0)
         throw(DomainError(
             Float64(flux_value),
@@ -117,7 +133,7 @@ function harmonic_state_to_samples!(
         samples[m + 1] = scaled
         samples[ntheta - m + 1] = conj(scaled)
     end
-    FFTW.ifft!(samples)
+    mul!(samples, get_nonlinear_cache(equations).ifft_plan, samples)
     return samples
 end
 
@@ -128,7 +144,7 @@ function samples_to_harmonics!(
 )
     ntheta = nonlinear_data(equations).theta_count
     max_harmonic = (length(out) - 1) ÷ 2
-    FFTW.fft!(samples)
+    mul!(samples, get_nonlinear_cache(equations).fft_plan, samples)
     inv_ntheta = 1.0 / ntheta
     @inbounds begin
         out[1] = 2.0 * real(samples[1]) * inv_ntheta
@@ -209,7 +225,7 @@ function nonlinear_current_components(
     @inbounds for j in eachindex(cache.scratch_samples)
         cache.scratch_samples[j] = ComplexF64(parabolic_shifted_flux(real(cache.samples[j]), equations), 0.0)
     end
-    FFTW.fft!(cache.scratch_samples)
+    mul!(cache.scratch_samples, cache.fft_plan, cache.scratch_samples)
     coeff = cache.scratch_samples[2] / nonlinear_data(equations).theta_count
     return (2.0 * real(coeff), -2.0 * imag(coeff))
 end

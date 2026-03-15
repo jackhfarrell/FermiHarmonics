@@ -18,7 +18,7 @@ Linearized 2D Boltzmann system in harmonic form:
 \\partial_t u + A_x \\partial_x u + A_y \\partial_y u = S(u;\\gamma_{mr},\\gamma_{mc})```.
 ```
 """
-struct FermiHarmonics2D{NVARS} <: Trixi.AbstractEquations{2, NVARS}
+struct FermiHarmonics2D{NVARS, TNonlinear} <: Trixi.AbstractEquations{2, NVARS}
     gamma_mr::Float64
     gamma_mc::Float64
     max_speed::Float64
@@ -28,7 +28,7 @@ struct FermiHarmonics2D{NVARS} <: Trixi.AbstractEquations{2, NVARS}
     mu0::Float64
     mass::Float64
     theta_oversample::Int
-    nonlinear_data
+    nonlinear_data::TNonlinear
 end
 
 """
@@ -77,7 +77,7 @@ function FermiHarmonics2D(
     Ax, Ay = streaming_matrices(M, vF)
     max_speed = vF
 
-    return FermiHarmonics2D{nvars_int}(
+    return FermiHarmonics2D{nvars_int, typeof(nonlinear_transport_data)}(
         Float64(gamma_mr),
         Float64(gamma_mc),
         max_speed,
