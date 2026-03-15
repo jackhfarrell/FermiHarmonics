@@ -43,6 +43,29 @@ For the scattering rates, we adopt a two-time (linearized BGK) model to capture 
 
 In this code release, source terms are purely physical; we do not apply additional numerical tail damping.
 
+## BLG Reference Convention
+
+For nonlinear straight-channel studies, the canonical dimensionless reference
+case is:
+
+- `mu0 = 1`
+- `vF = 1`
+- `mass = 2`
+- `gamma_mr = 0`
+- `gamma_mc = 0`
+- total channel length `L = 1`
+
+This convention is exposed through `FermiHarmonics.blg_reference_setup()`.
+Because the nonlinear parabolic-band transport uses
+`vF = sqrt(2 * mu0 / mass)`, setting `mu0 = 1` and `vF = 1` fixes the solver
+mass to `2`.
+
+The intended physical interpretation is BLG-inspired, but the solver remains
+dimensionless. Physical values like `m = 0.03 m_e` belong to the back-mapping
+layer in analysis and notes, not to the low-level solver API. Exact
+neutrality is also out of scope for the current nonlinear parabolic-band
+transport, which requires `mu0 > 0`.
+
 ## Solve Entry Point
 
 The main solve interface is documented in:

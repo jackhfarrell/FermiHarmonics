@@ -30,6 +30,7 @@ using Plots
 # Include core physics and interfaces
 include("equations.jl")
 include("nonlinear_transport.jl")
+include("reference_setup.jl")
 include("source_terms.jl")
 include("boundary_conditions.jl")
 include("trixi_interface.jl")
@@ -46,9 +47,12 @@ export FermiHarmonics2D,
        SolveParams,
        MaxwellWallBC,
        OhmicContactBC,
+       blg_reference_setup,
        estimate_max_harmonic,
        save_solution_custom,
        save_for_analysis,
+       evaluate_solution,
+       evaluate_observables,
        solve,
        write_sweep_metadata!,
        archive_mesh!,

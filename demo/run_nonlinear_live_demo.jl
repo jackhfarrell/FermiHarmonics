@@ -7,10 +7,11 @@ function main()
     output_dir = joinpath(@__DIR__, "data_nonlinear")
     mkpath(output_dir)
 
-    mu0 = 2.0
-    mass = 8.0
+    reference = FermiHarmonics.blg_reference_setup()
+    mu0 = reference.mu0
+    mass = reference.mass
     bias = 0.2
-    p_scatter = 1.0
+    p_scatter = reference.p_scatter
 
     boundary_conditions = Dict(
         :walls => MaxwellWallBC(p_scatter),
@@ -28,9 +29,9 @@ function main()
         max_harmonic_auto = 8,
     )
 
-    gamma_mr = 0.0
-    gamma_mc = 1.0
-    run_name = "nonlinear_live_demo"
+    gamma_mr = reference.gamma_mr
+    gamma_mc = reference.gamma_mc
+    run_name = "reference_nonlinear_live_demo"
 
     @info "Running nonlinear live demo" mu0 mass bias gamma_mr gamma_mc
 

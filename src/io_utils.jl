@@ -38,7 +38,11 @@ end
 Base.@deprecate save_observables_for_python save_for_analysis
 @doc "Deprecated alias for [`save_for_analysis`](@ref)." save_observables_for_python
 
-export save_solution_custom, save_for_analysis, save_observables_for_python, evaluate_solution
+export save_solution_custom,
+       save_for_analysis,
+       save_observables_for_python,
+       evaluate_solution,
+       evaluate_observables
 
 function analysis_grid_axes(solution_vector, semi, nvisnodes::Int)
     mesh, equations, solver, cache = Trixi.mesh_equations_solver_cache(semi)
@@ -373,6 +377,35 @@ function evaluate_solution(sol, semi, x_target, y_target; max_newton::Int=10, to
     a1_value = length(state_value) >= 2 ? state_value[2] : 0.0
     b1_value = length(state_value) >= 3 ? state_value[3] : 0.0
     return a0_value, a1_value, b1_value, true
+end
+
+"""
+    evaluate_observables(sol, semi, x_target, y_target; max_newton=10, tol=1e-12)
+
+Evaluate the physical observables at one Cartesian point.
+
+Returns a named tuple with:
+- `a0`
+- `a1`
+- `b1`
+- `jx`
+- `jy`
+- `in_domain`
+
+For linear transport, `jx == a1` and `jy == b1`.
+"""
+function evaluate_observables(sol, semi, x_target, y_target; max_newton::Int=10, tol::Float64=1e-12)
+    a0_value, a1_value, b1_value, jx_value, jy_value, in_domain = evaluate_analysis_observables(
+        sol.u[end], semi, x_target, y_target; max_newton=max_newton, tol=tol,
+    )
+    return (
+        a0 = a0_value,
+        a1 = a1_value,
+        b1 = b1_value,
+        jx = jx_value,
+        jy = jy_value,
+        in_domain = in_domain,
+    )
 end
 
 function evaluate_analysis_observables(solution_vector, semi, x_target, y_target; max_newton::Int=10, tol::Float64=1e-12)

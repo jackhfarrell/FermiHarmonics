@@ -4,6 +4,23 @@ using Trixi
 using StaticArrays
 using LinearAlgebra
 
+@testset "BLG reference convention" begin
+    reference = blg_reference_setup()
+    @test reference.convention_name == "blg_reference_dimensionless"
+    @test reference.channel_length == 1.0
+    @test reference.mu0 == 1.0
+    @test reference.mass == 2.0
+    @test reference.gamma_mr == 0.0
+    @test reference.gamma_mc == 0.0
+    @test reference.vF ≈ 1.0 atol=1e-12 rtol=1e-12
+    @test reference.left_probe_x == -0.3
+    @test reference.right_probe_x == 0.3
+
+    geo_path = normpath(joinpath(@__DIR__, "..", "demo", "mesh", "straight_channel.geo"))
+    geo_contents = read(geo_path, String)
+    @test occursin("length_x = 1.0;", geo_contents)
+end
+
 @testset "FermiHarmonics smoke tests" begin
     params = SolveParams()
     @test params.max_harmonic >= params.min_harmonic
@@ -151,4 +168,14 @@ end
     )
     @test semi_nonlinear.equations.transport === :parabolic_nonlinear
     @test length(sol_nonlinear.u[end]) == length(Trixi.wrap_array(sol_nonlinear.u[end], semi_nonlinear))
+
+    linear_probe = evaluate_observables(sol_linear, semi_linear, 0.0, 0.0)
+    @test linear_probe.in_domain
+    @test linear_probe.jx ≈ linear_probe.a1 atol=1e-10 rtol=1e-10
+    @test linear_probe.jy ≈ linear_probe.b1 atol=1e-10 rtol=1e-10
+
+    nonlinear_probe = evaluate_observables(sol_nonlinear, semi_nonlinear, 0.0, 0.0)
+    @test nonlinear_probe.in_domain
+    @test isfinite(nonlinear_probe.jx)
+    @test isfinite(nonlinear_probe.jy)
 end
