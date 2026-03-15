@@ -154,6 +154,7 @@ function nonlinear_diffuse_incoming_value(
     state_samples::Vector{ComplexF64},
     unit_normal::SVector{2, Float64},
     equations::FermiHarmonics2D,
+    tol::Float64,
 )
     data = nonlinear_data(equations)
     nx, ny = unit_normal
@@ -163,9 +164,9 @@ function nonlinear_diffuse_incoming_value(
 
     @inbounds for j in eachindex(state_samples)
         projection = nx * data.cos_theta[j] + ny * data.sin_theta[j]
-        if projection > 0.0
+        if projection > tol
             outgoing_flux += projection * parabolic_shifted_flux(real(state_samples[j]), equations)
-        elseif projection < 0.0
+        elseif projection < -tol
             incoming_weight -= projection
         end
     end
@@ -176,59 +177,165 @@ function nonlinear_diffuse_incoming_value(
     return parabolic_shifted_flux_inverse(outgoing_flux / incoming_weight, equations)
 end
 
-function nonlinear_diffuse_target!(
-    target::AbstractVector{Float64},
+function nonlinear_boundary_samples!(
+    out::AbstractVector{Float64},
     state::AbstractVector{Float64},
     unit_normal::SVector{2, Float64},
+    incoming_value::Float64,
+    specular_weight::Float64,
+    target::AbstractVector{Float64},
     equations::FermiHarmonics2D,
+    tol::Float64,
 )
     cache = get_nonlinear_cache(equations)
     harmonic_state_to_samples!(cache.samples, state, equations)
-    diffuse_value = nonlinear_diffuse_incoming_value(cache.samples, unit_normal, equations)
-    fill!(target, 0.0)
-    target[1] = 2.0 * diffuse_value
-    return target
+    copy!(cache.scratch_samples, cache.samples)
+
+    specular_target!(target, state, unit_normal)
+    harmonic_state_to_samples!(cache.samples, target, equations)
+
+    data = nonlinear_data(equations)
+    nx, ny = unit_normal
+    diffuse_weight = 1.0 - specular_weight
+    @inbounds for j in eachindex(cache.scratch_samples)
+        projection = nx * data.cos_theta[j] + ny * data.sin_theta[j]
+        if projection < -tol
+            specular_value = real(cache.samples[j])
+            incoming_sample = diffuse_weight * incoming_value + specular_weight * specular_value
+            cache.scratch_samples[j] = ComplexF64(incoming_sample, 0.0)
+        end
+    end
+
+    return samples_to_harmonics!(out, cache.scratch_samples, equations)
+end
+
+function nonlinear_boundary_flux!(
+    out_flux::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    normal::SVector{2, Float64},
+    unit_normal::SVector{2, Float64},
+    incoming_value::Float64,
+    specular_weight::Float64,
+    target::AbstractVector{Float64},
+    equations::FermiHarmonics2D,
+    tol::Float64,
+)
+    cache = get_nonlinear_cache(equations)
+    harmonic_state_to_samples!(cache.samples, state, equations)
+
+    if specular_weight > 0.0
+        specular_target!(target, state, unit_normal)
+        harmonic_state_to_samples!(cache.scratch_samples, target, equations)
+    end
+
+    data = nonlinear_data(equations)
+    nx, ny = unit_normal
+    normal_x, normal_y = normal
+    diffuse_weight = 1.0 - specular_weight
+    @inbounds for j in eachindex(cache.samples)
+        projection = nx * data.cos_theta[j] + ny * data.sin_theta[j]
+        phi_trace = real(cache.samples[j])
+        if projection < -tol
+            specular_value = specular_weight > 0.0 ? real(cache.scratch_samples[j]) : 0.0
+            phi_trace = diffuse_weight * incoming_value + specular_weight * specular_value
+        end
+        directional = normal_x * data.cos_theta[j] + normal_y * data.sin_theta[j]
+        cache.scratch_samples[j] = ComplexF64(
+            directional * parabolic_shifted_flux(phi_trace, equations),
+            0.0,
+        )
+    end
+
+    return samples_to_harmonics!(out_flux, cache.scratch_samples, equations)
 end
 
 function nonlinear_maxwell_wall!(
     out::AbstractVector{Float64},
     state::AbstractVector{Float64},
     unit_normal::SVector{2, Float64},
-    P_in::AbstractSparseMatrix,
     p_scatter::Real,
     target::AbstractVector{Float64},
     equations::FermiHarmonics2D,
+    tol::Float64,
 )
-    nonlinear_diffuse_target!(target, state, unit_normal, equations)
-    specular_target!(out, state, unit_normal)
-    p = Float64(p_scatter)
-    one_minus = 1.0 - p
-    @inbounds for i in eachindex(target)
-        target[i] = p * target[i] + one_minus * out[i]
-    end
-    apply_projector!(out, state, target, P_in)
-    return out
+    cache = get_nonlinear_cache(equations)
+    harmonic_state_to_samples!(cache.samples, state, equations)
+    diffuse_value = nonlinear_diffuse_incoming_value(cache.samples, unit_normal, equations, tol)
+    return nonlinear_boundary_samples!(
+        out, state, unit_normal, diffuse_value, 1.0 - Float64(p_scatter), target, equations, tol
+    )
+end
+
+function nonlinear_maxwell_wall_flux!(
+    out_flux::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    normal::SVector{2, Float64},
+    unit_normal::SVector{2, Float64},
+    p_scatter::Real,
+    target::AbstractVector{Float64},
+    equations::FermiHarmonics2D,
+    tol::Float64,
+)
+    cache = get_nonlinear_cache(equations)
+    harmonic_state_to_samples!(cache.samples, state, equations)
+    diffuse_value = nonlinear_diffuse_incoming_value(cache.samples, unit_normal, equations, tol)
+    return nonlinear_boundary_flux!(
+        out_flux,
+        state,
+        normal,
+        unit_normal,
+        diffuse_value,
+        1.0 - Float64(p_scatter),
+        target,
+        equations,
+        tol,
+    )
 end
 
 function nonlinear_ohmic_contact!(
     out::AbstractVector{Float64},
     state::AbstractVector{Float64},
     unit_normal::SVector{2, Float64},
-    P_in::AbstractSparseMatrix,
     p_ohmic_absorb::Real,
     bias::Real,
     target::AbstractVector{Float64},
+    equations::FermiHarmonics2D,
+    tol::Float64,
 )
-    fill!(target, 0.0)
-    target[1] = Float64(bias)
-    specular_target!(out, state, unit_normal)
-    p = Float64(p_ohmic_absorb)
-    one_minus = 1.0 - p
-    @inbounds for i in eachindex(target)
-        target[i] = p * target[i] + one_minus * out[i]
-    end
-    apply_projector!(out, state, target, P_in)
-    return out
+    return nonlinear_boundary_samples!(
+        out,
+        state,
+        unit_normal,
+        Float64(bias),
+        1.0 - Float64(p_ohmic_absorb),
+        target,
+        equations,
+        tol,
+    )
+end
+
+function nonlinear_ohmic_contact_flux!(
+    out_flux::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    normal::SVector{2, Float64},
+    unit_normal::SVector{2, Float64},
+    p_ohmic_absorb::Real,
+    bias::Real,
+    target::AbstractVector{Float64},
+    equations::FermiHarmonics2D,
+    tol::Float64,
+)
+    return nonlinear_boundary_flux!(
+        out_flux,
+        state,
+        normal,
+        unit_normal,
+        Float64(bias),
+        1.0 - Float64(p_ohmic_absorb),
+        target,
+        equations,
+        tol,
+    )
 end
 
 
@@ -387,7 +494,28 @@ function incoming_projector(
         dense[:, col] .= column
     end
 
-    P_sparse = sparse(dense)
+    D = ones(Float64, nvars)
+    D[1] = sqrt(2.0)
+    Dinv = ones(Float64, nvars)
+    Dinv[1] = 1 / sqrt(2.0)
+    Dx = Diagonal(D)
+    Dxinv = Diagonal(Dinv)
+
+    # The raw masked-and-truncated wall operator is generally not idempotent after
+    # harmonic truncation. We instead build the spectral projector associated with
+    # the "mostly incoming" eigenspaces of its weighted symmetric part.
+    dense_s = Dxinv * dense * Dx
+    sym_dense = Symmetric(0.5 * (dense_s + transpose(dense_s)))
+    eig = eigen(sym_dense)
+    mask = eig.values .> (0.5 + tol)
+    if !any(mask)
+        return spzeros(Float64, nvars, nvars)
+    end
+
+    Q = eig.vectors[:, mask]
+    P_s = Q * transpose(Q)
+    P_dense = Dx * P_s * Dxinv
+    P_sparse = sparse(P_dense)
     droptol!(P_sparse, 1e-12)
     return P_sparse
 end
@@ -443,6 +571,10 @@ function build_projectors(
     cache,
     boundary_indexing::Vector{Int},
 )::Dict{Int, SparseMatrixCSC{Float64, Int}}
+    if transport_is_nonlinear(equations)
+        return Dict{Int, SparseMatrixCSC{Float64, Int}}()
+    end
+
     n_nodes = Trixi.nnodes(solver)
     contravariant_vectors = cache.elements.contravariant_vectors
     boundaries = cache.boundaries

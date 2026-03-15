@@ -27,14 +27,26 @@ Returns:
 """
 function save_for_analysis(sol, semi, filename; nvisnodes=400)
     final_time = sol.t[end]
-    nvisnodes = Int(nvisnodes)
+    grids = compute_analysis_grids(sol.u[end], semi; nvisnodes=nvisnodes)
+    @info "Analysis: writing HDF5" file=filename
+    analysis_write_hdf5(filename, grids.a0, grids.a1, grids.b1, grids.jx, grids.jy,
+                        grids.x, grids.y, grids.mask, final_time, grids.equations)
+    @info "Analysis: write complete" file=filename
+    return filename
+end
+
+Base.@deprecate save_observables_for_python save_for_analysis
+@doc "Deprecated alias for [`save_for_analysis`](@ref)." save_observables_for_python
+
+export save_solution_custom, save_for_analysis, save_observables_for_python, evaluate_solution
+
+function analysis_grid_axes(solution_vector, semi, nvisnodes::Int)
     mesh, equations, solver, cache = Trixi.mesh_equations_solver_cache(semi)
     num_vars = Trixi.nvariables(equations)
-    num_vars >= 3 || throw(ArgumentError("save_for_analysis requires at least 3 variables (a0, a1, b1)"))
+    num_vars >= 3 || throw(ArgumentError("analysis output requires at least 3 variables (a0, a1, b1)"))
     num_nodes = Trixi.nnodes(solver)
     num_elements = Trixi.nelements(solver, cache)
-    
-    # Determine domain bounds from DG nodes.
+
     x_min = Inf
     x_max = -Inf
     y_min = Inf
@@ -50,9 +62,19 @@ function save_for_analysis(sol, semi, filename; nvisnodes=400)
         y_max = max(y_max, y)
     end
 
-    # Uniform Cartesian evaluation grid.
-    x_uniform = range(x_min, x_max, length=nvisnodes)
-    y_uniform = range(y_min, y_max, length=nvisnodes)
+    return (
+        x = range(x_min, x_max, length=nvisnodes),
+        y = range(y_min, y_max, length=nvisnodes),
+        equations = equations,
+    )
+end
+
+function compute_analysis_grids(solution_vector, semi; nvisnodes=400)
+    nvisnodes = Int(nvisnodes)
+    axes = analysis_grid_axes(solution_vector, semi, nvisnodes)
+    equations = axes.equations
+    x_uniform = axes.x
+    y_uniform = axes.y
 
     @info "Analysis: direct grid evaluation" nvisnodes
     num_x = length(x_uniform)
@@ -69,7 +91,7 @@ function save_for_analysis(sol, semi, filename; nvisnodes=400)
         x_target = x_uniform[x_index]
         y_target = y_uniform[y_index]
         a0_value, a1_value, b1_value, jx_value, jy_value, in_domain =
-            evaluate_analysis_observables(sol, semi, x_target, y_target)
+            evaluate_analysis_observables(solution_vector, semi, x_target, y_target)
         a0_grid[x_index, y_index] = a0_value
         a1_grid[x_index, y_index] = a1_value
         b1_grid[x_index, y_index] = b1_value
@@ -79,17 +101,19 @@ function save_for_analysis(sol, semi, filename; nvisnodes=400)
         end
         in_domain_mask[x_index, y_index] = in_domain
     end
-    @info "Analysis: writing HDF5" file=filename
-    analysis_write_hdf5(filename, a0_grid, a1_grid, b1_grid, jx_grid, jy_grid,
-                        x_uniform, y_uniform, in_domain_mask, final_time, equations)
-    @info "Analysis: write complete" file=filename
-    return filename
+
+    return (
+        a0 = a0_grid,
+        a1 = a1_grid,
+        b1 = b1_grid,
+        jx = jx_grid,
+        jy = jy_grid,
+        x = x_uniform,
+        y = y_uniform,
+        mask = in_domain_mask,
+        equations = equations,
+    )
 end
-
-Base.@deprecate save_observables_for_python save_for_analysis
-@doc "Deprecated alias for [`save_for_analysis`](@ref)." save_observables_for_python
-
-export save_solution_custom, save_for_analysis, save_observables_for_python, evaluate_solution
 
 """
     load_restart_compatible(filename, semi)
@@ -241,13 +265,12 @@ end
 
 
 function interpolate_state_at_point(
-    sol, 
+    solution_vector,
     semi, 
     x_target, 
     y_target;
     max_newton::Int=10, tol::Float64=1e-12
 )
-    solution_vector = sol.u[end]
     mesh, equations, solver, cache = Trixi.mesh_equations_solver_cache(semi)
     num_vars = Trixi.nvariables(equations)
     num_nodes = Trixi.nnodes(solver)
@@ -341,7 +364,7 @@ reference-coordinate solve.
 """
 function evaluate_solution(sol, semi, x_target, y_target; max_newton::Int=10, tol::Float64=1e-12)
     state_value, in_domain = interpolate_state_at_point(
-        sol, semi, x_target, y_target; max_newton=max_newton, tol=tol,
+        sol.u[end], semi, x_target, y_target; max_newton=max_newton, tol=tol,
     )
     if !in_domain
         return NaN, NaN, NaN, false
@@ -352,9 +375,9 @@ function evaluate_solution(sol, semi, x_target, y_target; max_newton::Int=10, to
     return a0_value, a1_value, b1_value, true
 end
 
-function evaluate_analysis_observables(sol, semi, x_target, y_target; max_newton::Int=10, tol::Float64=1e-12)
+function evaluate_analysis_observables(solution_vector, semi, x_target, y_target; max_newton::Int=10, tol::Float64=1e-12)
     state_value, in_domain = interpolate_state_at_point(
-        sol, semi, x_target, y_target; max_newton=max_newton, tol=tol,
+        solution_vector, semi, x_target, y_target; max_newton=max_newton, tol=tol,
     )
     if !in_domain
         return NaN, NaN, NaN, NaN, NaN, false

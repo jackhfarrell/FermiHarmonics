@@ -2,6 +2,7 @@ using Test
 using FermiHarmonics
 using Trixi
 using StaticArrays
+using LinearAlgebra
 
 @testset "FermiHarmonics smoke tests" begin
     params = SolveParams()
@@ -67,37 +68,44 @@ end
 
 @testset "Nonlinear boundary conditions" begin
     eq = FermiHarmonics2D(
-        5;
+        9;
         gamma_mr=0.0,
         gamma_mc=0.0,
-        max_harmonic=2,
+        max_harmonic=4,
         transport=:parabolic_nonlinear,
         mu0=2.0,
         mass=8.0,
     )
     unit_normal = SVector(1.0, 0.0)
-    state = zeros(Float64, 5)
+    state = zeros(Float64, 9)
     out = similar(state)
     scratch = similar(state)
-    P_in = FermiHarmonics.incoming_projector(eq, unit_normal)
 
-    FermiHarmonics.nonlinear_maxwell_wall!(out, state, unit_normal, P_in, 1.0, scratch, eq)
-    @test out ≈ zeros(5)
+    FermiHarmonics.nonlinear_maxwell_wall!(out, state, unit_normal, 1.0, scratch, eq, 1.0e-12)
+    @test out ≈ zeros(9)
 
-    FermiHarmonics.nonlinear_ohmic_contact!(out, state, unit_normal, P_in, 1.0, 1.0, scratch)
+    FermiHarmonics.nonlinear_ohmic_contact!(out, state, unit_normal, 1.0, 1.0, scratch, eq, 1.0e-12)
     cache = FermiHarmonics.get_nonlinear_cache(eq)
     FermiHarmonics.harmonic_state_to_samples!(cache.samples, out, eq)
     data = FermiHarmonics.nonlinear_data(eq)
     incoming = [real(cache.samples[j]) for j in eachindex(cache.samples)
-                if data.cos_theta[j] < -1.0e-8]
+                if data.cos_theta[j] < -1.0e-12]
     outgoing = [real(cache.samples[j]) for j in eachindex(cache.samples)
-                if data.cos_theta[j] > 1.0e-8]
+                if data.cos_theta[j] > 1.0e-12]
     @test !isempty(incoming)
     @test !isempty(outgoing)
-    @test out[1] ≈ 0.5 atol=1e-10 rtol=1e-10
+    @test 0.9 < out[1] < 1.0
     @test sum(incoming) / length(incoming) > sum(outgoing) / length(outgoing)
     @test all(isfinite, incoming)
     @test all(isfinite, outgoing)
+
+    out_top = similar(state)
+    out_bottom = similar(state)
+    FermiHarmonics.nonlinear_ohmic_contact!(out_top, state, SVector(0.0, -1.0), 1.0, 1.0, scratch, eq, 1.0e-12)
+    FermiHarmonics.nonlinear_ohmic_contact!(out_bottom, state, SVector(0.0, 1.0), 1.0, 1.0, scratch, eq, 1.0e-12)
+    @test out_top[1] ≈ out_bottom[1] atol=1e-12 rtol=1e-12
+    @test out_top[2] ≈ out_bottom[2] atol=1e-12 rtol=1e-12
+    @test out_top[3] ≈ -out_bottom[3] atol=1e-12 rtol=1e-12
 end
 
 @testset "Solve smoke tests" begin

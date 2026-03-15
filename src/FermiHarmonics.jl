@@ -25,6 +25,7 @@ using SparseArrays
 using StaticArrays
 using HDF5
 using FFTW
+using Plots
 
 # Include core physics and interfaces
 include("equations.jl")

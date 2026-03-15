@@ -348,6 +348,10 @@ end
 Create a live visualization callback for `a0`, `a1`, and `b1` every `params.log_every` accepted steps.
 """
 function visualization_callback(params, semi, name::AbstractString)
+    if transport_is_nonlinear(semi.equations)
+        return nonlinear_visualization_callback(params, semi, name)
+    end
+
     variable_names = ["a0", "a1", "b1"]
     return Trixi.VisualizationCallback(
         semi;
@@ -356,5 +360,71 @@ function visualization_callback(params, semi, name::AbstractString)
         filename="live_viz_$(name)",
         overwrite=true,
         seriescolor=:magma,
+    )
+end
+
+function nonlinear_visualization_callback(params, semi, name::AbstractString)
+    output_path = "live_viz_$(name).png"
+    nvisnodes = 120
+
+    symmetric_clims(field) = begin
+        finite_values = vec(field[isfinite.(field)])
+        if isempty(finite_values)
+            return (-1.0, 1.0)
+        end
+        amplitude = maximum(abs, finite_values)
+        amplitude > 0.0 || return (-1.0, 1.0)
+        return (-amplitude, amplitude)
+    end
+
+    return SciMLBase.DiscreteCallback(
+        (u, t, integrator) -> integrator.stats.naccept % params.log_every == 0,
+        integrator -> begin
+            grids = compute_analysis_grids(integrator.u, semi; nvisnodes=nvisnodes)
+            mask = grids.mask
+            a0 = ifelse.(mask, grids.a0, NaN)
+            a1 = ifelse.(mask, grids.a1, NaN)
+            jx = ifelse.(mask, something(grids.jx, grids.a1), NaN)
+            jy = ifelse.(mask, something(grids.jy, grids.b1), NaN)
+
+            p1 = Plots.heatmap(
+                grids.x, grids.y, permutedims(a0);
+                title = "a0",
+                aspect_ratio = :equal,
+                color = :magma,
+                colorbar = true,
+            )
+            p2 = Plots.heatmap(
+                grids.x, grids.y, permutedims(a1);
+                title = "a1",
+                aspect_ratio = :equal,
+                color = :balance,
+                colorbar = true,
+                clims = symmetric_clims(a1),
+            )
+            p3 = Plots.heatmap(
+                grids.x, grids.y, permutedims(jx);
+                title = "jx",
+                aspect_ratio = :equal,
+                color = :balance,
+                colorbar = true,
+                clims = symmetric_clims(jx),
+            )
+            p4 = Plots.heatmap(
+                grids.x, grids.y, permutedims(jy);
+                title = "jy",
+                aspect_ratio = :equal,
+                color = :balance,
+                colorbar = true,
+                clims = symmetric_clims(jy),
+            )
+            plot_title = "Nonlinear live viz: t=$(round(integrator.t, digits=4))"
+            composed = Plots.plot(p1, p2, p3, p4; layout=(2, 2), size=(1200, 900), plot_title=plot_title)
+            Plots.savefig(composed, output_path)
+            Plots.display(composed)
+            @info "Updated nonlinear live visualization" path=output_path t=round(integrator.t, digits=4)
+            nothing
+        end;
+        save_positions=(false, false),
     )
 end
