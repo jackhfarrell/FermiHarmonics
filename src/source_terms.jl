@@ -18,6 +18,15 @@ Compute physical scattering source terms.
     return physical_sources(u, x, t, equations)
 end
 
+@inline function source_terms(u, gradients, x, t,
+                              equations_parabolic::ElectrostaticGradientEquation2D)::SVector
+    equations = equations_parabolic.equations_hyperbolic
+    n = length(u)
+    out = MVector{n, Float64}(undef)
+    electrostatic_force_sources!(out, u, gradients, equations)
+    return SVector(out)
+end
+
 # ======================================================================================================================
 # Physical Scattering Sources
 # ======================================================================================================================

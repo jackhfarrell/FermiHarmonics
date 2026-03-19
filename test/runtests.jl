@@ -108,6 +108,89 @@ end
         mu0=1.0,
         mass=1.0,
     ))
+    @test_throws ArgumentError FermiHarmonics2D(
+        3;
+        gamma_mr=0.1,
+        gamma_mc=0.2,
+        transport=:linear,
+        chi=0.1,
+    )
+end
+
+@testset "Electrostatic self-consistent force" begin
+    eq = FermiHarmonics2D(
+        9;
+        gamma_mr=0.0,
+        gamma_mc=0.3,
+        max_harmonic=4,
+        transport=:parabolic_nonlinear,
+        mu0=2.0,
+        mass=8.0,
+        chi=0.6,
+        theta_oversample=2,
+    )
+    eq_parabolic = FermiHarmonics.ElectrostaticGradientEquation2D(eq)
+    cache = FermiHarmonics.get_nonlinear_cache(eq)
+    data = FermiHarmonics.nonlinear_data(eq)
+
+    derivative_state = zeros(Float64, 9)
+    derivative_state[FermiHarmonics.cosine_index(2)] = 0.3
+    derivative_state[FermiHarmonics.sine_index(1)] = -0.15
+    FermiHarmonics.harmonic_theta_derivative_to_samples!(cache.samples, derivative_state, eq)
+    expected_derivative = @. -2.0 * 0.3 * sin(2.0 * data.theta) - 0.15 * cos(data.theta)
+    @test maximum(abs.(real.(cache.samples) .- expected_derivative)) < 1.0e-10
+
+    uniform_state = zeros(Float64, 9)
+    zero_gradients = (zeros(9), zeros(9))
+    uniform_force = FermiHarmonics.source_terms(uniform_state, zero_gradients, nothing, 0.0, eq_parabolic)
+    @test uniform_force ≈ zeros(9) atol=1.0e-12 rtol=1.0e-12
+
+    driven_state = [0.2, 0.05, -0.04, 0.03, 0.01, 0.0, 0.0, 0.0, 0.0]
+    gradients = ([0.8; zeros(8)], [-0.5; zeros(8)])
+    force_source = FermiHarmonics.source_terms(driven_state, gradients, nothing, 0.0, eq_parabolic)
+    @test all(isfinite, force_source)
+    @test norm(force_source) > 0.0
+
+    eq_zero = FermiHarmonics2D(
+        9;
+        gamma_mr=0.0,
+        gamma_mc=0.3,
+        max_harmonic=4,
+        transport=:parabolic_nonlinear,
+        mu0=2.0,
+        mass=8.0,
+        chi=0.0,
+        theta_oversample=2,
+    )
+    eq_zero_parabolic = FermiHarmonics.ElectrostaticGradientEquation2D(eq_zero)
+    force_zero = FermiHarmonics.source_terms(driven_state, gradients, nothing, 0.0, eq_zero_parabolic)
+    @test force_zero ≈ zeros(9) atol=1.0e-12 rtol=1.0e-12
+
+    contact_state = [0.1, 0.03, -0.02, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+    boundary_out = similar(contact_state)
+    scratch = similar(contact_state)
+    unit_normal = SVector(1.0, 0.0)
+    bias = 0.35
+    incoming_value = FermiHarmonics.nonlinear_ohmic_incoming_value(
+        contact_state,
+        unit_normal,
+        1.0,
+        bias,
+        scratch,
+        eq,
+        1.0e-12,
+    )
+    FermiHarmonics.nonlinear_ohmic_contact!(
+        boundary_out,
+        contact_state,
+        unit_normal,
+        1.0,
+        bias,
+        scratch,
+        eq,
+        1.0e-12,
+    )
+    @test incoming_value + eq.electrostatic_coupling * (0.5 * boundary_out[1]) ≈ bias atol=1.0e-10 rtol=1.0e-10
 end
 
 @testset "Nonlinear BGK source terms" begin

@@ -21,6 +21,8 @@ end
 @inline nonlinear_data(equations::FermiHarmonics2D) = something(equations.nonlinear_data)
 @inline nonlinear_collision_is_exact_bgk(equations::FermiHarmonics2D) =
     transport_is_nonlinear(equations) && equations.collision_model === :exact_bgk
+@inline nonlinear_has_electrostatic_force(equations::FermiHarmonics2D) =
+    transport_is_nonlinear(equations) && equations.electrostatic_coupling != 0.0
 
 function validate_transport_mode(
     transport::Symbol,
@@ -133,6 +135,11 @@ end
     return sqrt(2.0 * arg / equations.mass)
 end
 
+@inline function parabolic_momentum(phi::Real, equations::FermiHarmonics2D)
+    arg = parabolic_argument(phi, equations)
+    return sqrt(2.0 * equations.mass * arg)
+end
+
 function harmonic_state_to_samples!(
     samples::Vector{ComplexF64},
     state::AbstractVector{<:Real},
@@ -171,6 +178,25 @@ function samples_to_harmonics!(
         end
     end
     return out
+end
+
+function harmonic_theta_derivative_to_samples!(
+    samples::Vector{ComplexF64},
+    state::AbstractVector{<:Real},
+    equations::FermiHarmonics2D,
+)
+    ntheta = nonlinear_data(equations).theta_count
+    max_harmonic = (length(state) - 1) ÷ 2
+    fill!(samples, 0.0 + 0.0im)
+    @inbounds for m in 1:max_harmonic
+        coeff = 0.5 * ComplexF64(Float64(state[cosine_index(m)]), -Float64(state[sine_index(m)]))
+        derivative_coeff = ComplexF64(-imag(coeff) * m, real(coeff) * m)
+        scaled = ntheta * derivative_coeff
+        samples[m + 1] = scaled
+        samples[ntheta - m + 1] = conj(scaled)
+    end
+    mul!(samples, get_nonlinear_cache(equations).ifft_plan, samples)
+    return samples
 end
 
 function nonlinear_flux!(
@@ -317,6 +343,87 @@ function local_equilibrium_state!(
 )
     mu, velocity = recover_mu_u(state, equations)
     return local_equilibrium_state!(out, mu, velocity, equations)
+end
+
+struct ElectrostaticGradientEquation2D{E, N} <: Trixi.AbstractLaplaceDiffusion{2, N}
+    diffusivity::Float64
+    equations_hyperbolic::E
+end
+
+function ElectrostaticGradientEquation2D(equations_hyperbolic::FermiHarmonics2D)
+    return ElectrostaticGradientEquation2D{typeof(equations_hyperbolic),
+                                           Trixi.nvariables(equations_hyperbolic)}(
+        0.0,
+        equations_hyperbolic,
+    )
+end
+
+Trixi.varnames(variable_mapping, equations_parabolic::ElectrostaticGradientEquation2D) =
+    Trixi.varnames(variable_mapping, equations_parabolic.equations_hyperbolic)
+
+Trixi.gradient_variable_transformation(::ElectrostaticGradientEquation2D) = Trixi.cons2cons
+
+@inline Trixi.have_constant_diffusivity(::ElectrostaticGradientEquation2D) = Trixi.True()
+@inline Trixi.max_diffusivity(::ElectrostaticGradientEquation2D) = 0.0
+@inline Trixi.max_diffusivity(u, ::ElectrostaticGradientEquation2D) = 0.0
+
+@inline function Trixi.flux(
+    u,
+    gradients,
+    orientation::Integer,
+    equations_parabolic::ElectrostaticGradientEquation2D,
+)
+    return 0.0 * u
+end
+
+@inline function Trixi.penalty(
+    u_outer,
+    u_inner,
+    inv_h,
+    equations_parabolic::ElectrostaticGradientEquation2D,
+    dg,
+)
+    return 0.0 * u_inner
+end
+
+function electrostatic_force_sources!(
+    out::AbstractVector{Float64},
+    state::AbstractVector{<:Real},
+    gradients,
+    equations::FermiHarmonics2D,
+)
+    if !nonlinear_has_electrostatic_force(equations)
+        fill!(out, 0.0)
+        return out
+    end
+
+    grad_phi0_x = 0.5 * Float64(gradients[1][1])
+    grad_phi0_y = 0.5 * Float64(gradients[2][1])
+    force_x = -equations.electrostatic_coupling * grad_phi0_x
+    force_y = -equations.electrostatic_coupling * grad_phi0_y
+    if force_x == 0.0 && force_y == 0.0
+        fill!(out, 0.0)
+        return out
+    end
+
+    cache = get_nonlinear_cache(equations)
+    harmonic_state_to_samples!(cache.samples, state, equations)
+    harmonic_theta_derivative_to_samples!(cache.scratch_samples, state, equations)
+    data = nonlinear_data(equations)
+
+    @inbounds for j in eachindex(cache.samples)
+        phi = real(cache.samples[j])
+        dphi_dtheta = real(cache.scratch_samples[j])
+        cos_theta = data.cos_theta[j]
+        sin_theta = data.sin_theta[j]
+        force_dot_hat = force_x * cos_theta + force_y * sin_theta
+        force_dot_theta = -force_x * sin_theta + force_y * cos_theta
+        source = -(force_dot_theta / parabolic_momentum(phi, equations)) * dphi_dtheta -
+                 parabolic_speed(phi, equations) * force_dot_hat
+        cache.scratch_samples[j] = ComplexF64(source, 0.0)
+    end
+
+    return samples_to_harmonics!(out, cache.scratch_samples, equations)
 end
 
 @inline function analysis_variables(u, equations::FermiHarmonics2D)

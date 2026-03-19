@@ -299,6 +299,33 @@ function Trixi.semidiscretize(
     )
 end
 
+function Trixi.semidiscretize(
+    semi::Trixi.SemidiscretizationHyperbolicParabolic{<:Any, <:FermiHarmonics2D},
+    tspan;
+    kwargs...,
+)
+    init_projector_cache!(semi)
+    return invoke(
+        Trixi.semidiscretize,
+        Tuple{Trixi.AbstractSemidiscretization, Any},
+        semi, tspan; kwargs...
+    )
+end
+
+function Trixi.semidiscretize(
+    semi::Trixi.SemidiscretizationHyperbolicParabolic{<:Any, <:FermiHarmonics2D},
+    tspan,
+    restart_file::AbstractString;
+    kwargs...,
+)
+    init_projector_cache!(semi)
+    return invoke(
+        Trixi.semidiscretize,
+        Tuple{Trixi.AbstractSemidiscretization, Any, AbstractString},
+        semi, tspan, restart_file; kwargs...
+    )
+end
+
 # ======================================================================================================================
 # Custom Analysis Integrals
 # ======================================================================================================================

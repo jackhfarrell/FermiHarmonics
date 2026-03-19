@@ -219,6 +219,7 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
                transport::Symbol=:linear,
                mu0::Union{Nothing, Real}=nothing,
                mass::Union{Nothing, Real}=nothing,
+               chi::Real=0.0,
                theta_oversample::Integer=2,
                u0_override::Union{Nothing, AbstractVector}=nothing,
                visualize::Bool=false,
@@ -240,20 +241,35 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
         transport=transport,
         mu0=mu0,
         mass=mass,
+        chi=chi,
         theta_oversample=theta_oversample,
     )
 
     boundary_symbols = sort(collect(keys(boundary_conditions)))
     solver = Trixi.DGSEM(polydeg=params.polydeg, surface_flux=Trixi.flux_lax_friedrichs)
     mesh = Trixi.P4estMesh{2}(mesh_path; boundary_symbols=boundary_symbols)
-    semi = Trixi.SemidiscretizationHyperbolic(
-        mesh, equations, (x, t, eq) -> zeros(SVector{nvars, Float64}), solver;
-        boundary_conditions=boundary_conditions,
-        source_terms=FermiHarmonics.source_terms,
-    )
+    if nonlinear_has_electrostatic_force(equations)
+        equations_parabolic = ElectrostaticGradientEquation2D(equations)
+        semi = Trixi.SemidiscretizationHyperbolicParabolic(
+            mesh,
+            (equations, equations_parabolic),
+            (x, t, eq) -> zeros(SVector{nvars, Float64}),
+            solver;
+            solver_parabolic=Trixi.ViscousFormulationLocalDG(),
+            source_terms=FermiHarmonics.source_terms,
+            source_terms_parabolic=FermiHarmonics.source_terms,
+            boundary_conditions=(boundary_conditions, boundary_conditions),
+        )
+    else
+        semi = Trixi.SemidiscretizationHyperbolic(
+            mesh, equations, (x, t, eq) -> zeros(SVector{nvars, Float64}), solver;
+            boundary_conditions=boundary_conditions,
+            source_terms=FermiHarmonics.source_terms,
+        )
+    end
 
     boundary_types = Dict(key => boundary_condition_name(value) for (key, value) in boundary_conditions)
-    @info "Starting solve" name=name max_harmonic=max_harmonic_resolved harmonic_mode=harmonic_mode gamma_mr=gamma_mr gamma_mc=gamma_mc polydeg=params.polydeg cfl=params.cfl residual_tol=params.residual_tol boundaries=boundary_types transport=transport mu0=mu0 mass=mass theta_oversample=theta_oversample
+    @info "Starting solve" name=name max_harmonic=max_harmonic_resolved harmonic_mode=harmonic_mode gamma_mr=gamma_mr gamma_mc=gamma_mc polydeg=params.polydeg cfl=params.cfl residual_tol=params.residual_tol boundaries=boundary_types transport=transport mu0=mu0 mass=mass chi=chi theta_oversample=theta_oversample
     flush(stdout)
     flush(stderr)
 

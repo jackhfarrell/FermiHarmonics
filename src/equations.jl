@@ -28,13 +28,15 @@ struct FermiHarmonics2D{NVARS, TNonlinear} <: Trixi.AbstractEquations{2, NVARS}
     collision_model::Symbol
     mu0::Float64
     mass::Float64
+    electrostatic_coupling::Float64
     theta_oversample::Int
     nonlinear_data::TNonlinear
 end
 
 """
     FermiHarmonics2D(nvars; gamma_mr, gamma_mc, max_harmonic=0, transport=:linear,
-                     collision_model=nothing, mu0=nothing, mass=nothing, theta_oversample=2)
+                     collision_model=nothing, mu0=nothing, mass=nothing,
+                     chi=0.0, theta_oversample=2)
 
 Construct `FermiHarmonics2D`.
 
@@ -46,6 +48,7 @@ Parameters:
 - `transport`: `:linear` or `:parabolic_nonlinear`.
 - `collision_model`: defaults to `:linear_mrt` for linear transport and `:exact_bgk` for nonlinear transport.
 - `mu0`, `mass`, `theta_oversample`: required nonlinear-transport parameters.
+- `chi`: electrostatic coupling in the self-consistent relation `phi = chi * a0 / 2`.
 
 Returns:
 - `FermiHarmonics2D{nvars}` equations object.
@@ -59,6 +62,7 @@ function FermiHarmonics2D(
     collision_model::Union{Nothing, Symbol} = nothing,
     mu0::Union{Nothing, Real} = nothing,
     mass::Union{Nothing, Real} = nothing,
+    chi::Real = 0.0,
     theta_oversample::Integer = 2,
 )
     nvars_int = Int(nvars)
@@ -70,6 +74,9 @@ function FermiHarmonics2D(
     end
 
     validate_transport_mode(transport, mu0, mass, theta_oversample)
+    if transport === :linear && Float64(chi) != 0.0
+        throw(ArgumentError("chi must be 0 for :linear transport"))
+    end
     collision_model_value = validate_collision_model(transport, collision_model)
 
     nonlinear_transport_data = nothing
@@ -94,6 +101,7 @@ function FermiHarmonics2D(
         collision_model_value,
         mu0_value,
         mass_value,
+        Float64(chi),
         Int(theta_oversample),
         nonlinear_transport_data,
     )
@@ -210,7 +218,7 @@ function Base.show(io::IO, equations::FermiHarmonics2D{NVARS}) where {NVARS}
     print(io, "transport=$(equations.transport), ")
     print(io, "collision_model=$(equations.collision_model)")
     if transport_is_nonlinear(equations)
-        print(io, ", mu0=$(equations.mu0), mass=$(equations.mass), theta_oversample=$(equations.theta_oversample)")
+        print(io, ", mu0=$(equations.mu0), mass=$(equations.mass), chi=$(equations.electrostatic_coupling), theta_oversample=$(equations.theta_oversample)")
     end
     print(io, ")")
 end
@@ -229,6 +237,7 @@ function Base.show(io::IO, ::MIME"text/plain", equations::FermiHarmonics2D{NVARS
         if transport_is_nonlinear(equations)
             Trixi.summary_line(io, "mu0", equations.mu0)
             Trixi.summary_line(io, "mass", equations.mass)
+            Trixi.summary_line(io, "chi", equations.electrostatic_coupling)
             Trixi.summary_line(io, "theta oversample", equations.theta_oversample)
             Trixi.summary_line(io, "linearized vF", equations.max_speed)
         end

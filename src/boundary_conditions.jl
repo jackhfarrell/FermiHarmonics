@@ -32,6 +32,26 @@ BCProjectorCache() = BCProjectorCache(
     0,
     (:unset, 0, 0))
 
+@inline function get_bc_thread_buffer!(buffers::Vector{Vector{Float64}}, nvars::Int)
+    tid = Threads.threadid()
+    @inbounds buf = buffers[tid]
+    if length(buf) != nvars
+        buf = Vector{Float64}(undef, nvars)
+        buffers[tid] = buf
+    end
+    return buf
+end
+
+@inline function ensure_bc_state_vector(u_inner, cache::BCProjectorCache)
+    u_inner isa AbstractVector{Float64} && return u_inner
+    nvars = length(u_inner)
+    buf = get_bc_thread_buffer!(cache.state_buffers, nvars)
+    @inbounds for i in 1:nvars
+        buf[i] = u_inner[i]
+    end
+    return buf
+end
+
 
 # ======================================================================================================================
 # Custom Boundary Condition Types
@@ -292,6 +312,55 @@ function nonlinear_maxwell_wall_flux!(
     )
 end
 
+function nonlinear_ohmic_incoming_value(
+    state::AbstractVector{Float64},
+    unit_normal::SVector{2, Float64},
+    p_ohmic_absorb::Real,
+    bias::Real,
+    target::AbstractVector{Float64},
+    equations::FermiHarmonics2D,
+    tol::Float64,
+)
+    if !nonlinear_has_electrostatic_force(equations)
+        return Float64(bias)
+    end
+
+    cache = get_nonlinear_cache(equations)
+    harmonic_state_to_samples!(cache.samples, state, equations)
+
+    specular_weight = 1.0 - Float64(p_ohmic_absorb)
+    if specular_weight > 0.0
+        specular_target!(target, state, unit_normal)
+        harmonic_state_to_samples!(cache.scratch_samples, target, equations)
+    end
+
+    data = nonlinear_data(equations)
+    nx, ny = unit_normal
+    diffuse_weight = 1.0 - specular_weight
+    base_sum = 0.0
+    phi0_coeff = 0.0
+    inv_ntheta = 1.0 / data.theta_count
+
+    @inbounds for j in eachindex(cache.samples)
+        projection = nx * data.cos_theta[j] + ny * data.sin_theta[j]
+        if projection < -tol
+            specular_value = specular_weight > 0.0 ? real(cache.scratch_samples[j]) : 0.0
+            base_sum += specular_weight * specular_value
+            phi0_coeff += diffuse_weight * inv_ntheta
+        else
+            base_sum += real(cache.samples[j])
+        end
+    end
+
+    phi0_base = base_sum * inv_ntheta
+    denominator = 1.0 + equations.electrostatic_coupling * phi0_coeff
+    abs(denominator) > 1.0e-14 || throw(DomainError(
+        denominator,
+        "electrochemical contact solve became singular",
+    ))
+    return (Float64(bias) - equations.electrostatic_coupling * phi0_base) / denominator
+end
+
 function nonlinear_ohmic_contact!(
     out::AbstractVector{Float64},
     state::AbstractVector{Float64},
@@ -302,11 +371,20 @@ function nonlinear_ohmic_contact!(
     equations::FermiHarmonics2D,
     tol::Float64,
 )
+    incoming_value = nonlinear_ohmic_incoming_value(
+        state,
+        unit_normal,
+        p_ohmic_absorb,
+        bias,
+        target,
+        equations,
+        tol,
+    )
     return nonlinear_boundary_samples!(
         out,
         state,
         unit_normal,
-        Float64(bias),
+        incoming_value,
         1.0 - Float64(p_ohmic_absorb),
         target,
         equations,
@@ -325,17 +403,97 @@ function nonlinear_ohmic_contact_flux!(
     equations::FermiHarmonics2D,
     tol::Float64,
 )
+    incoming_value = nonlinear_ohmic_incoming_value(
+        state,
+        unit_normal,
+        p_ohmic_absorb,
+        bias,
+        target,
+        equations,
+        tol,
+    )
     return nonlinear_boundary_flux!(
         out_flux,
         state,
         normal,
         unit_normal,
-        Float64(bias),
+        incoming_value,
         1.0 - Float64(p_ohmic_absorb),
         target,
         equations,
         tol,
     )
+end
+
+@inline function (bc::MaxwellWallBC)(
+    flux_inner,
+    u_inner,
+    normal_direction::AbstractVector,
+    x,
+    t,
+    operator_type::Trixi.Gradient,
+    equations_parabolic::ElectrostaticGradientEquation2D,
+)
+    equations = equations_parabolic.equations_hyperbolic
+    state = ensure_bc_state_vector(u_inner, bc.cache)
+    out = get_bc_thread_buffer!(bc.cache.out_buffers, length(state))
+    target = get_bc_thread_buffer!(bc.cache.target_buffers, length(state))
+    normal = SVector(Float64(normal_direction[1]), Float64(normal_direction[2]))
+    unit_n = unit_normal(normal)
+    nonlinear_maxwell_wall!(out, state, unit_n, bc.p_scatter, target, equations, max(bc.tol, 1.0e-12))
+    return out
+end
+
+@inline function (bc::MaxwellWallBC)(
+    flux_inner,
+    u_inner,
+    normal_direction::AbstractVector,
+    x,
+    t,
+    operator_type::Trixi.Divergence,
+    equations_parabolic::ElectrostaticGradientEquation2D,
+)
+    return flux_inner
+end
+
+@inline function (bc::OhmicContactBC)(
+    flux_inner,
+    u_inner,
+    normal_direction::AbstractVector,
+    x,
+    t,
+    operator_type::Trixi.Gradient,
+    equations_parabolic::ElectrostaticGradientEquation2D,
+)
+    equations = equations_parabolic.equations_hyperbolic
+    state = ensure_bc_state_vector(u_inner, bc.cache)
+    out = get_bc_thread_buffer!(bc.cache.out_buffers, length(state))
+    target = get_bc_thread_buffer!(bc.cache.target_buffers, length(state))
+    normal = SVector(Float64(normal_direction[1]), Float64(normal_direction[2]))
+    unit_n = unit_normal(normal)
+    nonlinear_ohmic_contact!(
+        out,
+        state,
+        unit_n,
+        bc.p_ohmic_absorb,
+        bc.bias,
+        target,
+        equations,
+        max(bc.tol, 1.0e-12),
+    )
+    return out
+end
+
+@inline function (bc::OhmicContactBC)(
+    flux_inner,
+    u_inner,
+    normal_direction::AbstractVector,
+    x,
+    t,
+    operator_type::Trixi.Divergence,
+    equations_parabolic::ElectrostaticGradientEquation2D,
+)
+    return flux_inner
 end
 
 
@@ -644,6 +802,46 @@ function init_projector_cache!(
     end
     
     # Build projectors for any uninitialized boundary conditions
+    for (bc, boundary_indexing) in zip(
+        boundary_conditions.boundary_condition_types,
+        boundary_conditions.boundary_indices,
+    )
+        if !bc.cache.initialized
+            new_projectors = build_projectors(
+                semi.equations, bc.tol, semi.mesh, semi.solver, semi.cache, boundary_indexing
+            )
+            merge!(bc.cache.projectors, new_projectors)
+            bc.cache.initialized = true
+        end
+    end
+    @debug "Initialized BC projector cache" mesh = typeof(semi.mesh)
+    return semi
+end
+
+function init_projector_cache!(
+    semi::Trixi.SemidiscretizationHyperbolicParabolic{<:Any, <:FermiHarmonics2D},
+)::Trixi.SemidiscretizationHyperbolicParabolic{<:Any, <:FermiHarmonics2D}
+    boundary_conditions = semi.boundary_conditions
+    nvars = Trixi.nvariables(semi.equations)
+    desired_signature = transport_is_nonlinear(semi.equations) ?
+        (semi.equations.transport, nvars, nonlinear_data(semi.equations).theta_count) :
+        (semi.equations.transport, nvars, 0)
+
+    for bc in boundary_conditions.boundary_condition_types
+        if bc.cache.signature != desired_signature
+            empty!(bc.cache.projectors)
+            bc.cache.initialized = false
+        end
+        bc.cache.nvars = nvars
+        bc.cache.signature = desired_signature
+    end
+
+    all_initialized = all(bc.cache.initialized for bc in boundary_conditions.boundary_condition_types)
+    if all_initialized
+        @debug "BC projector cache already initialized, reusing" mesh = typeof(semi.mesh)
+        return semi
+    end
+
     for (bc, boundary_indexing) in zip(
         boundary_conditions.boundary_condition_types,
         boundary_conditions.boundary_indices,
