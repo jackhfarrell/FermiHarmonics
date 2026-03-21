@@ -10,7 +10,10 @@ function main()
     reference = FermiHarmonics.blg_reference_setup()
     mu0 = reference.mu0
     mass = reference.mass
+    gamma_mr = reference.gamma_mr
+    gamma_mc = 1.0
     bias = 0.2
+    max_harmonic = 50
     p_scatter = reference.p_scatter
 
     boundary_conditions = Dict(
@@ -20,20 +23,18 @@ function main()
     )
 
     params = SolveParams(;
-        polydeg = 1,
-        tspan_end = 5.0,
+        polydeg = 3,
+        tspan_end = 4.0,
         residual_tol = 1e-4,
         cfl = 0.4,
-        log_every = 10,
+        log_every = 100,
         min_harmonic = 4,
-        max_harmonic_auto = 8,
+        max_harmonic_auto = 20,
     )
 
-    gamma_mr = reference.gamma_mr
-    gamma_mc = reference.gamma_mc
-    run_name = "reference_nonlinear_live_demo"
+    run_name = "nonlinear_live_gamma_mc1_M50_bias02_poly3"
 
-    @info "Running nonlinear live demo" mu0 mass bias gamma_mr gamma_mc
+    @info "Running nonlinear live visualization case" mu0 mass gamma_mr gamma_mc bias max_harmonic polydeg=params.polydeg tspan_end=params.tspan_end
 
     sol, semi = FermiHarmonics.solve(
         mesh_path,
@@ -42,7 +43,7 @@ function main()
         gamma_mr,
         gamma_mc;
         transport = :parabolic_nonlinear,
-        max_harmonic = :auto,
+        max_harmonic = max_harmonic,
         mu0 = mu0,
         mass = mass,
         visualize = true,

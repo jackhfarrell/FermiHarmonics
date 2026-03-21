@@ -187,6 +187,24 @@ function resize_warm_start(
     )
 end
 
+function validate_nonlinear_warm_start(
+    u0_override::AbstractVector,
+    target_u0::AbstractVector,
+    target_nvars::Integer,
+)
+    source_len = length(u0_override)
+    target_len = length(target_u0)
+    source_len == target_len || throw(ArgumentError(
+        "nonlinear warm start length $source_len does not match target length $target_len for n_angles=$(Int(target_nvars))",
+    ))
+    return (
+        u0 = collect(Float64, u0_override),
+        mode = :same,
+        source_nvars = Int(target_nvars),
+        target_nvars = Int(target_nvars),
+    )
+end
+
 # ======================================================================================================================
 # Solve Entry Point
 # ======================================================================================================================
@@ -205,7 +223,9 @@ Arguments:
 
 Keywords:
 - `max_harmonic`: harmonic cutoff. Use `:auto` (default) to estimate from `gamma_mr`, `gamma_mc`,
-  or pass an integer for a fixed cutoff (`nvars = 1 + 2*max_harmonic`).
+  or pass an integer for a fixed cutoff (`nvars = 1 + 2*max_harmonic`). This is also the default
+  resolution control for `transport=:parabolic_nonlinear, collision_model=:quadratic_bgk`.
+- `n_angles`: required discrete-angle count for `transport=:parabolic_nonlinear, collision_model=:exact_bgk`.
 - `u0_override`: optional warm-start state vector.
 - `visualize`: enable live visualization callback.
 - `name`: run name used in logs/visualization filenames.
@@ -216,11 +236,12 @@ Returns:
 function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any},
                params::SolveParams, gamma_mr::Real, gamma_mc::Real;
                max_harmonic::Union{Integer, Symbol, Nothing}=:auto,
+               n_angles::Union{Nothing, Integer}=nothing,
                transport::Symbol=:linear,
+               collision_model::Union{Nothing, Symbol}=nothing,
                mu0::Union{Nothing, Real}=nothing,
                mass::Union{Nothing, Real}=nothing,
                chi::Real=0.0,
-               theta_oversample::Integer=2,
                u0_override::Union{Nothing, AbstractVector}=nothing,
                visualize::Bool=false,
                name::AbstractString="run")
@@ -230,20 +251,48 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
     # ------------------------------------------------------------------------------------------------------------------
     isfile(mesh_path) || error("Mesh file not found: $mesh_path")
     validate(params)
+    collision_model_value = validate_collision_model(transport, collision_model)
 
-    max_harmonic_resolved, harmonic_mode = resolve_max_harmonic(max_harmonic, params, gamma_mr, gamma_mc)
-    nvars = 1 + 2 * max_harmonic_resolved
-    equations = FermiHarmonics2D(
-        nvars;
-        gamma_mr=gamma_mr,
-        gamma_mc=gamma_mc,
-        max_harmonic=max_harmonic_resolved,
-        transport=transport,
-        mu0=mu0,
-        mass=mass,
-        chi=chi,
-        theta_oversample=theta_oversample,
-    )
+    if transport === :parabolic_nonlinear && collision_model_value === :exact_bgk
+        isnothing(n_angles) && throw(ArgumentError("n_angles is required for :parabolic_nonlinear transport with collision_model=:exact_bgk"))
+        max_harmonic === :auto || isnothing(max_harmonic) ||
+            throw(ArgumentError("max_harmonic is not supported for collision_model=:exact_bgk; use n_angles"))
+        isnothing(mu0) && throw(ArgumentError("mu0 is required for :parabolic_nonlinear transport"))
+        isnothing(mass) && throw(ArgumentError("mass is required for :parabolic_nonlinear transport"))
+        nvars = Int(n_angles)
+        harmonic_mode = :angles
+        max_harmonic_resolved = nothing
+        equations = FermiAngles2D(
+            nvars;
+            gamma_mr=gamma_mr,
+            gamma_mc=gamma_mc,
+            collision_model=collision_model_value,
+            mu0=mu0,
+            mass=mass,
+            chi=chi,
+        )
+    else
+        if transport === :parabolic_nonlinear
+            !isnothing(n_angles) &&
+                throw(ArgumentError("n_angles is only supported for collision_model=:exact_bgk"))
+        else
+            !isnothing(n_angles) &&
+                throw(ArgumentError("n_angles is only supported for :parabolic_nonlinear transport"))
+        end
+        max_harmonic_resolved, harmonic_mode = resolve_max_harmonic(max_harmonic, params, gamma_mr, gamma_mc)
+        nvars = 1 + 2 * max_harmonic_resolved
+        equations = FermiHarmonics2D(
+            nvars;
+            gamma_mr=gamma_mr,
+            gamma_mc=gamma_mc,
+            max_harmonic=max_harmonic_resolved,
+            transport=transport,
+            collision_model=collision_model_value,
+            mu0=mu0,
+            mass=mass,
+            chi=chi,
+        )
+    end
 
     boundary_symbols = sort(collect(keys(boundary_conditions)))
     solver = Trixi.DGSEM(polydeg=params.polydeg, surface_flux=Trixi.flux_lax_friedrichs)
@@ -269,7 +318,7 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
     end
 
     boundary_types = Dict(key => boundary_condition_name(value) for (key, value) in boundary_conditions)
-    @info "Starting solve" name=name max_harmonic=max_harmonic_resolved harmonic_mode=harmonic_mode gamma_mr=gamma_mr gamma_mc=gamma_mc polydeg=params.polydeg cfl=params.cfl residual_tol=params.residual_tol boundaries=boundary_types transport=transport mu0=mu0 mass=mass chi=chi theta_oversample=theta_oversample
+    @info "Starting solve" name=name max_harmonic=max_harmonic_resolved n_angles=n_angles harmonic_mode=harmonic_mode gamma_mr=gamma_mr gamma_mc=gamma_mc polydeg=params.polydeg cfl=params.cfl residual_tol=params.residual_tol boundaries=boundary_types transport=transport collision_model=collision_model_value mu0=mu0 mass=mass chi=chi
     flush(stdout)
     flush(stderr)
 
@@ -281,7 +330,9 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
 
     # handle warm start from previous solution in memory if provided.
     if !isnothing(u0_override)
-        warm = resize_warm_start(u0_override, ode.u0, nvars)
+        warm = equations isa FermiAngles2D ?
+            validate_nonlinear_warm_start(u0_override, ode.u0, nvars) :
+            resize_warm_start(u0_override, ode.u0, nvars)
         if warm.mode != :same
             @info "Adjusted warm start for harmonic mismatch" mode=warm.mode source_nvars=warm.source_nvars target_nvars=warm.target_nvars source_length=length(u0_override) target_length=length(warm.u0)
             flush(stdout)

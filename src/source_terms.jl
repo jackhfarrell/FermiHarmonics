@@ -14,7 +14,7 @@
 
 Compute physical scattering source terms.
 """
-@inline function source_terms(u, x, t, equations::FermiHarmonics2D)::SVector
+@inline function source_terms(u, x, t, equations::AbstractFermiTransportEquations2D)::SVector
     return physical_sources(u, x, t, equations)
 end
 
@@ -44,8 +44,8 @@ Source terms from a BGK-type approximation to the collision integral.  We do not
 ``\\gamma_mr``, while higher harmonics are damped at the full scattering rate 
 ``\\gamma_mr + \\gamma_mc``.
 """
-@inline function physical_sources(u, x, t, equations::FermiHarmonics2D)::SVector
-    if nonlinear_collision_is_exact_bgk(equations)
+@inline function physical_sources(u, x, t, equations::AbstractFermiTransportEquations2D)::SVector
+    if transport_is_nonlinear(equations)
         return nonlinear_bgk_sources(u, equations)
     end
 
@@ -77,7 +77,7 @@ Source terms from a BGK-type approximation to the collision integral.  We do not
     return SVector(out)
 end
 
-@inline function nonlinear_bgk_sources(u, equations::FermiHarmonics2D)::SVector
+@inline function nonlinear_bgk_sources(u, equations::AbstractFermiTransportEquations2D)::SVector
     n = length(u)
     out = MVector{n, Float64}(undef)
     drift_equilibrium = MVector{n, Float64}(undef)

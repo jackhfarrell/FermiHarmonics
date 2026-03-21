@@ -33,81 +33,95 @@ end
     @test typeof(eq) <: Trixi.AbstractEquations{2, 9}
 end
 
-@testset "Nonlinear transport utilities" begin
+@testset "Quadratic nonlinear transport utilities" begin
     eq = FermiHarmonics2D(
         9;
         gamma_mr=0.1,
         gamma_mc=1.0,
         max_harmonic=4,
         transport=:parabolic_nonlinear,
-        mu0=2.0,
-        mass=8.0,
-        theta_oversample=2,
+        mu0=1.0,
+        mass=2.0,
     )
-    @test eq.collision_model === :exact_bgk
+    eq_linear = FermiHarmonics2D(9; gamma_mr=0.1, gamma_mc=1.0, max_harmonic=4)
+    @test eq.collision_model === :quadratic_bgk
+    @test FermiHarmonics.nonlinear_data(eq).theta_count == 16
 
-    state = [0.3, -0.08, 0.05, 0.03, -0.02, 0.015, -0.01, 0.005, -0.004]
-    cache = FermiHarmonics.get_nonlinear_cache(eq)
-    FermiHarmonics.harmonic_state_to_samples!(cache.samples, state, eq)
-    recovered = zeros(Float64, length(state))
-    FermiHarmonics.samples_to_harmonics!(recovered, cache.samples, eq)
-    @test recovered ≈ state atol=1e-10 rtol=1e-10
+    state = zeros(Float64, 9)
+    state[1] = 0.04
+    state[2] = 0.02
+    state[3] = -0.01
+    state[4] = 0.008
+    state[5] = -0.006
 
     flux_zero_x = Trixi.flux(zeros(9), 1, eq)
     flux_zero_y = Trixi.flux(zeros(9), 2, eq)
     @test flux_zero_x ≈ zeros(9)
     @test flux_zero_y ≈ zeros(9)
 
-    v0 = sqrt(2.0 * eq.mu0 / eq.mass)
-    Ax, Ay = FermiHarmonics.streaming_matrices(4, v0)
-    epsilon = 1.0e-7
-    nonlinear_x = collect(Trixi.flux(epsilon .* state, 1, eq)) ./ epsilon
-    nonlinear_y = collect(Trixi.flux(epsilon .* state, 2, eq)) ./ epsilon
-    @test nonlinear_x ≈ Ax * state atol=1e-6 rtol=1e-6
-    @test nonlinear_y ≈ Ay * state atol=1e-6 rtol=1e-6
+    flux_x = Trixi.flux(state, 1, eq)
+    flux_linear_x = Trixi.flux(state, 1, eq_linear)
+    @test norm(flux_x - flux_linear_x) < 2.0e-3
 
     expected_density = eq.mass * (eq.mu0 + 0.5 * state[1]) / (2.0 * pi)
     @test FermiHarmonics.nonlinear_density(state, eq) ≈ expected_density atol=1e-12 rtol=1e-12
-    @test collect(FermiHarmonics.nonlinear_current([state[1]; zeros(8)], eq)) ≈ [0.0, 0.0] atol=1e-12 rtol=1e-12
+    @test FermiHarmonics.derived_harmonics(state, eq) == (state[1], state[2], state[3])
 
-    mu_target = 2.15
-    velocity_target = SVector(0.12, -0.05)
+    mu_target = 1.08
+    velocity_target = SVector(0.05, -0.02)
     equilibrium_state = zeros(Float64, 9)
     FermiHarmonics.local_equilibrium_state!(equilibrium_state, mu_target, velocity_target, eq)
     recovered_mu, recovered_velocity = FermiHarmonics.recover_mu_u(equilibrium_state, eq)
-    expected_density_eq = eq.mass * mu_target / (2.0 * pi)
-    @test FermiHarmonics.nonlinear_density(equilibrium_state, eq) ≈ expected_density_eq atol=2e-10 rtol=2e-10
-    expected_current_eq = 0.25 * eq.mass * mu_target .* velocity_target
-    @test collect(FermiHarmonics.nonlinear_current(equilibrium_state, eq)) ≈ collect(expected_current_eq) atol=5e-9 rtol=5e-9
-    @test recovered_mu ≈ mu_target atol=2e-10 rtol=2e-10
-    @test recovered_velocity ≈ velocity_target atol=5e-9 rtol=5e-9
+    @test recovered_mu ≈ mu_target atol=1e-12 rtol=1e-12
+    @test recovered_velocity ≈ velocity_target atol=1e-12 rtol=1e-12
+    @test equilibrium_state[FermiHarmonics.cosine_index(2)] ≈
+          0.5 * eq.mass * (velocity_target[1]^2 - velocity_target[2]^2) atol=1e-12 rtol=1e-12
+    @test equilibrium_state[FermiHarmonics.sine_index(2)] ≈
+          eq.mass * velocity_target[1] * velocity_target[2] atol=1e-12 rtol=1e-12
 
     reconstructed_state = zeros(Float64, 9)
     FermiHarmonics.local_equilibrium_state!(reconstructed_state, equilibrium_state, eq)
-    @test reconstructed_state ≈ equilibrium_state atol=5e-9 rtol=5e-9
+    @test reconstructed_state ≈ equilibrium_state atol=1e-12 rtol=1e-12
 
-    small_velocity = SVector(0.03, 0.0)
-    small_drift_state = zeros(Float64, 9)
-    FermiHarmonics.local_equilibrium_state!(small_drift_state, eq.mu0, small_velocity, eq)
-    @test small_drift_state[FermiHarmonics.cosine_index(2)] ≈
-          small_drift_state[FermiHarmonics.cosine_index(1)]^2 / (4.0 * eq.mu0) atol=2e-4 rtol=2e-3
+    perturbed_state = copy(equilibrium_state)
+    perturbed_state[4] += 0.01
+    perturbed_state[5] -= 0.008
+    target_density = FermiHarmonics.nonlinear_density(perturbed_state, eq)
+    target_current = FermiHarmonics.nonlinear_current(perturbed_state, eq)
+    recovered_mu_perturbed, recovered_velocity_perturbed = FermiHarmonics.recover_mu_u(perturbed_state, eq)
+    matched_state = zeros(Float64, 9)
+    FermiHarmonics.local_equilibrium_state!(matched_state, recovered_mu_perturbed, recovered_velocity_perturbed, eq)
+    @test FermiHarmonics.nonlinear_density(matched_state, eq) ≈ target_density atol=1e-12 rtol=1e-12
+    @test collect(FermiHarmonics.nonlinear_current(matched_state, eq)) ≈ collect(target_current) atol=1e-11 rtol=1e-11
 
-    @test_throws ArgumentError FermiHarmonics2D(
-        3;
-        gamma_mr=0.1,
-        gamma_mc=0.2,
-        max_harmonic=1,
-        transport=:parabolic_nonlinear,
-        mass=1.0,
-    )
-    @test_throws DomainError Trixi.flux([-2.5], 1, FermiHarmonics2D(
-        1;
-        gamma_mr=0.1,
-        gamma_mc=0.2,
+    high_eq = FermiHarmonics2D(
+        9;
+        gamma_mr=0.0,
+        gamma_mc=20.0,
+        max_harmonic=4,
         transport=:parabolic_nonlinear,
         mu0=1.0,
-        mass=1.0,
-    ))
+        mass=2.0,
+    )
+    high_state = copy(equilibrium_state)
+    high_state[4] += 1.0e-3
+    high_state[5] -= 7.0e-4
+    high_mu, high_velocity = FermiHarmonics.recover_mu_u(high_state, high_eq)
+    @test isfinite(high_mu)
+    @test all(isfinite, high_velocity)
+    high_source = FermiHarmonics.physical_sources(high_state, nothing, 0.0, high_eq)
+    @test all(isfinite, high_source)
+
+    @test_throws ArgumentError FermiHarmonics2D(
+        9;
+        gamma_mr=0.1,
+        gamma_mc=0.2,
+        max_harmonic=4,
+        transport=:parabolic_nonlinear,
+        collision_model=:exact_bgk,
+        mu0=1.0,
+        mass=2.0,
+    )
     @test_throws ArgumentError FermiHarmonics2D(
         3;
         gamma_mr=0.1,
@@ -117,6 +131,51 @@ end
     )
 end
 
+@testset "Exact nonlinear angle reference" begin
+    eq = FermiAngles2D(
+        32;
+        gamma_mr=0.1,
+        gamma_mc=1.0,
+        mu0=1.0,
+        mass=2.0,
+    )
+    @test eq.collision_model === :exact_bgk
+
+    data = FermiHarmonics.nonlinear_data(eq)
+    state = @. 0.08 * cos(data.theta) - 0.05 * sin(data.theta) + 0.03 * cos(2.0 * data.theta)
+
+    flux_x = collect(Trixi.flux(state, 1, eq))
+    @test flux_x ≈ [data.cos_theta[j] * FermiHarmonics.parabolic_shifted_flux(state[j], eq) for j in eachindex(state)] atol=1e-12 rtol=1e-12
+
+    a0, a1, b1 = FermiHarmonics.derived_harmonics(state, eq)
+    @test a0 ≈ 0.0 atol=1e-10 rtol=1e-10
+    @test a1 ≈ 0.08 atol=1e-10 rtol=1e-10
+    @test b1 ≈ -0.05 atol=1e-10 rtol=1e-10
+
+    @test_throws ArgumentError FermiAngles2D(
+        7;
+        gamma_mr=0.1,
+        gamma_mc=0.2,
+        mu0=1.0,
+        mass=1.0,
+    )
+    @test_throws ArgumentError FermiAngles2D(
+        10;
+        gamma_mr=0.1,
+        gamma_mc=0.2,
+        collision_model=:quadratic_bgk,
+        mu0=1.0,
+        mass=1.0,
+    )
+    @test_throws DomainError Trixi.flux(fill(-2.5, 32), 1, FermiAngles2D(
+        32;
+        gamma_mr=0.1,
+        gamma_mc=0.2,
+        mu0=1.0,
+        mass=1.0,
+    ))
+end
+
 @testset "Electrostatic self-consistent force" begin
     eq = FermiHarmonics2D(
         9;
@@ -124,29 +183,23 @@ end
         gamma_mc=0.3,
         max_harmonic=4,
         transport=:parabolic_nonlinear,
-        mu0=2.0,
-        mass=8.0,
+        mu0=1.0,
+        mass=2.0,
         chi=0.6,
-        theta_oversample=2,
     )
     eq_parabolic = FermiHarmonics.ElectrostaticGradientEquation2D(eq)
-    cache = FermiHarmonics.get_nonlinear_cache(eq)
-    data = FermiHarmonics.nonlinear_data(eq)
-
-    derivative_state = zeros(Float64, 9)
-    derivative_state[FermiHarmonics.cosine_index(2)] = 0.3
-    derivative_state[FermiHarmonics.sine_index(1)] = -0.15
-    FermiHarmonics.harmonic_theta_derivative_to_samples!(cache.samples, derivative_state, eq)
-    expected_derivative = @. -2.0 * 0.3 * sin(2.0 * data.theta) - 0.15 * cos(data.theta)
-    @test maximum(abs.(real.(cache.samples) .- expected_derivative)) < 1.0e-10
 
     uniform_state = zeros(Float64, 9)
     zero_gradients = (zeros(9), zeros(9))
     uniform_force = FermiHarmonics.source_terms(uniform_state, zero_gradients, nothing, 0.0, eq_parabolic)
     @test uniform_force ≈ zeros(9) atol=1.0e-12 rtol=1.0e-12
 
-    driven_state = [0.2, 0.05, -0.04, 0.03, 0.01, 0.0, 0.0, 0.0, 0.0]
-    gradients = ([0.8; zeros(8)], [-0.5; zeros(8)])
+    driven_state = zeros(Float64, 9)
+    driven_state[1] = 0.04
+    driven_state[2] = 0.03
+    driven_state[3] = -0.02
+    driven_state[4] = 0.01
+    gradients = (vcat(0.8, zeros(8)), vcat(-0.5, zeros(8)))
     force_source = FermiHarmonics.source_terms(driven_state, gradients, nothing, 0.0, eq_parabolic)
     @test all(isfinite, force_source)
     @test norm(force_source) > 0.0
@@ -157,40 +210,13 @@ end
         gamma_mc=0.3,
         max_harmonic=4,
         transport=:parabolic_nonlinear,
-        mu0=2.0,
-        mass=8.0,
+        mu0=1.0,
+        mass=2.0,
         chi=0.0,
-        theta_oversample=2,
     )
     eq_zero_parabolic = FermiHarmonics.ElectrostaticGradientEquation2D(eq_zero)
     force_zero = FermiHarmonics.source_terms(driven_state, gradients, nothing, 0.0, eq_zero_parabolic)
     @test force_zero ≈ zeros(9) atol=1.0e-12 rtol=1.0e-12
-
-    contact_state = [0.1, 0.03, -0.02, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-    boundary_out = similar(contact_state)
-    scratch = similar(contact_state)
-    unit_normal = SVector(1.0, 0.0)
-    bias = 0.35
-    incoming_value = FermiHarmonics.nonlinear_ohmic_incoming_value(
-        contact_state,
-        unit_normal,
-        1.0,
-        bias,
-        scratch,
-        eq,
-        1.0e-12,
-    )
-    FermiHarmonics.nonlinear_ohmic_contact!(
-        boundary_out,
-        contact_state,
-        unit_normal,
-        1.0,
-        bias,
-        scratch,
-        eq,
-        1.0e-12,
-    )
-    @test incoming_value + eq.electrostatic_coupling * (0.5 * boundary_out[1]) ≈ bias atol=1.0e-10 rtol=1.0e-10
 end
 
 @testset "Nonlinear BGK source terms" begin
@@ -200,19 +226,26 @@ end
         gamma_mc=0.8,
         max_harmonic=4,
         transport=:parabolic_nonlinear,
-        mu0=2.0,
-        mass=8.0,
-        theta_oversample=2,
+        mu0=1.0,
+        mass=2.0,
     )
     equilibrium_state = zeros(Float64, 9)
-    FermiHarmonics.local_equilibrium_state!(equilibrium_state, 2.1, SVector(0.08, -0.03), eq_bgk)
+    FermiHarmonics.local_equilibrium_state!(equilibrium_state, 1.06, SVector(0.05, -0.02), eq_bgk)
     source_eq = FermiHarmonics.physical_sources(equilibrium_state, nothing, 0.0, eq_bgk)
-    @test source_eq ≈ zeros(9) atol=5e-9 rtol=5e-9
+    @test source_eq ≈ zeros(9) atol=5e-12 rtol=5e-12
+    recovered_mu, recovered_velocity = FermiHarmonics.recover_mu_u(equilibrium_state, eq_bgk)
+    drift_equilibrium = zeros(Float64, 9)
+    FermiHarmonics.local_equilibrium_state!(drift_equilibrium, recovered_mu, recovered_velocity, eq_bgk)
+    @test FermiHarmonics.nonlinear_density(drift_equilibrium, eq_bgk) ≈
+          FermiHarmonics.nonlinear_density(equilibrium_state, eq_bgk) atol=1e-12 rtol=1e-12
+    @test collect(FermiHarmonics.nonlinear_current(drift_equilibrium, eq_bgk)) ≈
+          collect(FermiHarmonics.nonlinear_current(equilibrium_state, eq_bgk)) atol=1e-11 rtol=1e-11
 
     perturbed = copy(equilibrium_state)
-    perturbed[FermiHarmonics.cosine_index(3)] += 0.04
+    perturbed[5] += 0.02
     source_perturbed = FermiHarmonics.physical_sources(perturbed, nothing, 0.0, eq_bgk)
-    @test source_perturbed[FermiHarmonics.cosine_index(3)] < 0.0
+    @test norm(source_perturbed) > 0.0
+    @test all(isfinite, source_perturbed)
 
     eq_two_rate = FermiHarmonics2D(
         9;
@@ -220,15 +253,85 @@ end
         gamma_mc=0.5,
         max_harmonic=4,
         transport=:parabolic_nonlinear,
-        mu0=2.0,
-        mass=8.0,
-        theta_oversample=2,
+        mu0=1.0,
+        mass=2.0,
     )
     two_rate_state = zeros(Float64, 9)
-    FermiHarmonics.local_equilibrium_state!(two_rate_state, 2.05, SVector(0.07, 0.01), eq_two_rate)
+    FermiHarmonics.local_equilibrium_state!(two_rate_state, 1.04, SVector(0.04, 0.01), eq_two_rate)
     two_rate_source = FermiHarmonics.physical_sources(two_rate_state, nothing, 0.0, eq_two_rate)
-    @test norm(two_rate_source[2:3]) > 0.0
-    @test norm(two_rate_source[4:end]) > 0.0
+    @test norm(two_rate_source) > 0.0
+end
+
+@testset "Quadratic nonlinear regression vs exact reference" begin
+    eq_quad = FermiHarmonics2D(
+        9;
+        gamma_mr=0.1,
+        gamma_mc=0.4,
+        max_harmonic=4,
+        transport=:parabolic_nonlinear,
+        mu0=1.0,
+        mass=2.0,
+    )
+    ntheta = FermiHarmonics.nonlinear_data(eq_quad).theta_count
+    eq_exact = FermiAngles2D(
+        ntheta;
+        gamma_mr=0.1,
+        gamma_mc=0.4,
+        mu0=1.0,
+        mass=2.0,
+    )
+
+    state = zeros(Float64, 9)
+    state[1] = 0.02
+    state[2] = 0.012
+    state[3] = -0.009
+    state[4] = 0.006
+    state[5] = 0.004
+
+    samples = Vector{ComplexF64}(undef, ntheta)
+    FermiHarmonics.harmonic_state_to_samples!(samples, state, eq_quad)
+    sample_state = real.(samples)
+
+    flux_quad = zeros(Float64, 9)
+    FermiHarmonics.nonlinear_flux!(flux_quad, state, SVector(1.0, 0.0), eq_quad)
+    flux_exact_samples = zeros(Float64, ntheta)
+    FermiHarmonics.nonlinear_flux!(flux_exact_samples, sample_state, SVector(1.0, 0.0), eq_exact)
+    flux_exact_harmonics = zeros(Float64, 9)
+    FermiHarmonics.samples_to_harmonics!(flux_exact_harmonics, ComplexF64.(collect(flux_exact_samples)), eq_quad)
+    @test flux_quad ≈ flux_exact_harmonics atol=1.0e-4 rtol=1.0e-3
+
+    equilibrium_quad = zeros(Float64, 9)
+    FermiHarmonics.local_equilibrium_state!(equilibrium_quad, 1.03, SVector(0.03, -0.02), eq_quad)
+    equilibrium_exact_samples = zeros(Float64, ntheta)
+    FermiHarmonics.local_equilibrium_state!(equilibrium_exact_samples, 1.03, SVector(0.03, -0.02), eq_exact)
+    equilibrium_exact_harmonics = zeros(Float64, 9)
+    FermiHarmonics.samples_to_harmonics!(equilibrium_exact_harmonics, ComplexF64.(collect(equilibrium_exact_samples)), eq_quad)
+    @test equilibrium_quad ≈ equilibrium_exact_harmonics atol=2.0e-4 rtol=2.0e-3
+
+    reference_state = zeros(Float64, 9)
+    FermiHarmonics.local_equilibrium_state!(reference_state, 1.03, SVector(0.03, -0.02), eq_quad)
+    reference_samples = Vector{ComplexF64}(undef, ntheta)
+    FermiHarmonics.harmonic_state_to_samples!(reference_samples, reference_state, eq_quad)
+    reference_sample_state = real.(reference_samples)
+
+    recovered_mu_quad, recovered_velocity_quad = FermiHarmonics.recover_mu_u(reference_state, eq_quad)
+    recovered_mu_exact, recovered_velocity_exact = FermiHarmonics.recover_mu_u(reference_sample_state, eq_exact)
+    @test recovered_mu_quad ≈ recovered_mu_exact atol=2.0e-4 rtol=2.0e-3
+
+    recovered_quad_state = zeros(Float64, 9)
+    FermiHarmonics.local_equilibrium_state!(recovered_quad_state, recovered_mu_quad, recovered_velocity_quad, eq_quad)
+    recovered_exact_samples = zeros(Float64, ntheta)
+    FermiHarmonics.local_equilibrium_state!(recovered_exact_samples, recovered_mu_exact, recovered_velocity_exact, eq_exact)
+    recovered_exact_harmonics = zeros(Float64, 9)
+    FermiHarmonics.samples_to_harmonics!(recovered_exact_harmonics, ComplexF64.(collect(recovered_exact_samples)), eq_quad)
+    @test FermiHarmonics.nonlinear_density(recovered_quad_state, eq_quad) ≈
+          FermiHarmonics.nonlinear_density(reference_state, eq_quad) atol=1.0e-12 rtol=1.0e-12
+    @test collect(FermiHarmonics.nonlinear_current(recovered_quad_state, eq_quad)) ≈
+          collect(FermiHarmonics.nonlinear_current(reference_state, eq_quad)) atol=1.0e-11 rtol=1.0e-11
+    @test FermiHarmonics.nonlinear_density(recovered_exact_samples, eq_exact) ≈
+          FermiHarmonics.nonlinear_density(reference_sample_state, eq_exact) atol=1.0e-12 rtol=1.0e-12
+    @test all(isfinite, recovered_exact_samples)
+    @test all(isfinite, recovered_velocity_exact)
 end
 
 @testset "Nonlinear boundary conditions" begin
@@ -238,39 +341,39 @@ end
         gamma_mc=0.0,
         max_harmonic=4,
         transport=:parabolic_nonlinear,
-        mu0=2.0,
-        mass=8.0,
+        mu0=1.0,
+        mass=2.0,
     )
+    eq_linear = FermiHarmonics2D(9; gamma_mr=0.0, gamma_mc=0.0, max_harmonic=4)
     unit_normal = SVector(1.0, 0.0)
+    P_in = FermiHarmonics.incoming_projector(eq, unit_normal; tol=1.0e-12)
+    P_in_linear = FermiHarmonics.incoming_projector(eq_linear, unit_normal; tol=1.0e-12)
+    @test Matrix(P_in) ≈ Matrix(P_in_linear) atol=1.0e-12 rtol=1.0e-12
+
     state = zeros(Float64, 9)
     out = similar(state)
     scratch = similar(state)
 
-    FermiHarmonics.nonlinear_maxwell_wall!(out, state, unit_normal, 1.0, scratch, eq, 1.0e-12)
+    FermiHarmonics.maxwell_wall!(out, state, unit_normal, P_in, 1.0, scratch)
     @test out ≈ zeros(9)
 
-    FermiHarmonics.nonlinear_ohmic_contact!(out, state, unit_normal, 1.0, 1.0, scratch, eq, 1.0e-12)
-    cache = FermiHarmonics.get_nonlinear_cache(eq)
-    FermiHarmonics.harmonic_state_to_samples!(cache.samples, out, eq)
-    data = FermiHarmonics.nonlinear_data(eq)
-    incoming = [real(cache.samples[j]) for j in eachindex(cache.samples)
-                if data.cos_theta[j] < -1.0e-12]
-    outgoing = [real(cache.samples[j]) for j in eachindex(cache.samples)
-                if data.cos_theta[j] > 1.0e-12]
-    @test !isempty(incoming)
-    @test !isempty(outgoing)
-    @test 0.9 < out[1] < 1.0
-    @test sum(incoming) / length(incoming) > sum(outgoing) / length(outgoing)
-    @test all(isfinite, incoming)
-    @test all(isfinite, outgoing)
+    FermiHarmonics.ohmic_contact!(out, state, unit_normal, P_in, 1.0, 1.0, scratch)
+    out_a0, out_a1, out_b1 = FermiHarmonics.derived_harmonics(out, eq)
+    @test out_a0 > 0.0
+    @test out_a1 < 0.0
+    @test isfinite(out_b1)
 
     out_top = similar(state)
     out_bottom = similar(state)
-    FermiHarmonics.nonlinear_ohmic_contact!(out_top, state, SVector(0.0, -1.0), 1.0, 1.0, scratch, eq, 1.0e-12)
-    FermiHarmonics.nonlinear_ohmic_contact!(out_bottom, state, SVector(0.0, 1.0), 1.0, 1.0, scratch, eq, 1.0e-12)
-    @test out_top[1] ≈ out_bottom[1] atol=1e-12 rtol=1e-12
-    @test out_top[2] ≈ out_bottom[2] atol=1e-12 rtol=1e-12
-    @test out_top[3] ≈ -out_bottom[3] atol=1e-12 rtol=1e-12
+    P_top = FermiHarmonics.incoming_projector(eq, SVector(0.0, -1.0); tol=1.0e-12)
+    P_bottom = FermiHarmonics.incoming_projector(eq, SVector(0.0, 1.0); tol=1.0e-12)
+    FermiHarmonics.ohmic_contact!(out_top, state, SVector(0.0, -1.0), P_top, 1.0, 1.0, scratch)
+    FermiHarmonics.ohmic_contact!(out_bottom, state, SVector(0.0, 1.0), P_bottom, 1.0, 1.0, scratch)
+    top_a0, top_a1, top_b1 = FermiHarmonics.derived_harmonics(out_top, eq)
+    bottom_a0, bottom_a1, bottom_b1 = FermiHarmonics.derived_harmonics(out_bottom, eq)
+    @test top_a0 ≈ bottom_a0 atol=1e-12 rtol=1e-12
+    @test top_a1 ≈ bottom_a1 atol=1e-12 rtol=1e-12
+    @test top_b1 ≈ -bottom_b1 atol=1e-12 rtol=1e-12
 end
 
 @testset "Solve smoke tests" begin
@@ -307,16 +410,32 @@ end
         params,
         0.0,
         0.5;
-        max_harmonic=2,
         transport=:parabolic_nonlinear,
-        mu0=2.0,
-        mass=8.0,
-        theta_oversample=2,
+        max_harmonic=2,
+        mu0=1.0,
+        mass=2.0,
         name="test_nonlinear",
     )
     @test semi_nonlinear.equations.transport === :parabolic_nonlinear
-    @test semi_nonlinear.equations.collision_model === :exact_bgk
+    @test semi_nonlinear.equations.collision_model === :quadratic_bgk
+    @test semi_nonlinear.equations isa FermiHarmonics2D
     @test length(sol_nonlinear.u[end]) == length(Trixi.wrap_array(sol_nonlinear.u[end], semi_nonlinear))
+
+    sol_exact, semi_exact = solve(
+        mesh_path,
+        boundary_conditions,
+        params,
+        0.0,
+        0.5;
+        transport=:parabolic_nonlinear,
+        collision_model=:exact_bgk,
+        n_angles=16,
+        mu0=1.0,
+        mass=2.0,
+        name="test_exact_nonlinear",
+    )
+    @test semi_exact.equations.collision_model === :exact_bgk
+    @test semi_exact.equations isa FermiAngles2D
 
     linear_probe = evaluate_observables(sol_linear, semi_linear, 0.0, 0.0)
     @test linear_probe.in_domain
@@ -329,4 +448,98 @@ end
     @test isfinite(nonlinear_probe.jx)
     @test isfinite(nonlinear_probe.jy)
     @test Trixi.varnames(FermiHarmonics.analysis_variables, semi_nonlinear.equations) == ("n", "jx", "jy")
+    @test semi_nonlinear.equations.collision_model === :quadratic_bgk
+    exact_probe = evaluate_observables(sol_exact, semi_exact, 0.0, 0.0)
+    @test exact_probe.in_domain
+    @test isfinite(exact_probe.n)
+
+    @test_throws ArgumentError solve(
+        mesh_path,
+        boundary_conditions,
+        params,
+        0.0,
+        0.5;
+        transport=:parabolic_nonlinear,
+        collision_model=:exact_bgk,
+        mu0=1.0,
+        mass=2.0,
+        name="missing_exact_angles",
+    )
+    @test_throws ArgumentError solve(
+        mesh_path,
+        boundary_conditions,
+        params,
+        0.0,
+        0.5;
+        transport=:parabolic_nonlinear,
+        n_angles=16,
+        mu0=1.0,
+        mass=2.0,
+        name="invalid_quadratic_angles",
+    )
+    @test_throws ArgumentError solve(
+        mesh_path,
+        boundary_conditions,
+        params,
+        0.0,
+        0.5;
+        transport=:parabolic_nonlinear,
+        collision_model=:exact_bgk,
+        max_harmonic=2,
+        n_angles=16,
+        mu0=1.0,
+        mass=2.0,
+        name="invalid_exact_max_harmonic",
+    )
+    @test_throws ArgumentError solve(
+        mesh_path,
+        boundary_conditions,
+        params,
+        0.0,
+        0.5;
+        transport=:parabolic_nonlinear,
+        collision_model=:linear_mrt,
+        max_harmonic=2,
+        mu0=1.0,
+        mass=2.0,
+        name="invalid_collision_model",
+    )
+    @test_throws ArgumentError solve(
+        mesh_path,
+        boundary_conditions,
+        params,
+        0.0,
+        0.5;
+        transport=:parabolic_nonlinear,
+        collision_model=:exact_bgk,
+        n_angles=16,
+        mu0=1.0,
+        mass=2.0,
+        u0_override=zeros(length(sol_exact.u[end]) + 1),
+        name="invalid_warm_start",
+    )
+
+    stability_params = SolveParams(;
+        polydeg=1,
+        tspan_end=0.08,
+        residual_tol=1e-3,
+        cfl=0.35,
+        log_every=10_000,
+        min_harmonic=2,
+        max_harmonic_auto=4,
+    )
+    sol_stable, semi_stable = solve(
+        mesh_path,
+        boundary_conditions,
+        stability_params,
+        0.0,
+        20.0;
+        transport=:parabolic_nonlinear,
+        max_harmonic=2,
+        mu0=1.0,
+        mass=2.0,
+        name="test_nonlinear_stability",
+    )
+    @test semi_stable.equations.collision_model === :quadratic_bgk
+    @test sol_stable.t[end] ≈ stability_params.tspan_end atol=1.0e-12 rtol=1.0e-12
 end

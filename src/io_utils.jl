@@ -374,6 +374,10 @@ function evaluate_solution(sol, semi, x_target, y_target; max_newton::Int=10, to
     if !in_domain
         return NaN, NaN, NaN, false
     end
+    if transport_is_nonlinear(semi.equations)
+        a0_value, a1_value, b1_value = derived_harmonics(state_value, semi.equations)
+        return a0_value, a1_value, b1_value, true
+    end
     a0_value = state_value[1]
     a1_value = length(state_value) >= 2 ? state_value[2] : 0.0
     b1_value = length(state_value) >= 3 ? state_value[3] : 0.0
@@ -421,13 +425,14 @@ function evaluate_analysis_observables(solution_vector, semi, x_target, y_target
     equations = semi.equations
     density_value = transport_is_nonlinear(equations) ?
         nonlinear_density(state_value, equations) : state_value[1]
-    a1_value = length(state_value) >= 2 ? state_value[2] : 0.0
-    b1_value = length(state_value) >= 3 ? state_value[3] : 0.0
     if transport_is_nonlinear(equations)
+        a0_value, a1_value, b1_value = derived_harmonics(state_value, equations)
         jx_value, jy_value = nonlinear_current(state_value, equations)
         return density_value, a1_value, b1_value, jx_value, jy_value, true
     end
 
+    a1_value = length(state_value) >= 2 ? state_value[2] : 0.0
+    b1_value = length(state_value) >= 3 ? state_value[3] : 0.0
     return density_value, a1_value, b1_value, a1_value, b1_value, true
 end
 

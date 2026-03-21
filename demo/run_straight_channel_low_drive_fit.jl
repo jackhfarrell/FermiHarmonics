@@ -166,11 +166,10 @@ function main()
             params,
             gamma_mr,
             gamma_mc;
-            max_harmonic = 20,
             transport = :parabolic_nonlinear,
+            max_harmonic = :auto,
             mu0 = mu0,
             mass = mass,
-            theta_oversample = 2,
             u0_override = u0,
             visualize = false,
             name = run_name,

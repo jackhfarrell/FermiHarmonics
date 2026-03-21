@@ -25,6 +25,7 @@ using SparseArrays
 using StaticArrays
 using HDF5
 using FFTW
+using NLsolve
 using Plots
 
 # Include core physics and interfaces
@@ -44,6 +45,7 @@ include("io_utils.jl")
 
 # Export main types and functions
 export FermiHarmonics2D,
+       FermiAngles2D,
        SolveParams,
        MaxwellWallBC,
        OhmicContactBC,

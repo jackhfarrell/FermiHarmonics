@@ -36,14 +36,51 @@ sol, semi = solve(
 )
 ```
 
+For nonlinear runs, the default path stays in harmonics:
+
+```julia
+sol, semi = solve(
+    "mesh.inp",
+    boundary_conditions,
+    params,
+    0.05,
+    0.40;
+    transport = :parabolic_nonlinear,
+    max_harmonic = :auto,
+    mu0 = 1.0,
+    mass = 2.0,
+)
+```
+
+The exact angle-state reference solver is still available explicitly:
+
+```julia
+sol, semi = solve(
+    "mesh.inp",
+    boundary_conditions,
+    params,
+    0.05,
+    0.40;
+    transport = :parabolic_nonlinear,
+    collision_model = :exact_bgk,
+    n_angles = 128,
+    mu0 = 1.0,
+    mass = 2.0,
+)
+```
+
 ## Behavior Notes
 
 - `solve` requires a `SolveParams` instance for solver settings.
-- Harmonic count is fixed per solve (`nvars = 1 + 2M`), but `M` can be selected automatically per case via `max_harmonic=:auto`.
+- Linear runs use harmonic states with `max_harmonic`.
+- Default nonlinear runs use harmonic states with `max_harmonic` and `collision_model=:quadratic_bgk`.
+- Exact nonlinear reference runs use angle states with `collision_model=:exact_bgk` and `n_angles`.
 - Auto mode uses `estimate_max_harmonic(gamma_mr, gamma_mc)` with `gamma_total = gamma_mr + gamma_mc`.
 - Default logarithmic map is `gamma_total=0 -> M=100` and `gamma_total>=300 -> M=4`.
 - Optional tuning keys in `SolveParams` are `min_harmonic` and `max_harmonic_auto`.
-- Warm starts via `u0_override` support harmonic-count changes by truncating or zero-padding higher modes.
+- Linear warm starts via `u0_override` support harmonic-count changes by truncating or zero-padding higher modes.
+- Quadratic nonlinear warm starts follow the same harmonic resize behavior as linear runs.
+- Exact nonlinear warm starts must already match the chosen `n_angles`.
 
 ## Auto Harmonic Selector
 

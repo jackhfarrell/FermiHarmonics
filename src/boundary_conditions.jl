@@ -19,6 +19,7 @@ mutable struct BCProjectorCache
     target_buffers::Vector{Vector{Float64}}
     out_buffers::Vector{Vector{Float64}}
     projectors::Dict{Int, SparseMatrixCSC{Float64, Int}}
+    nonlinear_faces::Dict{Int, Any}
     initialized::Bool
     nvars::Int
     signature::Tuple{Symbol, Int, Int}
@@ -28,9 +29,17 @@ BCProjectorCache() = BCProjectorCache(
     [Float64[] for _ in 1:Threads.nthreads()],
     [Float64[] for _ in 1:Threads.nthreads()],
     Dict{Int, SparseMatrixCSC{Float64, Int}}(),
+    Dict{Int, Any}(),
     false,
     0,
     (:unset, 0, 0))
+
+struct NonlinearBoundaryFaceData
+    unit_normal::SVector{2, Float64}
+    incoming_mask::BitVector
+    stencil_indices::Matrix{Int}
+    stencil_weights::Matrix{Float64}
+end
 
 @inline function get_bc_thread_buffer!(buffers::Vector{Vector{Float64}}, nvars::Int)
     tid = Threads.threadid()
@@ -425,6 +434,195 @@ function nonlinear_ohmic_contact_flux!(
     )
 end
 
+@inline function wrap_periodic_index(index::Integer, count::Integer)
+    return mod1(Int(index), Int(count))
+end
+
+function cubic_periodic_stencil(theta_ref::Float64, theta_count::Int, dtheta::Float64)
+    position = theta_ref / dtheta
+    base_index = floor(Int, position) + 1
+    t = position - (base_index - 1)
+    indices = (
+        wrap_periodic_index(base_index - 1, theta_count),
+        wrap_periodic_index(base_index, theta_count),
+        wrap_periodic_index(base_index + 1, theta_count),
+        wrap_periodic_index(base_index + 2, theta_count),
+    )
+    weights = (
+        -t * (t - 1.0) * (t - 2.0) / 6.0,
+        (t + 1.0) * (t - 1.0) * (t - 2.0) / 2.0,
+        -(t + 1.0) * t * (t - 2.0) / 2.0,
+        (t + 1.0) * t * (t - 1.0) / 6.0,
+    )
+    return indices, weights
+end
+
+function build_nonlinear_face_data(
+    equations::FermiAngles2D,
+    unit_normal::SVector{2, Float64},
+    tol::Float64,
+)
+    data = nonlinear_data(equations)
+    theta_count = data.theta_count
+    incoming_mask = falses(theta_count)
+    stencil_indices = Matrix{Int}(undef, 4, theta_count)
+    stencil_weights = Matrix{Float64}(undef, 4, theta_count)
+    alpha = atan(unit_normal[2], unit_normal[1])
+    dtheta = data.weight
+
+    @inbounds for j in 1:theta_count
+        projection = unit_normal[1] * data.cos_theta[j] + unit_normal[2] * data.sin_theta[j]
+        incoming_mask[j] = projection < -tol
+        theta_ref = mod(2.0 * alpha + pi - data.theta[j], 2.0 * pi)
+        indices, weights = cubic_periodic_stencil(theta_ref, theta_count, dtheta)
+        stencil_indices[:, j] .= indices
+        stencil_weights[:, j] .= weights
+    end
+
+    return NonlinearBoundaryFaceData(unit_normal, incoming_mask, stencil_indices, stencil_weights)
+end
+
+@inline function apply_specular_stencil(
+    state::AbstractVector{<:Real},
+    face_data::NonlinearBoundaryFaceData,
+    angle_index::Int,
+)
+    return face_data.stencil_weights[1, angle_index] * state[face_data.stencil_indices[1, angle_index]] +
+           face_data.stencil_weights[2, angle_index] * state[face_data.stencil_indices[2, angle_index]] +
+           face_data.stencil_weights[3, angle_index] * state[face_data.stencil_indices[3, angle_index]] +
+           face_data.stencil_weights[4, angle_index] * state[face_data.stencil_indices[4, angle_index]]
+end
+
+function nonlinear_diffuse_incoming_value(
+    state::AbstractVector{<:Real},
+    face_data::NonlinearBoundaryFaceData,
+    equations::FermiAngles2D,
+    tol::Float64,
+)
+    data = nonlinear_data(equations)
+    outgoing_flux = 0.0
+    incoming_weight = 0.0
+    nx, ny = face_data.unit_normal
+    @inbounds for j in eachindex(state)
+        projection = nx * data.cos_theta[j] + ny * data.sin_theta[j]
+        if projection > tol
+            outgoing_flux += projection * parabolic_shifted_flux(state[j], equations)
+        elseif projection < -tol
+            incoming_weight -= projection
+        end
+    end
+    incoming_weight *= data.weight
+    incoming_weight > 0.0 || return 0.0
+    outgoing_flux *= data.weight
+    return parabolic_shifted_flux_inverse(outgoing_flux / incoming_weight, equations)
+end
+
+function nonlinear_boundary_samples!(
+    out::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    face_data::NonlinearBoundaryFaceData,
+    incoming_value::Float64,
+    specular_weight::Float64,
+    equations::FermiAngles2D,
+)
+    copy!(out, state)
+    diffuse_weight = 1.0 - specular_weight
+    @inbounds for j in eachindex(out)
+        if face_data.incoming_mask[j]
+            specular_value = apply_specular_stencil(state, face_data, j)
+            out[j] = diffuse_weight * incoming_value + specular_weight * specular_value
+        end
+    end
+    return out
+end
+
+function nonlinear_maxwell_wall!(
+    out::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    unit_normal::SVector{2, Float64},
+    p_scatter::Real,
+    target::AbstractVector{Float64},
+    equations::FermiAngles2D,
+    tol::Float64,
+    face_data::Union{Nothing, NonlinearBoundaryFaceData} = nothing,
+)
+    local_face_data = isnothing(face_data) ? build_nonlinear_face_data(equations, unit_normal, tol) : face_data
+    diffuse_value = nonlinear_diffuse_incoming_value(state, local_face_data, equations, tol)
+    return nonlinear_boundary_samples!(
+        out,
+        state,
+        local_face_data,
+        diffuse_value,
+        1.0 - Float64(p_scatter),
+        equations,
+    )
+end
+
+function nonlinear_ohmic_incoming_value(
+    state::AbstractVector{Float64},
+    face_data::NonlinearBoundaryFaceData,
+    p_ohmic_absorb::Real,
+    bias::Real,
+    equations::FermiAngles2D,
+)
+    if !nonlinear_has_electrostatic_force(equations)
+        return Float64(bias)
+    end
+
+    specular_weight = 1.0 - Float64(p_ohmic_absorb)
+    diffuse_weight = 1.0 - specular_weight
+    inv_ntheta = 1.0 / nonlinear_data(equations).theta_count
+    base_sum = 0.0
+    phi0_coeff = 0.0
+
+    @inbounds for j in eachindex(state)
+        if face_data.incoming_mask[j]
+            specular_value = specular_weight > 0.0 ? apply_specular_stencil(state, face_data, j) : 0.0
+            base_sum += specular_weight * specular_value
+            phi0_coeff += diffuse_weight * inv_ntheta
+        else
+            base_sum += state[j]
+        end
+    end
+
+    phi0_base = base_sum * inv_ntheta
+    denominator = 1.0 + equations.electrostatic_coupling * phi0_coeff
+    abs(denominator) > 1.0e-14 || throw(DomainError(
+        denominator,
+        "electrochemical contact solve became singular",
+    ))
+    return (Float64(bias) - equations.electrostatic_coupling * phi0_base) / denominator
+end
+
+function nonlinear_ohmic_contact!(
+    out::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    unit_normal::SVector{2, Float64},
+    p_ohmic_absorb::Real,
+    bias::Real,
+    target::AbstractVector{Float64},
+    equations::FermiAngles2D,
+    tol::Float64,
+    face_data::Union{Nothing, NonlinearBoundaryFaceData} = nothing,
+)
+    local_face_data = isnothing(face_data) ? build_nonlinear_face_data(equations, unit_normal, tol) : face_data
+    incoming_value = nonlinear_ohmic_incoming_value(
+        state,
+        local_face_data,
+        p_ohmic_absorb,
+        bias,
+        equations,
+    )
+    return nonlinear_boundary_samples!(
+        out,
+        state,
+        local_face_data,
+        incoming_value,
+        1.0 - Float64(p_ohmic_absorb),
+        equations,
+    )
+end
+
 @inline function (bc::MaxwellWallBC)(
     flux_inner,
     u_inner,
@@ -626,56 +824,7 @@ function incoming_projector(
     unit_normal::SVector{2, Float64};
     tol::Float64 = 0.0,
 )::SparseMatrixCSC{Float64, Int}
-    if !transport_is_nonlinear(equations)
-        return incoming_projector(equations.Ax, equations.Ay, unit_normal; tol=tol)
-    end
-
-    nvars = Trixi.nvariables(equations)
-    theta_count = nonlinear_data(equations).theta_count
-    dense = zeros(Float64, nvars, nvars)
-    state_basis = zeros(Float64, nvars)
-    samples = Vector{ComplexF64}(undef, theta_count)
-    scratch = Vector{ComplexF64}(undef, theta_count)
-    column = zeros(Float64, nvars)
-    nx, ny = unit_normal
-    data = nonlinear_data(equations)
-
-    @inbounds for col in 1:nvars
-        fill!(state_basis, 0.0)
-        state_basis[col] = 1.0
-        harmonic_state_to_samples!(samples, state_basis, equations)
-        for j in 1:theta_count
-            projection = nx * data.cos_theta[j] + ny * data.sin_theta[j]
-            scratch[j] = projection <= -tol ? samples[j] : 0.0 + 0.0im
-        end
-        samples_to_harmonics!(column, scratch, equations)
-        dense[:, col] .= column
-    end
-
-    D = ones(Float64, nvars)
-    D[1] = sqrt(2.0)
-    Dinv = ones(Float64, nvars)
-    Dinv[1] = 1 / sqrt(2.0)
-    Dx = Diagonal(D)
-    Dxinv = Diagonal(Dinv)
-
-    # The raw masked-and-truncated wall operator is generally not idempotent after
-    # harmonic truncation. We instead build the spectral projector associated with
-    # the "mostly incoming" eigenspaces of its weighted symmetric part.
-    dense_s = Dxinv * dense * Dx
-    sym_dense = Symmetric(0.5 * (dense_s + transpose(dense_s)))
-    eig = eigen(sym_dense)
-    mask = eig.values .> (0.5 + tol)
-    if !any(mask)
-        return spzeros(Float64, nvars, nvars)
-    end
-
-    Q = eig.vectors[:, mask]
-    P_s = Q * transpose(Q)
-    P_dense = Dx * P_s * Dxinv
-    P_sparse = sparse(P_dense)
-    droptol!(P_sparse, 1e-12)
-    return P_sparse
+    return incoming_projector(equations.Ax, equations.Ay, unit_normal; tol=tol)
 end
 
 """
@@ -729,10 +878,6 @@ function build_projectors(
     cache,
     boundary_indexing::Vector{Int},
 )::Dict{Int, SparseMatrixCSC{Float64, Int}}
-    if transport_is_nonlinear(equations)
-        return Dict{Int, SparseMatrixCSC{Float64, Int}}()
-    end
-
     n_nodes = Trixi.nnodes(solver)
     contravariant_vectors = cache.elements.contravariant_vectors
     boundaries = cache.boundaries
@@ -761,6 +906,40 @@ function build_projectors(
     return projectors
 end
 
+function build_nonlinear_faces(
+    equations::FermiAngles2D,
+    tol::Float64,
+    mesh::Trixi.P4estMesh{2},
+    solver,
+    cache,
+    boundary_indexing::Vector{Int},
+)::Dict{Int, Any}
+    n_nodes = Trixi.nnodes(solver)
+    contravariant_vectors = cache.elements.contravariant_vectors
+    boundaries = cache.boundaries
+    nonlinear_faces = Dict{Int, Any}()
+    for global_idx in boundary_indexing
+        element = boundaries.neighbor_ids[global_idx]
+        node_indices = boundaries.node_indices[global_idx]
+        direction = Trixi.indices2direction(node_indices)
+        if direction == 1 || direction == 2
+            i_index = direction == 1 ? 1 : n_nodes
+            j_index = 1
+        else
+            i_index = 1
+            j_index = direction == 3 ? 1 : n_nodes
+        end
+        normal_direction = Trixi.get_normal_direction(
+            direction, contravariant_vectors, i_index, j_index, element
+        )
+        unit_n = unit_normal(
+            SVector(Float64(normal_direction[1]), Float64(normal_direction[2]))
+        )
+        nonlinear_faces[global_idx] = build_nonlinear_face_data(equations, unit_n, tol)
+    end
+    return nonlinear_faces
+end
+
 """
     init_projector_cache!(semi)
 
@@ -776,8 +955,8 @@ can save significant time when running multiple cases with the same mesh/solver 
 different physics parameters (gamma_mr, gamma_mc, etc.).
 """
 function init_projector_cache!(
-    semi::Trixi.SemidiscretizationHyperbolic{<:Any, <:FermiHarmonics2D},
-)::Trixi.SemidiscretizationHyperbolic{<:Any, <:FermiHarmonics2D}
+    semi::Trixi.SemidiscretizationHyperbolic{<:Any, <:AbstractFermiTransportEquations2D},
+)::Trixi.SemidiscretizationHyperbolic{<:Any, <:AbstractFermiTransportEquations2D}
     boundary_conditions = semi.boundary_conditions
     nvars = Trixi.nvariables(semi.equations)
     desired_signature = transport_is_nonlinear(semi.equations) ?
@@ -788,6 +967,7 @@ function init_projector_cache!(
     for bc in boundary_conditions.boundary_condition_types
         if bc.cache.signature != desired_signature
             empty!(bc.cache.projectors)
+            empty!(bc.cache.nonlinear_faces)
             bc.cache.initialized = false
         end
         bc.cache.nvars = nvars
@@ -807,10 +987,17 @@ function init_projector_cache!(
         boundary_conditions.boundary_indices,
     )
         if !bc.cache.initialized
-            new_projectors = build_projectors(
-                semi.equations, bc.tol, semi.mesh, semi.solver, semi.cache, boundary_indexing
-            )
-            merge!(bc.cache.projectors, new_projectors)
+            if semi.equations isa FermiAngles2D
+                new_faces = build_nonlinear_faces(
+                    semi.equations, bc.tol, semi.mesh, semi.solver, semi.cache, boundary_indexing
+                )
+                merge!(bc.cache.nonlinear_faces, new_faces)
+            else
+                new_projectors = build_projectors(
+                    semi.equations, bc.tol, semi.mesh, semi.solver, semi.cache, boundary_indexing
+                )
+                merge!(bc.cache.projectors, new_projectors)
+            end
             bc.cache.initialized = true
         end
     end
@@ -819,8 +1006,8 @@ function init_projector_cache!(
 end
 
 function init_projector_cache!(
-    semi::Trixi.SemidiscretizationHyperbolicParabolic{<:Any, <:FermiHarmonics2D},
-)::Trixi.SemidiscretizationHyperbolicParabolic{<:Any, <:FermiHarmonics2D}
+    semi::Trixi.SemidiscretizationHyperbolicParabolic{<:Any, <:AbstractFermiTransportEquations2D},
+)::Trixi.SemidiscretizationHyperbolicParabolic{<:Any, <:AbstractFermiTransportEquations2D}
     boundary_conditions = semi.boundary_conditions
     nvars = Trixi.nvariables(semi.equations)
     desired_signature = transport_is_nonlinear(semi.equations) ?
@@ -830,6 +1017,7 @@ function init_projector_cache!(
     for bc in boundary_conditions.boundary_condition_types
         if bc.cache.signature != desired_signature
             empty!(bc.cache.projectors)
+            empty!(bc.cache.nonlinear_faces)
             bc.cache.initialized = false
         end
         bc.cache.nvars = nvars
@@ -847,10 +1035,17 @@ function init_projector_cache!(
         boundary_conditions.boundary_indices,
     )
         if !bc.cache.initialized
-            new_projectors = build_projectors(
-                semi.equations, bc.tol, semi.mesh, semi.solver, semi.cache, boundary_indexing
-            )
-            merge!(bc.cache.projectors, new_projectors)
+            if semi.equations isa FermiAngles2D
+                new_faces = build_nonlinear_faces(
+                    semi.equations, bc.tol, semi.mesh, semi.solver, semi.cache, boundary_indexing
+                )
+                merge!(bc.cache.nonlinear_faces, new_faces)
+            else
+                new_projectors = build_projectors(
+                    semi.equations, bc.tol, semi.mesh, semi.solver, semi.cache, boundary_indexing
+                )
+                merge!(bc.cache.projectors, new_projectors)
+            end
             bc.cache.initialized = true
         end
     end
