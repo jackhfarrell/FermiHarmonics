@@ -45,6 +45,7 @@ end
     )
     eq_linear = FermiHarmonics2D(9; gamma_mr=0.1, gamma_mc=1.0, max_harmonic=4)
     @test eq.collision_model === :quadratic_bgk
+    @test eq.gamma3 ≈ eq.gamma_mc atol=1e-12 rtol=1e-12
     @test FermiHarmonics.nonlinear_data(eq).theta_count == 16
 
     state = zeros(Float64, 9)
@@ -129,6 +130,16 @@ end
         transport=:linear,
         chi=0.1,
     )
+    @test_throws ArgumentError FermiHarmonics2D(
+        9;
+        gamma_mr=0.1,
+        gamma_mc=0.2,
+        gamma3=-0.1,
+        max_harmonic=4,
+        transport=:parabolic_nonlinear,
+        mu0=1.0,
+        mass=2.0,
+    )
 end
 
 @testset "Exact nonlinear angle reference" begin
@@ -177,6 +188,41 @@ end
 end
 
 @testset "Electrostatic self-consistent force" begin
+    function expected_quadratic_transport_source(state, gradients, eq)
+        ntheta = FermiHarmonics.nonlinear_data(eq).theta_count
+        phi = Vector{ComplexF64}(undef, ntheta)
+        gradx = Vector{ComplexF64}(undef, ntheta)
+        grady = Vector{ComplexF64}(undef, ntheta)
+        dtheta = Vector{ComplexF64}(undef, ntheta)
+        work = Vector{ComplexF64}(undef, ntheta)
+        FermiHarmonics.harmonic_state_to_samples!(phi, state, eq)
+        FermiHarmonics.harmonic_state_to_samples!(gradx, gradients[1], eq)
+        FermiHarmonics.harmonic_state_to_samples!(grady, gradients[2], eq)
+        FermiHarmonics.harmonic_theta_derivative_to_samples!(dtheta, state, eq)
+        data = FermiHarmonics.nonlinear_data(eq)
+        v0 = eq.max_speed
+        p0 = eq.mass * v0
+        inv_2mu0 = 0.5 / eq.mu0
+        grad_phi0_x = 0.5 * gradients[1][1]
+        grad_phi0_y = 0.5 * gradients[2][1]
+        @inbounds for j in eachindex(work)
+            phi_j = real(phi[j])
+            p_hat_grad_phi = data.cos_theta[j] * real(gradx[j]) + data.sin_theta[j] * real(grady[j])
+            p_hat_grad_phi0 = data.cos_theta[j] * grad_phi0_x + data.sin_theta[j] * grad_phi0_y
+            theta_hat_grad_phi0 = -data.sin_theta[j] * grad_phi0_x + data.cos_theta[j] * grad_phi0_y
+            source = -(v0 * inv_2mu0) * phi_j * p_hat_grad_phi
+            if eq.electrostatic_coupling != 0.0
+                source -= eq.electrostatic_coupling * v0 * p_hat_grad_phi0
+                source -= eq.electrostatic_coupling * v0 * inv_2mu0 * phi_j * p_hat_grad_phi0
+                source += (eq.electrostatic_coupling / p0) * theta_hat_grad_phi0 * real(dtheta[j])
+            end
+            work[j] = ComplexF64(source, 0.0)
+        end
+        out = zeros(Float64, length(state))
+        FermiHarmonics.samples_to_harmonics!(out, work, eq)
+        return out
+    end
+
     eq = FermiHarmonics2D(
         9;
         gamma_mr=0.0,
@@ -203,6 +249,7 @@ end
     force_source = FermiHarmonics.source_terms(driven_state, gradients, nothing, 0.0, eq_parabolic)
     @test all(isfinite, force_source)
     @test norm(force_source) > 0.0
+    @test collect(force_source) ≈ expected_quadratic_transport_source(driven_state, gradients, eq) atol=1.0e-12 rtol=1.0e-12
 
     eq_zero = FermiHarmonics2D(
         9;
@@ -216,7 +263,9 @@ end
     )
     eq_zero_parabolic = FermiHarmonics.ElectrostaticGradientEquation2D(eq_zero)
     force_zero = FermiHarmonics.source_terms(driven_state, gradients, nothing, 0.0, eq_zero_parabolic)
-    @test force_zero ≈ zeros(9) atol=1.0e-12 rtol=1.0e-12
+    @test all(isfinite, force_zero)
+    @test norm(force_zero) > 0.0
+    @test collect(force_zero) ≈ expected_quadratic_transport_source(driven_state, gradients, eq_zero) atol=1.0e-12 rtol=1.0e-12
 end
 
 @testset "Nonlinear BGK source terms" begin
@@ -224,6 +273,7 @@ end
         9;
         gamma_mr=0.0,
         gamma_mc=0.8,
+        gamma3=0.05,
         max_harmonic=4,
         transport=:parabolic_nonlinear,
         mu0=1.0,
@@ -246,6 +296,20 @@ end
     source_perturbed = FermiHarmonics.physical_sources(perturbed, nothing, 0.0, eq_bgk)
     @test norm(source_perturbed) > 0.0
     @test all(isfinite, source_perturbed)
+    @test source_perturbed[1] ≈ 0.0 atol=1e-12 rtol=1e-12
+    @test source_perturbed[2] ≈ 0.0 atol=1e-12 rtol=1e-12
+    @test source_perturbed[3] ≈ 0.0 atol=1e-12 rtol=1e-12
+
+    even_mode_state = zeros(Float64, 9)
+    even_mode_state[FermiHarmonics.cosine_index(2)] = 0.03
+    even_mode_source = FermiHarmonics.physical_sources(even_mode_state, nothing, 0.0, eq_bgk)
+    @test even_mode_source[FermiHarmonics.cosine_index(2)] ≈ -eq_bgk.gamma_mc * even_mode_state[FermiHarmonics.cosine_index(2)] atol=1e-12 rtol=1e-12
+
+    odd_mode_state = zeros(Float64, 9)
+    odd_mode_state[FermiHarmonics.cosine_index(3)] = 0.03
+    odd_mode_source = FermiHarmonics.physical_sources(odd_mode_state, nothing, 0.0, eq_bgk)
+    @test odd_mode_source[FermiHarmonics.cosine_index(3)] ≈
+          -min(eq_bgk.gamma_mc, eq_bgk.gamma3 * 3^4) * odd_mode_state[FermiHarmonics.cosine_index(3)] atol=1e-12 rtol=1e-12
 
     eq_two_rate = FermiHarmonics2D(
         9;
@@ -260,6 +324,8 @@ end
     FermiHarmonics.local_equilibrium_state!(two_rate_state, 1.04, SVector(0.04, 0.01), eq_two_rate)
     two_rate_source = FermiHarmonics.physical_sources(two_rate_state, nothing, 0.0, eq_two_rate)
     @test norm(two_rate_source) > 0.0
+    @test two_rate_source[2] ≈ -eq_two_rate.gamma_mr * two_rate_state[2] atol=1e-12 rtol=1e-12
+    @test two_rate_source[3] ≈ -eq_two_rate.gamma_mr * two_rate_state[3] atol=1e-12 rtol=1e-12
 end
 
 @testset "Quadratic nonlinear regression vs exact reference" begin
@@ -282,11 +348,11 @@ end
     )
 
     state = zeros(Float64, 9)
-    state[1] = 0.02
-    state[2] = 0.012
-    state[3] = -0.009
-    state[4] = 0.006
-    state[5] = 0.004
+    state[1] = 0.004
+    state[2] = 0.0025
+    state[3] = -0.0015
+    state[4] = 0.001
+    state[5] = 0.0008
 
     samples = Vector{ComplexF64}(undef, ntheta)
     FermiHarmonics.harmonic_state_to_samples!(samples, state, eq_quad)
@@ -298,7 +364,7 @@ end
     FermiHarmonics.nonlinear_flux!(flux_exact_samples, sample_state, SVector(1.0, 0.0), eq_exact)
     flux_exact_harmonics = zeros(Float64, 9)
     FermiHarmonics.samples_to_harmonics!(flux_exact_harmonics, ComplexF64.(collect(flux_exact_samples)), eq_quad)
-    @test flux_quad ≈ flux_exact_harmonics atol=1.0e-4 rtol=1.0e-3
+    @test norm(flux_quad - flux_exact_harmonics) < 5.0e-5
 
     equilibrium_quad = zeros(Float64, 9)
     FermiHarmonics.local_equilibrium_state!(equilibrium_quad, 1.03, SVector(0.03, -0.02), eq_quad)
@@ -374,6 +440,30 @@ end
     @test top_a0 ≈ bottom_a0 atol=1e-12 rtol=1e-12
     @test top_a1 ≈ bottom_a1 atol=1e-12 rtol=1e-12
     @test top_b1 ≈ -bottom_b1 atol=1e-12 rtol=1e-12
+
+    nonlinear_state = zeros(Float64, 9)
+    nonlinear_state[1] = 0.08
+    nonlinear_state[2] = 0.04
+    nonlinear_state[3] = -0.015
+    nonlinear_state[4] = 0.01
+    nonlinear_bc = OhmicContactBC(0.12)
+    linear_bc = OhmicContactBC(0.12)
+    trace_flux = (u_inner, u_outer, normal_direction, equations) -> SVector{length(u_outer), Float64}(u_outer)
+    nonlinear_trace = nonlinear_bc(nonlinear_state, [1.0, 0.0], nothing, 0.0, trace_flux, eq)
+    linear_trace = linear_bc(nonlinear_state, [1.0, 0.0], nothing, 0.0, trace_flux, eq_linear)
+    expected_nonlinear_trace = similar(nonlinear_state)
+    FermiHarmonics.nonlinear_ohmic_contact!(
+        expected_nonlinear_trace,
+        nonlinear_state,
+        SVector(1.0, 0.0),
+        1.0,
+        0.12,
+        similar(nonlinear_state),
+        eq,
+        1.0e-12,
+    )
+    @test collect(nonlinear_trace) ≈ expected_nonlinear_trace atol=1.0e-12 rtol=1.0e-12
+    @test norm(collect(nonlinear_trace) - collect(linear_trace)) > 1.0e-6
 end
 
 @testset "Solve smoke tests" begin
@@ -542,4 +632,33 @@ end
     )
     @test semi_stable.equations.collision_model === :quadratic_bgk
     @test sol_stable.t[end] ≈ stability_params.tspan_end atol=1.0e-12 rtol=1.0e-12
+
+    sol_gamma3, semi_gamma3 = solve(
+        mesh_path,
+        boundary_conditions,
+        params,
+        0.0,
+        0.5;
+        transport=:parabolic_nonlinear,
+        max_harmonic=2,
+        gamma3=0.2,
+        mu0=1.0,
+        mass=2.0,
+        name="test_nonlinear_gamma3",
+    )
+    @test semi_gamma3.equations.gamma3 ≈ 0.2 atol=1e-12 rtol=1e-12
+
+    @test_throws ArgumentError solve(
+        mesh_path,
+        boundary_conditions,
+        params,
+        0.0,
+        0.5;
+        transport=:parabolic_nonlinear,
+        max_harmonic=2,
+        gamma3=-0.1,
+        mu0=1.0,
+        mass=2.0,
+        name="invalid_gamma3",
+    )
 end

@@ -82,6 +82,7 @@ end
 @inline function Trixi.max_abs_speed_naive(u_ll, u_rr, orientation::Integer,
                                           equations::AbstractFermiTransportEquations2D)
     if transport_is_nonlinear(equations)
+        equations isa FermiHarmonics2D && return equations.max_speed
         normal = orientation == 1 ? SVector(1.0, 0.0) : SVector(0.0, 1.0)
         return max(
             nonlinear_max_abs_speed(u_ll, normal, equations),
@@ -94,6 +95,7 @@ end
 @inline function Trixi.max_abs_speed_naive(u_ll, u_rr, normal_direction::AbstractVector,
                                           equations::AbstractFermiTransportEquations2D)
     if transport_is_nonlinear(equations)
+        equations isa FermiHarmonics2D && return equations.max_speed * hypot(normal_direction[1], normal_direction[2])
         normal = SVector(normal_direction[1], normal_direction[2])
         return max(
             nonlinear_max_abs_speed(u_ll, normal, equations),
@@ -105,11 +107,12 @@ end
 end
 
 @inline function Trixi.have_constant_speed(equations::AbstractFermiTransportEquations2D)
-    return transport_is_nonlinear(equations) ? Trixi.False() : Trixi.True()
+    return equations isa FermiAngles2D ? Trixi.False() : Trixi.True()
 end
 
 @inline function Trixi.max_abs_speeds(u_or_eq::AbstractVector, equations::AbstractFermiTransportEquations2D)
     if transport_is_nonlinear(equations)
+        equations isa FermiHarmonics2D && return (equations.max_speed, equations.max_speed)
         return nonlinear_max_abs_speeds(u_or_eq, equations)
     end
     return (equations.max_speed, equations.max_speed)
@@ -171,6 +174,14 @@ end
             nonlinear_maxwell_wall!(out, state, unit_n, bc.p_scatter, target, equations, effective_tol, face_data)
         else
             nonlinear_ohmic_contact!(out, state, unit_n, bc.p_ohmic_absorb, bc.bias, target, equations, effective_tol, face_data)
+        end
+        return surface_flux_function(state, out, normal_direction, equations)
+    elseif transport_is_nonlinear(equations)
+        effective_tol = max(bc.tol, 1.0e-12)
+        if bc_type === :maxwell
+            nonlinear_maxwell_wall!(out, state, unit_n, bc.p_scatter, target, equations, effective_tol)
+        else
+            nonlinear_ohmic_contact!(out, state, unit_n, bc.p_ohmic_absorb, bc.bias, target, equations, effective_tol)
         end
         return surface_flux_function(state, out, normal_direction, equations)
     elseif bc.cache.initialized && boundary_index > 0 && haskey(bc.cache.projectors, boundary_index)

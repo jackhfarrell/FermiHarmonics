@@ -226,6 +226,8 @@ Keywords:
   or pass an integer for a fixed cutoff (`nvars = 1 + 2*max_harmonic`). This is also the default
   resolution control for `transport=:parabolic_nonlinear, collision_model=:quadratic_bgk`.
 - `n_angles`: required discrete-angle count for `transport=:parabolic_nonlinear, collision_model=:exact_bgk`.
+- `gamma3`: optional odd-mode quartic relaxation prefactor for harmonic nonlinear solves;
+  defaults to `gamma_mc`.
 - `u0_override`: optional warm-start state vector.
 - `visualize`: enable live visualization callback.
 - `name`: run name used in logs/visualization filenames.
@@ -239,6 +241,7 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
                n_angles::Union{Nothing, Integer}=nothing,
                transport::Symbol=:linear,
                collision_model::Union{Nothing, Symbol}=nothing,
+               gamma3::Union{Nothing, Real}=nothing,
                mu0::Union{Nothing, Real}=nothing,
                mass::Union{Nothing, Real}=nothing,
                chi::Real=0.0,
@@ -285,6 +288,7 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
             nvars;
             gamma_mr=gamma_mr,
             gamma_mc=gamma_mc,
+            gamma3=gamma3,
             max_harmonic=max_harmonic_resolved,
             transport=transport,
             collision_model=collision_model_value,
@@ -297,7 +301,19 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
     boundary_symbols = sort(collect(keys(boundary_conditions)))
     solver = Trixi.DGSEM(polydeg=params.polydeg, surface_flux=Trixi.flux_lax_friedrichs)
     mesh = Trixi.P4estMesh{2}(mesh_path; boundary_symbols=boundary_symbols)
-    if nonlinear_has_electrostatic_force(equations)
+    if equations isa FermiHarmonics2D && transport_is_nonlinear(equations)
+        equations_parabolic = ElectrostaticGradientEquation2D(equations)
+        semi = Trixi.SemidiscretizationHyperbolicParabolic(
+            mesh,
+            (equations, equations_parabolic),
+            (x, t, eq) -> zeros(SVector{nvars, Float64}),
+            solver;
+            solver_parabolic=Trixi.ViscousFormulationLocalDG(),
+            source_terms=FermiHarmonics.source_terms,
+            source_terms_parabolic=FermiHarmonics.source_terms,
+            boundary_conditions=(boundary_conditions, boundary_conditions),
+        )
+    elseif nonlinear_has_electrostatic_force(equations)
         equations_parabolic = ElectrostaticGradientEquation2D(equations)
         semi = Trixi.SemidiscretizationHyperbolicParabolic(
             mesh,
@@ -318,7 +334,7 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
     end
 
     boundary_types = Dict(key => boundary_condition_name(value) for (key, value) in boundary_conditions)
-    @info "Starting solve" name=name max_harmonic=max_harmonic_resolved n_angles=n_angles harmonic_mode=harmonic_mode gamma_mr=gamma_mr gamma_mc=gamma_mc polydeg=params.polydeg cfl=params.cfl residual_tol=params.residual_tol boundaries=boundary_types transport=transport collision_model=collision_model_value mu0=mu0 mass=mass chi=chi
+    @info "Starting solve" name=name max_harmonic=max_harmonic_resolved n_angles=n_angles harmonic_mode=harmonic_mode gamma_mr=gamma_mr gamma_mc=gamma_mc gamma3=(equations isa FermiHarmonics2D ? equations.gamma3 : nothing) polydeg=params.polydeg cfl=params.cfl residual_tol=params.residual_tol boundaries=boundary_types transport=transport collision_model=collision_model_value mu0=mu0 mass=mass chi=chi
     flush(stdout)
     flush(stderr)
 

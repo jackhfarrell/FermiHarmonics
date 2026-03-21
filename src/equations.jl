@@ -23,6 +23,7 @@ Linearized 2D Boltzmann system in harmonic form:
 struct FermiHarmonics2D{NVARS, TNonlinear} <: AbstractFermiTransportEquations2D{NVARS}
     gamma_mr::Float64
     gamma_mc::Float64
+    gamma3::Float64
     max_speed::Float64
     Ax::Matrix{Float64}
     Ay::Matrix{Float64}
@@ -70,7 +71,7 @@ struct FermiAngles2D{NVARS, TData} <: AbstractFermiTransportEquations2D{NVARS}
 end
 
 """
-    FermiHarmonics2D(nvars; gamma_mr, gamma_mc, max_harmonic=0, transport=:linear,
+    FermiHarmonics2D(nvars; gamma_mr, gamma_mc, gamma3=nothing, max_harmonic=0, transport=:linear,
                      collision_model=nothing, mu0=nothing, mass=nothing,
                      chi=0.0, theta_oversample=1)
 
@@ -80,6 +81,7 @@ Parameters:
 - `nvars`: number of state variables, must be odd (`1 + 2M`).
 - `gamma_mr`: momentum-relaxing scattering rate.
 - `gamma_mc`: momentum-conserving scattering rate.
+- `gamma3`: optional odd-mode quartic relaxation prefactor for nonlinear harmonic transport.
 - `max_harmonic`: optional explicit harmonic cutoff; if set, must satisfy `nvars == 1 + 2*max_harmonic`.
 - `transport`: `:linear` or `:parabolic_nonlinear`.
 - `collision_model`: defaults to `:linear_mrt` for linear transport and `:quadratic_bgk` for nonlinear transport.
@@ -93,6 +95,7 @@ function FermiHarmonics2D(
     nvars::Integer;
     gamma_mr::Real,
     gamma_mc::Real,
+    gamma3::Union{Nothing, Real} = nothing,
     max_harmonic::Integer = 0,
     transport::Symbol = :linear,
     collision_model::Union{Nothing, Symbol} = nothing,
@@ -114,6 +117,8 @@ function FermiHarmonics2D(
         throw(ArgumentError("chi must be 0 for :linear transport"))
     end
     collision_model_value = validate_collision_model(transport, collision_model)
+    gamma3_value = isnothing(gamma3) ? Float64(gamma_mc) : Float64(gamma3)
+    gamma3_value >= 0.0 || throw(ArgumentError("gamma3 must be >= 0"))
 
     nonlinear_transport_data = nothing
     mu0_value = isnothing(mu0) ? NaN : Float64(mu0)
@@ -132,6 +137,7 @@ function FermiHarmonics2D(
     return FermiHarmonics2D{nvars_int, typeof(nonlinear_transport_data)}(
         Float64(gamma_mr),
         Float64(gamma_mc),
+        gamma3_value,
         max_speed,
         Ax,
         Ay,
@@ -321,6 +327,7 @@ function Base.show(io::IO, equations::FermiHarmonics2D{NVARS}) where {NVARS}
     print(io, "max_harmonic=$max_harmonic, ")
     print(io, "γ_mr=$(equations.gamma_mr), ")
     print(io, "γ_mc=$(equations.gamma_mc), ")
+    print(io, "γ₃=$(equations.gamma3), ")
     print(io, "transport=$(equations.transport), ")
     print(io, "collision_model=$(equations.collision_model)")
     if transport_is_nonlinear(equations)
@@ -349,6 +356,7 @@ function Base.show(io::IO, ::MIME"text/plain", equations::FermiHarmonics2D{NVARS
         Trixi.summary_line(io, "max harmonic", max_harmonic)
         Trixi.summary_line(io, "γ_mr (momentum-relaxing)", equations.gamma_mr)
         Trixi.summary_line(io, "γ_mc (momentum-conserving)", equations.gamma_mc)
+        Trixi.summary_line(io, "γ3 (odd quartic prefactor)", equations.gamma3)
         Trixi.summary_line(io, "transport", equations.transport)
         Trixi.summary_line(io, "collision model", equations.collision_model)
         if transport_is_nonlinear(equations)

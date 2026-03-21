@@ -12,8 +12,8 @@ function main()
     mass = reference.mass
     gamma_mr = reference.gamma_mr
     gamma_mc = 1.0
-    bias = 0.2
-    max_harmonic = 50
+    bias = 0.4
+    max_harmonic = 10
     p_scatter = reference.p_scatter
 
     boundary_conditions = Dict(
@@ -27,12 +27,12 @@ function main()
         tspan_end = 4.0,
         residual_tol = 1e-4,
         cfl = 0.4,
-        log_every = 100,
+        log_every = 500,
         min_harmonic = 4,
         max_harmonic_auto = 20,
     )
 
-    run_name = "nonlinear_live_gamma_mc1_M50_bias02_poly3"
+    run_name = "nonlinear_live_gamma_mc1_M10_bias04_poly3"
 
     @info "Running nonlinear live visualization case" mu0 mass gamma_mr gamma_mc bias max_harmonic polydeg=params.polydeg tspan_end=params.tspan_end
 

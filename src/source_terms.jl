@@ -78,6 +78,10 @@ Source terms from a BGK-type approximation to the collision integral.  We do not
 end
 
 @inline function nonlinear_bgk_sources(u, equations::AbstractFermiTransportEquations2D)::SVector
+    return nonlinear_bgk_sources(u, Val(:dispatch), equations)
+end
+
+@inline function nonlinear_bgk_sources(u, ::Val{:dispatch}, equations::FermiAngles2D)::SVector
     n = length(u)
     out = MVector{n, Float64}(undef)
     drift_equilibrium = MVector{n, Float64}(undef)
@@ -92,6 +96,37 @@ end
     @inbounds for i in 1:n
         out[i] = -gamma_mr * (u[i] - isotropic_equilibrium[i]) -
                  gamma_mc * (u[i] - drift_equilibrium[i])
+    end
+    return SVector(out)
+end
+
+@inline nonlinear_mode_rate(m::Int, equations::FermiHarmonics2D) =
+    iseven(m) ? equations.gamma_mc : min(equations.gamma_mc, equations.gamma3 * m^4)
+
+@inline function nonlinear_bgk_sources(u, ::Val{:dispatch}, equations::FermiHarmonics2D)::SVector
+    n = length(u)
+    out = MVector{n, Float64}(undef)
+    drift_equilibrium = MVector{n, Float64}(undef)
+    mu, velocity = recover_mu_u(u, equations)
+    local_equilibrium_state!(drift_equilibrium, mu, velocity, equations)
+
+    gamma_mr = equations.gamma_mr
+    max_harmonic = (n - 1) ÷ 2
+    @inbounds begin
+        out[1] = 0.0
+        if n >= 3
+            out[2] = -gamma_mr * Float64(u[2])
+            out[3] = -gamma_mr * Float64(u[3])
+        end
+        for m in 2:max_harmonic
+            gamma_mode = nonlinear_mode_rate(m, equations)
+            ci = cosine_index(m)
+            si = sine_index(m)
+            out[ci] = -gamma_mr * Float64(u[ci]) +
+                      gamma_mode * (drift_equilibrium[ci] - Float64(u[ci]))
+            out[si] = -gamma_mr * Float64(u[si]) +
+                      gamma_mode * (drift_equilibrium[si] - Float64(u[si]))
+        end
     end
     return SVector(out)
 end

@@ -5,6 +5,10 @@ Utilities for the opt-in nonlinear parabolic-band transport mode.
 mutable struct NonlinearThreadCache{PF, PI}
     samples::Vector{ComplexF64}
     scratch_samples::Vector{ComplexF64}
+    work_samples::Vector{ComplexF64}
+    gradx_samples::Vector{ComplexF64}
+    grady_samples::Vector{ComplexF64}
+    theta_derivative_samples::Vector{ComplexF64}
     fft_plan::PF
     ifft_plan::PI
 end
@@ -84,18 +88,39 @@ function create_nonlinear_transport_data(max_harmonic::Int, theta_oversample::In
     sin_theta = sin.(theta)
     samples = Vector{ComplexF64}(undef, ntheta)
     scratch_samples = Vector{ComplexF64}(undef, ntheta)
+    work_samples = Vector{ComplexF64}(undef, ntheta)
+    gradx_samples = Vector{ComplexF64}(undef, ntheta)
+    grady_samples = Vector{ComplexF64}(undef, ntheta)
+    theta_derivative_samples = Vector{ComplexF64}(undef, ntheta)
     fft_plan = FFTW.plan_fft!(scratch_samples; flags=FFTW.ESTIMATE)
     ifft_plan = FFTW.plan_ifft!(samples; flags=FFTW.ESTIMATE)
-    cache_template = NonlinearThreadCache(samples, scratch_samples, fft_plan, ifft_plan)
+    cache_template = NonlinearThreadCache(
+        samples,
+        scratch_samples,
+        work_samples,
+        gradx_samples,
+        grady_samples,
+        theta_derivative_samples,
+        fft_plan,
+        ifft_plan,
+    )
     TC = typeof(cache_template)
     thread_caches = Vector{TC}(undef, Threads.nthreads())
     thread_caches[1] = cache_template
     for tid in 2:length(thread_caches)
         samples_tid = Vector{ComplexF64}(undef, ntheta)
         scratch_samples_tid = Vector{ComplexF64}(undef, ntheta)
+        work_samples_tid = Vector{ComplexF64}(undef, ntheta)
+        gradx_samples_tid = Vector{ComplexF64}(undef, ntheta)
+        grady_samples_tid = Vector{ComplexF64}(undef, ntheta)
+        theta_derivative_samples_tid = Vector{ComplexF64}(undef, ntheta)
         thread_caches[tid] = NonlinearThreadCache(
             samples_tid,
             scratch_samples_tid,
+            work_samples_tid,
+            gradx_samples_tid,
+            grady_samples_tid,
+            theta_derivative_samples_tid,
             FFTW.plan_fft!(scratch_samples_tid; flags=FFTW.ESTIMATE),
             FFTW.plan_ifft!(samples_tid; flags=FFTW.ESTIMATE),
         )
@@ -242,21 +267,34 @@ function nonlinear_flux!(
     normal::SVector{2, Float64},
     equations::FermiHarmonics2D,
 )
-    data = nonlinear_data(equations)
-    cache = get_nonlinear_cache(equations)
-    harmonic_state_to_samples!(cache.samples, state, equations)
-
-    nx, ny = normal
-    @inbounds for j in eachindex(cache.scratch_samples)
-        phi = real(cache.samples[j])
-        directional_cosine = nx * data.cos_theta[j] + ny * data.sin_theta[j]
-        cache.scratch_samples[j] = ComplexF64(
-            directional_cosine * quadratic_shifted_flux(phi, equations),
-            0.0,
-        )
+    n_vars = length(state)
+    max_harmonic_local = (n_vars - 1) ÷ 2
+    normal_x, normal_y = normal
+    v0 = equations.max_speed
+    @inbounds begin
+        out[cosine_index(0)] = (max_harmonic_local >= 1) ?
+            (normal_x * v0 * Float64(state[cosine_index(1)]) +
+             normal_y * v0 * Float64(state[sine_index(1)])) : 0.0
+        for m in 1:max_harmonic_local
+            out[cosine_index(m)] =
+                normal_x * (0.5 * v0) * Float64(state[cosine_index(m - 1)]) +
+                (m + 1 <= max_harmonic_local ? normal_x * (0.5 * v0) *
+                 Float64(state[cosine_index(m + 1)]) : 0.0) +
+                (m - 1 >= 1 ? normal_y * (-0.5 * v0) *
+                 Float64(state[sine_index(m - 1)]) : 0.0) +
+                (m + 1 <= max_harmonic_local ? normal_y * (0.5 * v0) *
+                 Float64(state[sine_index(m + 1)]) : 0.0)
+            out[sine_index(m)] =
+                (m - 1 >= 1 ? normal_x * (0.5 * v0) *
+                 Float64(state[sine_index(m - 1)]) : 0.0) +
+                (m + 1 <= max_harmonic_local ? normal_x * (0.5 * v0) *
+                 Float64(state[sine_index(m + 1)]) : 0.0) +
+                normal_y * (0.5 * v0) * Float64(state[cosine_index(m - 1)]) +
+                (m + 1 <= max_harmonic_local ? normal_y * (-0.5 * v0) *
+                 Float64(state[cosine_index(m + 1)]) : 0.0)
+        end
     end
-
-    return samples_to_harmonics!(out, cache.scratch_samples, equations)
+    return out
 end
 
 function nonlinear_max_abs_speed(
@@ -264,33 +302,14 @@ function nonlinear_max_abs_speed(
     normal::SVector{2, Float64},
     equations::FermiHarmonics2D,
 )
-    data = nonlinear_data(equations)
-    cache = get_nonlinear_cache(equations)
-    harmonic_state_to_samples!(cache.samples, state, equations)
-
-    max_speed = 0.0
-    nx, ny = normal
-    @inbounds for j in eachindex(cache.samples)
-        phi = real(cache.samples[j])
-        speed = abs(nx * data.cos_theta[j] + ny * data.sin_theta[j]) *
-                abs(quadratic_speed(phi, equations))
-        max_speed = max(max_speed, speed)
-    end
-    return max_speed
+    return equations.max_speed * norm(normal)
 end
 
 function nonlinear_max_abs_speeds(
     state::AbstractVector{<:Real},
     equations::FermiHarmonics2D,
 )
-    cache = get_nonlinear_cache(equations)
-    harmonic_state_to_samples!(cache.samples, state, equations)
-
-    vmax = 0.0
-    @inbounds for j in eachindex(cache.samples)
-        vmax = max(vmax, abs(quadratic_speed(real(cache.samples[j]), equations)))
-    end
-    return (vmax, vmax)
+    return (equations.max_speed, equations.max_speed)
 end
 
 function nonlinear_current_components(
@@ -517,38 +536,39 @@ function electrostatic_force_sources!(
     gradients,
     equations::FermiHarmonics2D,
 )
-    if !nonlinear_has_electrostatic_force(equations)
-        fill!(out, 0.0)
-        return out
-    end
-
-    grad_phi0_x = 0.5 * Float64(gradients[1][1])
-    grad_phi0_y = 0.5 * Float64(gradients[2][1])
-    force_x = -equations.electrostatic_coupling * grad_phi0_x
-    force_y = -equations.electrostatic_coupling * grad_phi0_y
-    if force_x == 0.0 && force_y == 0.0
-        fill!(out, 0.0)
-        return out
-    end
-
     cache = get_nonlinear_cache(equations)
     harmonic_state_to_samples!(cache.samples, state, equations)
-    harmonic_theta_derivative_to_samples!(cache.scratch_samples, state, equations)
+    harmonic_state_to_samples!(cache.gradx_samples, gradients[1], equations)
+    harmonic_state_to_samples!(cache.grady_samples, gradients[2], equations)
+    harmonic_theta_derivative_to_samples!(cache.theta_derivative_samples, state, equations)
     data = nonlinear_data(equations)
+    v0 = equations.max_speed
+    inv_2mu0 = 0.5 / equations.mu0
+    chi = equations.electrostatic_coupling
+    p0 = equations.mass * v0
+    grad_phi0_x = 0.5 * Float64(gradients[1][1])
+    grad_phi0_y = 0.5 * Float64(gradients[2][1])
 
-    @inbounds for j in eachindex(cache.samples)
+    @inbounds for j in eachindex(cache.work_samples)
         phi = real(cache.samples[j])
-        dphi_dtheta = real(cache.scratch_samples[j])
+        dphi_dtheta = real(cache.theta_derivative_samples[j])
+        dphi_dx = real(cache.gradx_samples[j])
+        dphi_dy = real(cache.grady_samples[j])
         cos_theta = data.cos_theta[j]
         sin_theta = data.sin_theta[j]
-        force_dot_hat = force_x * cos_theta + force_y * sin_theta
-        force_dot_theta = -force_x * sin_theta + force_y * cos_theta
-        source = -quadratic_inverse_momentum(phi, equations) * force_dot_theta * dphi_dtheta -
-                 quadratic_speed(phi, equations) * force_dot_hat
-        cache.scratch_samples[j] = ComplexF64(source, 0.0)
+        p_hat_grad_phi = cos_theta * dphi_dx + sin_theta * dphi_dy
+        p_hat_grad_phi0 = cos_theta * grad_phi0_x + sin_theta * grad_phi0_y
+        theta_hat_grad_phi0 = -sin_theta * grad_phi0_x + cos_theta * grad_phi0_y
+        source = -(v0 * inv_2mu0) * phi * p_hat_grad_phi
+        if chi != 0.0
+            source -= chi * v0 * p_hat_grad_phi0
+            source -= chi * v0 * inv_2mu0 * phi * p_hat_grad_phi0
+            source += (chi / p0) * theta_hat_grad_phi0 * dphi_dtheta
+        end
+        cache.work_samples[j] = ComplexF64(source, 0.0)
     end
 
-    return samples_to_harmonics!(out, cache.scratch_samples, equations)
+    return samples_to_harmonics!(out, cache.work_samples, equations)
 end
 
 @inline function analysis_variables(u, equations::FermiHarmonics2D)
