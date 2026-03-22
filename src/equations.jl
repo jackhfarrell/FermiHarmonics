@@ -25,6 +25,7 @@ struct FermiHarmonics2D{NVARS, TNonlinear} <: AbstractFermiTransportEquations2D{
     gamma_mc::Float64
     gamma3::Float64
     max_speed::Float64
+    timestep_speed::Float64
     Ax::Matrix{Float64}
     Ay::Matrix{Float64}
     transport::Symbol
@@ -62,6 +63,7 @@ struct FermiAngles2D{NVARS, TData} <: AbstractFermiTransportEquations2D{NVARS}
     gamma_mr::Float64
     gamma_mc::Float64
     max_speed::Float64
+    timestep_speed::Float64
     transport::Symbol
     collision_model::Symbol
     mu0::Float64
@@ -69,6 +71,8 @@ struct FermiAngles2D{NVARS, TData} <: AbstractFermiTransportEquations2D{NVARS}
     electrostatic_coupling::Float64
     nonlinear_data::TData
 end
+
+@inline nonlinear_timestep_speed(vF::Real, chi::Real) = Float64(vF) * (1.0 + abs(Float64(chi)))
 
 """
     FermiHarmonics2D(nvars; gamma_mr, gamma_mc, gamma3=nothing, max_harmonic=0, transport=:linear,
@@ -133,12 +137,15 @@ function FermiHarmonics2D(
 
     Ax, Ay = streaming_matrices(M, vF)
     max_speed = vF
+    timestep_speed = transport === :parabolic_nonlinear ?
+        nonlinear_timestep_speed(vF, chi) : vF
 
     return FermiHarmonics2D{nvars_int, typeof(nonlinear_transport_data)}(
         Float64(gamma_mr),
         Float64(gamma_mc),
         gamma3_value,
         max_speed,
+        timestep_speed,
         Ax,
         Ay,
         transport,
@@ -210,6 +217,7 @@ function FermiAngles2D(
         Float64(gamma_mr),
         Float64(gamma_mc),
         zero_state_speed(mu0_value, mass_value),
+        nonlinear_timestep_speed(zero_state_speed(mu0_value, mass_value), chi),
         :parabolic_nonlinear,
         collision_model_value,
         mu0_value,
@@ -331,7 +339,7 @@ function Base.show(io::IO, equations::FermiHarmonics2D{NVARS}) where {NVARS}
     print(io, "transport=$(equations.transport), ")
     print(io, "collision_model=$(equations.collision_model)")
     if transport_is_nonlinear(equations)
-        print(io, ", mu0=$(equations.mu0), mass=$(equations.mass), chi=$(equations.electrostatic_coupling), dealiased_angles=$(nonlinear_data(equations).theta_count)")
+        print(io, ", mu0=$(equations.mu0), mass=$(equations.mass), chi=$(equations.electrostatic_coupling), dealiased_angles=$(nonlinear_data(equations).theta_count), timestep_speed=$(equations.timestep_speed)")
     end
     print(io, ")")
 end
@@ -343,7 +351,7 @@ function Base.show(io::IO, equations::FermiAngles2D{NVARS}) where {NVARS}
     print(io, "γ_mc=$(equations.gamma_mc), ")
     print(io, "transport=$(equations.transport), ")
     print(io, "collision_model=$(equations.collision_model), ")
-    print(io, "mu0=$(equations.mu0), mass=$(equations.mass), chi=$(equations.electrostatic_coupling)")
+    print(io, "mu0=$(equations.mu0), mass=$(equations.mass), chi=$(equations.electrostatic_coupling), timestep_speed=$(equations.timestep_speed)")
     print(io, ")")
 end
 
@@ -365,6 +373,7 @@ function Base.show(io::IO, ::MIME"text/plain", equations::FermiHarmonics2D{NVARS
             Trixi.summary_line(io, "chi", equations.electrostatic_coupling)
             Trixi.summary_line(io, "dealiased angles", nonlinear_data(equations).theta_count)
             Trixi.summary_line(io, "linearized vF", equations.max_speed)
+            Trixi.summary_line(io, "CFL timestep speed", equations.timestep_speed)
         end
         Trixi.summary_footer(io)
     end
@@ -384,6 +393,7 @@ function Base.show(io::IO, ::MIME"text/plain", equations::FermiAngles2D{NVARS}) 
         Trixi.summary_line(io, "mass", equations.mass)
         Trixi.summary_line(io, "chi", equations.electrostatic_coupling)
         Trixi.summary_line(io, "linearized vF", equations.max_speed)
+        Trixi.summary_line(io, "CFL timestep speed", equations.timestep_speed)
         Trixi.summary_footer(io)
     end
 end

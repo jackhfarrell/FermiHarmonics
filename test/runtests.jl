@@ -3,6 +3,7 @@ using FermiHarmonics
 using Trixi
 using StaticArrays
 using LinearAlgebra
+using HDF5
 
 @testset "BLG reference convention" begin
     reference = blg_reference_setup()
@@ -19,6 +20,76 @@ using LinearAlgebra
     geo_path = normpath(joinpath(@__DIR__, "..", "demo", "mesh", "straight_channel.geo"))
     geo_contents = read(geo_path, String)
     @test occursin("length_x = 1.0;", geo_contents)
+end
+
+@testset "Mesh-native analysis export" begin
+    mesh_path = normpath(joinpath(@__DIR__, "..", "projects", "nonlinearities", "mesh", "tesla_valve.inp"))
+    boundary_conditions = Dict(
+        :walls => MaxwellWallBC(1.0),
+        :inlet => OhmicContactBC(0.05),
+        :outlet => OhmicContactBC(-0.05),
+    )
+    params = SolveParams(;
+        polydeg=1,
+        tspan_end=0.01,
+        residual_tol=1e-3,
+        cfl=0.2,
+        log_every=10_000,
+        min_harmonic=2,
+        max_harmonic_auto=4,
+    )
+    sol, semi = solve(
+        mesh_path,
+        boundary_conditions,
+        params,
+        0.0,
+        0.5;
+        transport=:parabolic_nonlinear,
+        max_harmonic=2,
+        mu0=1.0,
+        mass=2.0,
+        chi=0.2,
+        name="test_mesh_native_export",
+    )
+
+    mesh_data = FermiHarmonics.compute_mesh_native_analysis(sol.u[end], semi; refine=2)
+    @test all(isfinite, mesh_data.x)
+    @test all(isfinite, mesh_data.y)
+    @test all(isfinite, mesh_data.n)
+    @test all(isfinite, mesh_data.jx)
+    @test all(isfinite, mesh_data.jy)
+    @test size(mesh_data.triangles, 2) == 3
+    @test minimum(mesh_data.triangles) >= 0
+    @test maximum(mesh_data.triangles) < length(mesh_data.x)
+
+    sample_index = findfirst(i -> isfinite(mesh_data.n[i]) && isfinite(mesh_data.jx[i]) && isfinite(mesh_data.jy[i]), eachindex(mesh_data.n))
+    @test sample_index !== nothing
+    obs = evaluate_observables(sol, semi, mesh_data.x[sample_index], mesh_data.y[sample_index])
+    @test obs.in_domain
+    @test obs.n ≈ mesh_data.n[sample_index] atol=1e-9 rtol=1e-9
+    @test obs.jx ≈ mesh_data.jx[sample_index] atol=1e-9 rtol=1e-9
+    @test obs.jy ≈ mesh_data.jy[sample_index] atol=1e-9 rtol=1e-9
+
+    mktempdir() do dir
+        mesh_native_path = joinpath(dir, "tesla_mesh_native.h5")
+        FermiHarmonics.save_mesh_native_analysis(sol, semi, mesh_native_path; refine=2)
+        @test isfile(mesh_native_path)
+        h5open(mesh_native_path, "r") do f
+            @test haskey(f, "x")
+            @test haskey(f, "y")
+            @test haskey(f, "triangles")
+            @test haskey(f, "n")
+            @test haskey(f, "jx")
+            @test haskey(f, "jy")
+            @test read(attributes(f)["grid_type"]) == "mesh_native_triangles"
+            @test read(attributes(f)["time"]) ≈ sol.t[end] atol=1e-12 rtol=1e-12
+        end
+
+        output_png = joinpath(dir, "tesla_mesh_native.png")
+        run(`python3 demo/plot_mesh_native_streamlines.py $mesh_native_path --output $output_png --stream-grid 80`)
+        @test isfile(output_png)
+        @test filesize(output_png) > 0
+    end
 end
 
 @testset "FermiHarmonics smoke tests" begin
@@ -47,6 +118,21 @@ end
     @test eq.collision_model === :quadratic_bgk
     @test eq.gamma3 ≈ eq.gamma_mc atol=1e-12 rtol=1e-12
     @test FermiHarmonics.nonlinear_data(eq).theta_count == 16
+    @test eq.max_speed ≈ 1.0 atol=1e-12 rtol=1e-12
+    @test eq.timestep_speed ≈ 1.0 atol=1e-12 rtol=1e-12
+
+    eq_chi = FermiHarmonics2D(
+        9;
+        gamma_mr=0.1,
+        gamma_mc=1.0,
+        max_harmonic=4,
+        transport=:parabolic_nonlinear,
+        mu0=1.0,
+        mass=2.0,
+        chi=10.0,
+    )
+    @test eq_chi.max_speed ≈ eq.max_speed atol=1e-12 rtol=1e-12
+    @test eq_chi.timestep_speed ≈ 11.0 atol=1e-12 rtol=1e-12
 
     state = zeros(Float64, 9)
     state[1] = 0.04
@@ -150,7 +236,19 @@ end
         mu0=1.0,
         mass=2.0,
     )
+    eq_chi = FermiAngles2D(
+        32;
+        gamma_mr=0.1,
+        gamma_mc=1.0,
+        mu0=1.0,
+        mass=2.0,
+        chi=10.0,
+    )
     @test eq.collision_model === :exact_bgk
+    @test eq.max_speed ≈ 1.0 atol=1e-12 rtol=1e-12
+    @test eq.timestep_speed ≈ 1.0 atol=1e-12 rtol=1e-12
+    @test eq_chi.max_speed ≈ eq.max_speed atol=1e-12 rtol=1e-12
+    @test eq_chi.timestep_speed ≈ 11.0 atol=1e-12 rtol=1e-12
 
     data = FermiHarmonics.nonlinear_data(eq)
     state = @. 0.08 * cos(data.theta) - 0.05 * sin(data.theta) + 0.03 * cos(2.0 * data.theta)

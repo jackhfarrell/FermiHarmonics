@@ -43,11 +43,27 @@ function save_for_analysis(sol, semi, filename; nvisnodes=400)
     return filename
 end
 
+"""
+    save_mesh_native_analysis(sol, semi, filename; refine=6)
+
+Save observables on a mesh-following unstructured visualization grid created by
+subdividing each DG element in reference space.
+"""
+function save_mesh_native_analysis(sol, semi, filename; refine=6)
+    final_time = sol.t[end]
+    mesh_data = compute_mesh_native_analysis(sol.u[end], semi; refine=refine)
+    @info "Analysis: writing mesh-native HDF5" file=filename
+    analysis_write_mesh_native_hdf5(filename, mesh_data, final_time, semi.equations)
+    @info "Analysis: mesh-native write complete" file=filename
+    return filename
+end
+
 Base.@deprecate save_observables_for_python save_for_analysis
 @doc "Deprecated alias for [`save_for_analysis`](@ref)." save_observables_for_python
 
 export save_solution_custom,
        save_for_analysis,
+       save_mesh_native_analysis,
        save_observables_for_python,
        evaluate_solution,
        evaluate_observables
@@ -78,6 +94,153 @@ function analysis_grid_axes(solution_vector, semi, nvisnodes::Int)
         x = range(x_min, x_max, length=nvisnodes),
         y = range(y_min, y_max, length=nvisnodes),
         equations = equations,
+    )
+end
+
+@inline reference_visualization_nodes(refine::Int) =
+    collect(range(-1.0, 1.0, length=refine + 1))
+
+function interpolate_element_state!(
+    out::AbstractVector{Float64},
+    basis_xi::AbstractVector{<:Real},
+    basis_eta::AbstractVector{<:Real},
+    element_u_values::AbstractArray{<:Real, 3},
+)
+    fill!(out, 0.0)
+    nvars = size(element_u_values, 1)
+    num_nodes = length(basis_xi)
+    @inbounds for node_j in 1:num_nodes, node_i in 1:num_nodes
+        weight = basis_xi[node_i] * basis_eta[node_j]
+        for var_index in 1:nvars
+            out[var_index] += weight * element_u_values[var_index, node_i, node_j]
+        end
+    end
+    return out
+end
+
+function map_element_point(
+    basis_xi::AbstractVector{<:Real},
+    basis_eta::AbstractVector{<:Real},
+    element_x_coords::AbstractMatrix{<:Real},
+    element_y_coords::AbstractMatrix{<:Real},
+)
+    x_mapped = 0.0
+    y_mapped = 0.0
+    num_nodes = length(basis_xi)
+    @inbounds for node_j in 1:num_nodes, node_i in 1:num_nodes
+        weight = basis_xi[node_i] * basis_eta[node_j]
+        x_mapped += weight * element_x_coords[node_i, node_j]
+        y_mapped += weight * element_y_coords[node_i, node_j]
+    end
+    return x_mapped, y_mapped
+end
+
+function compute_mesh_native_analysis(solution_vector, semi; refine=6)
+    refine_int = Int(refine)
+    refine_int >= 1 || throw(ArgumentError("refine must be >= 1"))
+
+    mesh, equations, solver, cache = Trixi.mesh_equations_solver_cache(semi)
+    num_vars = Trixi.nvariables(equations)
+    num_nodes = Trixi.nnodes(solver)
+    num_elements = Trixi.nelements(solver, cache)
+    solution_wrapped = Trixi.wrap_array(solution_vector, semi)
+    basis_nodes = solver.basis.nodes
+    visual_nodes = reference_visualization_nodes(refine_int)
+    side_points = refine_int + 1
+    points_per_element = side_points^2
+    num_points = num_elements * points_per_element
+    num_triangles = num_elements * 2 * refine_int^2
+
+    x_points = Vector{Float64}(undef, num_points)
+    y_points = Vector{Float64}(undef, num_points)
+    density_points = Vector{Float64}(undef, num_points)
+    a1_points = Vector{Float64}(undef, num_points)
+    b1_points = Vector{Float64}(undef, num_points)
+    jx_points = Vector{Float64}(undef, num_points)
+    jy_points = Vector{Float64}(undef, num_points)
+    triangles = Matrix{Int32}(undef, num_triangles, 3)
+
+    basis_cache = [lagrange_basis(basis_nodes, xi) for xi in visual_nodes]
+    state_buffer = zeros(Float64, num_vars)
+    triangle_index = 1
+
+    @inbounds for element_index in 1:num_elements
+        element_x_coords = zeros(num_nodes, num_nodes)
+        element_y_coords = zeros(num_nodes, num_nodes)
+        element_u_values = zeros(num_vars, num_nodes, num_nodes)
+        for node_j in 1:num_nodes, node_i in 1:num_nodes
+            coords = Trixi.get_node_coords(cache.elements.node_coordinates, equations, solver,
+                                           node_i, node_j, element_index)
+            element_x_coords[node_i, node_j] = coords[1]
+            element_y_coords[node_i, node_j] = coords[2]
+            vars = Trixi.get_node_vars(solution_wrapped, equations, solver,
+                                       node_i, node_j, element_index)
+            for var_index in 1:num_vars
+                element_u_values[var_index, node_i, node_j] = vars[var_index]
+            end
+        end
+
+        point_base = (element_index - 1) * points_per_element
+        for eta_index in 1:side_points, xi_index in 1:side_points
+            basis_xi = basis_cache[xi_index]
+            basis_eta = basis_cache[eta_index]
+            point_index = point_base + (eta_index - 1) * side_points + xi_index
+
+            x_mapped, y_mapped = map_element_point(
+                basis_xi, basis_eta, element_x_coords, element_y_coords,
+            )
+            interpolate_element_state!(state_buffer, basis_xi, basis_eta, element_u_values)
+
+            density_value = transport_is_nonlinear(equations) ?
+                nonlinear_density(state_buffer, equations) : state_buffer[1]
+            if transport_is_nonlinear(equations)
+                _, a1_value, b1_value = derived_harmonics(state_buffer, equations)
+                jx_value, jy_value = nonlinear_current(state_buffer, equations)
+                a1_points[point_index] = a1_value
+                b1_points[point_index] = b1_value
+                jx_points[point_index] = jx_value
+                jy_points[point_index] = jy_value
+            else
+                a1_value = length(state_buffer) >= 2 ? state_buffer[2] : 0.0
+                b1_value = length(state_buffer) >= 3 ? state_buffer[3] : 0.0
+                a1_points[point_index] = a1_value
+                b1_points[point_index] = b1_value
+                jx_points[point_index] = a1_value
+                jy_points[point_index] = b1_value
+            end
+
+            x_points[point_index] = x_mapped
+            y_points[point_index] = y_mapped
+            density_points[point_index] = density_value
+        end
+
+        for cell_eta in 1:refine_int, cell_xi in 1:refine_int
+            lower_left = point_base + (cell_eta - 1) * side_points + cell_xi
+            lower_right = lower_left + 1
+            upper_left = lower_left + side_points
+            upper_right = upper_left + 1
+
+            triangles[triangle_index, 1] = Int32(lower_left - 1)
+            triangles[triangle_index, 2] = Int32(lower_right - 1)
+            triangles[triangle_index, 3] = Int32(upper_right - 1)
+            triangle_index += 1
+            triangles[triangle_index, 1] = Int32(lower_left - 1)
+            triangles[triangle_index, 2] = Int32(upper_right - 1)
+            triangles[triangle_index, 3] = Int32(upper_left - 1)
+            triangle_index += 1
+        end
+    end
+
+    return (
+        x = x_points,
+        y = y_points,
+        n = density_points,
+        a1 = a1_points,
+        b1 = b1_points,
+        jx = jx_points,
+        jy = jy_points,
+        triangles = triangles,
+        refine = refine_int,
     )
 end
 
@@ -481,5 +644,30 @@ function analysis_write_hdf5(filename, density_grid, a1_grid, b1_grid, jx_grid, 
         else
             attributes(file)["description"] = "Observable harmonics: a0 (density), a1 (x-current), b1 (y-current)"
         end
+    end
+end
+
+function analysis_write_mesh_native_hdf5(filename, mesh_data, t, equations)
+    h5open(filename, "w") do file
+        file["x"] = mesh_data.x
+        file["y"] = mesh_data.y
+        file["triangles"] = mesh_data.triangles
+        if transport_is_nonlinear(equations)
+            file["n"] = mesh_data.n
+        else
+            file["a0"] = mesh_data.n
+        end
+        file["a1"] = mesh_data.a1
+        file["b1"] = mesh_data.b1
+        file["jx"] = mesh_data.jx
+        file["jy"] = mesh_data.jy
+
+        attributes(file)["time"] = Float64(t)
+        attributes(file)["grid_type"] = "mesh_native_triangles"
+        attributes(file)["refine"] = mesh_data.refine
+        attributes(file)["connectivity_index_base"] = 0
+        attributes(file)["description"] = transport_is_nonlinear(equations) ?
+            "Mesh-native nonlinear observables on a refined unstructured visualization grid" :
+            "Mesh-native linear observables on a refined unstructured visualization grid"
     end
 end

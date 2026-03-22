@@ -82,7 +82,7 @@ end
 @inline function Trixi.max_abs_speed_naive(u_ll, u_rr, orientation::Integer,
                                           equations::AbstractFermiTransportEquations2D)
     if transport_is_nonlinear(equations)
-        equations isa FermiHarmonics2D && return equations.max_speed
+        equations isa FermiHarmonics2D && return equations.timestep_speed
         normal = orientation == 1 ? SVector(1.0, 0.0) : SVector(0.0, 1.0)
         return max(
             nonlinear_max_abs_speed(u_ll, normal, equations),
@@ -95,7 +95,7 @@ end
 @inline function Trixi.max_abs_speed_naive(u_ll, u_rr, normal_direction::AbstractVector,
                                           equations::AbstractFermiTransportEquations2D)
     if transport_is_nonlinear(equations)
-        equations isa FermiHarmonics2D && return equations.max_speed * hypot(normal_direction[1], normal_direction[2])
+        equations isa FermiHarmonics2D && return equations.timestep_speed * hypot(normal_direction[1], normal_direction[2])
         normal = SVector(normal_direction[1], normal_direction[2])
         return max(
             nonlinear_max_abs_speed(u_ll, normal, equations),
@@ -112,15 +112,19 @@ end
 
 @inline function Trixi.max_abs_speeds(u_or_eq::AbstractVector, equations::AbstractFermiTransportEquations2D)
     if transport_is_nonlinear(equations)
-        equations isa FermiHarmonics2D && return (equations.max_speed, equations.max_speed)
+        equations isa FermiHarmonics2D && return (equations.timestep_speed, equations.timestep_speed)
         return nonlinear_max_abs_speeds(u_or_eq, equations)
     end
     return (equations.max_speed, equations.max_speed)
 end
 
 @inline Trixi.max_abs_speeds(u_or_eq::Union{AbstractFermiTransportEquations2D, AbstractVector},
-                            equations::AbstractFermiTransportEquations2D) = (equations.max_speed, equations.max_speed)
-@inline Trixi.max_abs_speeds(equations::AbstractFermiTransportEquations2D) = (equations.max_speed, equations.max_speed)
+                            equations::AbstractFermiTransportEquations2D) =
+    transport_is_nonlinear(equations) ? (equations.timestep_speed, equations.timestep_speed) :
+                                        (equations.max_speed, equations.max_speed)
+@inline Trixi.max_abs_speeds(equations::AbstractFermiTransportEquations2D) =
+    transport_is_nonlinear(equations) ? (equations.timestep_speed, equations.timestep_speed) :
+                                        (equations.max_speed, equations.max_speed)
 # ======================================================================================================================
 # Boundary Condition Interface
 # ======================================================================================================================
