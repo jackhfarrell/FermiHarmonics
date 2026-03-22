@@ -68,9 +68,9 @@ end
 
 function run_tesla_valve_cluster_bias_sweep(; direction::AbstractString=get(ENV, "TESLA_DIRECTION", "forward"),
                                              output_root::AbstractString=get(ENV, "TESLA_OUTPUT_DIR",
-                                                                             joinpath(@__DIR__, "data_nonlinear",
+                                                                             joinpath(@__DIR__, "..", "data",
                                                                                       "tesla_valve_cluster_bias_sweep")))
-    project_root = normpath(joinpath(@__DIR__, ".."))
+    project_root = normpath(joinpath(@__DIR__, "..", "..", ".."))
     geo_path = joinpath(project_root, "projects", "nonlinearities", "mesh", "tesla_valve.geo")
     mesh_path = joinpath(project_root, "projects", "nonlinearities", "mesh", "tesla_valve.inp")
     ensure_tesla_cluster_mesh(geo_path, mesh_path)

@@ -1137,8 +1137,11 @@ end
 end
 
 @testset "Tesla cluster sweep helpers" begin
-    include(normpath(joinpath(@__DIR__, "..", "demo", "run_tesla_valve_cluster_bias_sweep.jl")))
-    include(normpath(joinpath(@__DIR__, "..", "demo", "submit_tesla_valve_cluster_bias_sweep.jl")))
+    ENV["TESLA_SWEEP_PARTITION"] = "test-partition"
+    ENV["TESLA_SWEEP_QOS"] = "test-qos"
+    ENV["TESLA_SWEEP_TIME"] = "02:00:00"
+    include(normpath(joinpath(@__DIR__, "..", "projects", "nonlinear", "scripts", "run_tesla_valve_cluster_bias_sweep.jl")))
+    include(normpath(joinpath(@__DIR__, "..", "projects", "nonlinear", "scripts", "submit_tesla_valve_cluster_bias_sweep.jl")))
 
     biases = tesla_cluster_bias_values()
     @test length(biases) == 30
@@ -1161,6 +1164,9 @@ end
     @test occursin("TESLA_DIRECTION=forward", forward_cmd)
     @test occursin("--cpus-per-task=16", forward_cmd)
     @test occursin("--mem=8G", forward_cmd)
+    @test occursin("--partition=test-partition", forward_cmd)
+    @test occursin("--qos=test-qos", forward_cmd)
+    @test occursin("--time=02:00:00", forward_cmd)
     @test occursin("TESLA_DIRECTION=reverse", reverse_cmd)
     @test occursin("--array=1-1", reverse_cmd)
 end
