@@ -216,6 +216,7 @@ Returns:
 function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any},
                params::SolveParams, gamma_mr::Real, gamma_mc::Real;
                max_harmonic::Union{Integer, Symbol, Nothing}=:auto,
+               omega_c::Real=0.0,
                u0_override::Union{Nothing, AbstractVector}=nothing,
                visualize::Bool=false,
                name::AbstractString="run")
@@ -232,6 +233,7 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
         nvars;
         gamma_mr=gamma_mr,
         gamma_mc=gamma_mc,
+        omega_c=omega_c,
         max_harmonic=max_harmonic_resolved,
     )
 
@@ -245,7 +247,7 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
     )
 
     boundary_types = Dict(key => boundary_condition_name(value) for (key, value) in boundary_conditions)
-    @info "Starting solve" name=name max_harmonic=max_harmonic_resolved harmonic_mode=harmonic_mode gamma_mr=gamma_mr gamma_mc=gamma_mc polydeg=params.polydeg cfl=params.cfl residual_tol=params.residual_tol boundaries=boundary_types
+    @info "Starting solve" name=name max_harmonic=max_harmonic_resolved harmonic_mode=harmonic_mode gamma_mr=gamma_mr gamma_mc=gamma_mc omega_c=omega_c polydeg=params.polydeg cfl=params.cfl residual_tol=params.residual_tol boundaries=boundary_types
     flush(stdout)
     flush(stderr)
 

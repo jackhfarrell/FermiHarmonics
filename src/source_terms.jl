@@ -38,6 +38,7 @@ Source terms from a BGK-type approximation to the collision integral.  We do not
 @inline function physical_sources(u, x, t, equations::FermiHarmonics2D)::SVector
     n = length(u)
     out = MVector{n, Float64}(undef)
+    omega_c = equations.omega_c
     @inbounds begin
         # Monopole: no damping (charge conservation)
         out[1] = 0.0
@@ -45,8 +46,8 @@ Source terms from a BGK-type approximation to the collision integral.  We do not
         # Dipole: momentum-relaxing scattering only
         if n >= 3
             gamma_mr = equations.gamma_mr
-            out[2] = -gamma_mr * u[2]
-            out[3] = -gamma_mr * u[3]
+            out[2] = -gamma_mr * u[2] - omega_c * u[3]
+            out[3] = -gamma_mr * u[3] + omega_c * u[2]
         end
         
         # Higher harmonics: full scattering (momentum-relaxing + momentum-conserving)
@@ -56,8 +57,8 @@ Source terms from a BGK-type approximation to the collision integral.  We do not
             for m in 2:max_harmonic
                 ci = cosine_index(m)
                 si = sine_index(m)
-                out[ci] = -gamma_hi * u[ci]
-                out[si] = -gamma_hi * u[si]
+                out[ci] = -gamma_hi * u[ci] - m * omega_c * u[si]
+                out[si] = -gamma_hi * u[si] + m * omega_c * u[ci]
             end
         end
     end

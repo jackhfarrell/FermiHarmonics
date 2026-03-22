@@ -21,6 +21,7 @@ Linearized 2D Boltzmann system in harmonic form:
 struct FermiHarmonics2D{NVARS} <: Trixi.AbstractEquations{2, NVARS}
     gamma_mr::Float64
     gamma_mc::Float64
+    omega_c::Float64
     max_speed::Float64
     Ax::Matrix{Float64}
     Ay::Matrix{Float64}
@@ -44,6 +45,7 @@ function FermiHarmonics2D(
     nvars::Integer;
     gamma_mr::Real,
     gamma_mc::Real,
+    omega_c::Real = 0.0,
     max_harmonic::Integer = 0,
 )
     nvars_int = Int(nvars)
@@ -62,6 +64,7 @@ function FermiHarmonics2D(
     return FermiHarmonics2D{nvars_int}(
         Float64(gamma_mr),
         Float64(gamma_mc),
+        Float64(omega_c),
         max_speed,
         Ax,
         Ay,
@@ -175,7 +178,8 @@ function Base.show(io::IO, equations::FermiHarmonics2D{NVARS}) where {NVARS}
     print(io, "FermiHarmonics2D{$NVARS}(")
     print(io, "max_harmonic=$max_harmonic, ")
     print(io, "γ_mr=$(equations.gamma_mr), ")
-    print(io, "γ_mc=$(equations.gamma_mc)")
+    print(io, "γ_mc=$(equations.gamma_mc), ")
+    print(io, "ω_c=$(equations.omega_c)")
     print(io, ")")
 end
 
@@ -188,6 +192,7 @@ function Base.show(io::IO, ::MIME"text/plain", equations::FermiHarmonics2D{NVARS
         Trixi.summary_line(io, "max harmonic", max_harmonic)
         Trixi.summary_line(io, "γ_mr (momentum-relaxing)", equations.gamma_mr)
         Trixi.summary_line(io, "γ_mc (momentum-conserving)", equations.gamma_mc)
+        Trixi.summary_line(io, "ω_c (cyclotron frequency)", equations.omega_c)
         Trixi.summary_footer(io)
     end
 end
