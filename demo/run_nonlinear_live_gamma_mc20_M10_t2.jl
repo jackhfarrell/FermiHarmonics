@@ -1,3 +1,5 @@
+ENV["GKSwstype"] = "100"
+ENV["GKS_NO_GUI"] = "1"
 using Plots
 using FermiHarmonics
 

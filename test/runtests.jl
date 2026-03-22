@@ -4,6 +4,7 @@ using Trixi
 using StaticArrays
 using LinearAlgebra
 using HDF5
+using FFTW
 
 @testset "BLG reference convention" begin
     reference = blg_reference_setup()
@@ -105,6 +106,70 @@ end
 end
 
 @testset "Quadratic nonlinear transport utilities" begin
+    function reference_harmonic_state_to_samples(state, eq)
+        ntheta = FermiHarmonics.nonlinear_data(eq).theta_count
+        max_harmonic = (length(state) - 1) ÷ 2
+        spectrum = zeros(ComplexF64, ntheta)
+        spectrum[1] = ComplexF64(0.5 * ntheta * Float64(state[1]), 0.0)
+        for m in 1:max_harmonic
+            coeff = 0.5 * ComplexF64(Float64(state[FermiHarmonics.cosine_index(m)]), -Float64(state[FermiHarmonics.sine_index(m)]))
+            scaled = ntheta * coeff
+            spectrum[m + 1] = scaled
+            spectrum[ntheta - m + 1] = conj(scaled)
+        end
+        return ifft(spectrum)
+    end
+
+    function reference_harmonic_theta_derivative_to_samples(state, eq)
+        ntheta = FermiHarmonics.nonlinear_data(eq).theta_count
+        max_harmonic = (length(state) - 1) ÷ 2
+        spectrum = zeros(ComplexF64, ntheta)
+        for m in 1:max_harmonic
+            coeff = 0.5 * ComplexF64(Float64(state[FermiHarmonics.cosine_index(m)]), -Float64(state[FermiHarmonics.sine_index(m)]))
+            derivative_coeff = ComplexF64(-imag(coeff) * m, real(coeff) * m)
+            scaled = ntheta * derivative_coeff
+            spectrum[m + 1] = scaled
+            spectrum[ntheta - m + 1] = conj(scaled)
+        end
+        return ifft(spectrum)
+    end
+
+    function reference_electrostatic_force_sources(state, gradients, eq)
+        phi = reference_harmonic_state_to_samples(state, eq)
+        gradx = reference_harmonic_state_to_samples(gradients[1], eq)
+        grady = reference_harmonic_state_to_samples(gradients[2], eq)
+        dtheta = reference_harmonic_theta_derivative_to_samples(state, eq)
+        data = FermiHarmonics.nonlinear_data(eq)
+        v0 = eq.max_speed
+        inv_2mu0 = 0.5 / eq.mu0
+        chi = eq.electrostatic_coupling
+        p0 = eq.mass * v0
+        grad_phi0_x = 0.5 * Float64(gradients[1][1])
+        grad_phi0_y = 0.5 * Float64(gradients[2][1])
+        work = Vector{ComplexF64}(undef, length(phi))
+        for j in eachindex(work)
+            phi_j = real(phi[j])
+            dphi_dtheta = real(dtheta[j])
+            dphi_dx = real(gradx[j])
+            dphi_dy = real(grady[j])
+            cos_theta = data.cos_theta[j]
+            sin_theta = data.sin_theta[j]
+            p_hat_grad_phi = cos_theta * dphi_dx + sin_theta * dphi_dy
+            p_hat_grad_phi0 = cos_theta * grad_phi0_x + sin_theta * grad_phi0_y
+            theta_hat_grad_phi0 = -sin_theta * grad_phi0_x + cos_theta * grad_phi0_y
+            source = -(v0 * inv_2mu0) * phi_j * p_hat_grad_phi
+            if chi != 0.0
+                source -= chi * v0 * p_hat_grad_phi0
+                source -= chi * v0 * inv_2mu0 * phi_j * p_hat_grad_phi0
+                source += (chi / p0) * theta_hat_grad_phi0 * dphi_dtheta
+            end
+            work[j] = ComplexF64(source, 0.0)
+        end
+        out = zeros(Float64, length(state))
+        FermiHarmonics.samples_to_harmonics!(out, copy(work), eq)
+        return out
+    end
+
     eq = FermiHarmonics2D(
         9;
         gamma_mr=0.1,
@@ -136,6 +201,50 @@ end
     @test eq_chi.timestep_speed ≈ 11.0 atol=1e-12 rtol=1e-12
     @test FermiHarmonics.nonlinear_bias_scale(eq_chi) ≈ 11.0 atol=1e-12 rtol=1e-12
     @test FermiHarmonics.nonlinear_electrochemical_bias(0.1, eq_chi) ≈ 1.1 atol=1e-12 rtol=1e-12
+
+    cache = FermiHarmonics.get_nonlinear_cache(eq)
+    sample_state = zeros(Float64, 9)
+    sample_state[1] = 0.08
+    sample_state[2] = 0.03
+    sample_state[3] = -0.02
+    sample_state[4] = 0.01
+    sample_state[5] = 0.006
+    reference_samples = reference_harmonic_state_to_samples(sample_state, eq)
+    FermiHarmonics.harmonic_state_to_spectrum!(cache.spectrum, sample_state, eq)
+    FermiHarmonics.harmonic_spectrum_to_samples!(cache.samples, cache.spectrum, eq)
+    @test cache.samples ≈ reference_samples atol=1e-12 rtol=1e-12
+    reference_derivative = reference_harmonic_theta_derivative_to_samples(sample_state, eq)
+    FermiHarmonics.harmonic_spectrum_to_theta_derivative_samples!(cache.theta_derivative_samples, cache.spectrum, eq)
+    @test cache.theta_derivative_samples ≈ reference_derivative atol=1e-12 rtol=1e-12
+
+    gradients = (copy(sample_state), -0.5 .* sample_state)
+    gradients[1][1] = 0.04
+    gradients[2][1] = -0.03
+    source_ref = reference_electrostatic_force_sources(sample_state, gradients, eq_chi)
+    source_new = similar(source_ref)
+    FermiHarmonics.electrostatic_force_sources!(source_new, sample_state, gradients, eq_chi)
+    @test source_new ≈ source_ref atol=1e-12 rtol=1e-12
+    FermiHarmonics.prepare_harmonic_gradient_theta_work!(
+        cache.samples,
+        cache.theta_derivative_samples,
+        cache.gradx_samples,
+        cache.grady_samples,
+        cache.spectrum,
+        sample_state,
+        gradients,
+        eq,
+    )
+    alloc_theta = @allocated FermiHarmonics.prepare_harmonic_gradient_theta_work!(
+        cache.samples,
+        cache.theta_derivative_samples,
+        cache.gradx_samples,
+        cache.grady_samples,
+        cache.spectrum,
+        sample_state,
+        gradients,
+        eq,
+    )
+    @test alloc_theta <= 64
 
     state = zeros(Float64, 9)
     state[1] = 0.04
@@ -502,6 +611,65 @@ end
 end
 
 @testset "Nonlinear boundary conditions" begin
+    function reference_harmonic_state_to_samples(state, eq)
+        ntheta = FermiHarmonics.nonlinear_data(eq).theta_count
+        max_harmonic = (length(state) - 1) ÷ 2
+        spectrum = zeros(ComplexF64, ntheta)
+        spectrum[1] = ComplexF64(0.5 * ntheta * Float64(state[1]), 0.0)
+        for m in 1:max_harmonic
+            coeff = 0.5 * ComplexF64(Float64(state[FermiHarmonics.cosine_index(m)]), -Float64(state[FermiHarmonics.sine_index(m)]))
+            scaled = ntheta * coeff
+            spectrum[m + 1] = scaled
+            spectrum[ntheta - m + 1] = conj(scaled)
+        end
+        return ifft(spectrum)
+    end
+
+    function reference_nonlinear_boundary_samples(state, unit_normal, incoming_value, specular_weight, eq, tol)
+        state_samples = reference_harmonic_state_to_samples(state, eq)
+        result_samples = copy(state_samples)
+        target = similar(state)
+        FermiHarmonics.specular_target!(target, state, unit_normal)
+        specular_samples = reference_harmonic_state_to_samples(target, eq)
+        data = FermiHarmonics.nonlinear_data(eq)
+        diffuse_weight = 1.0 - specular_weight
+        for j in eachindex(result_samples)
+            projection = unit_normal[1] * data.cos_theta[j] + unit_normal[2] * data.sin_theta[j]
+            if projection < -tol
+                incoming_sample = diffuse_weight * incoming_value + specular_weight * real(specular_samples[j])
+                result_samples[j] = ComplexF64(incoming_sample, 0.0)
+            end
+        end
+        out = zeros(Float64, length(state))
+        FermiHarmonics.samples_to_harmonics!(out, result_samples, eq)
+        return out
+    end
+
+    function reference_nonlinear_boundary_flux(state, normal, unit_normal, incoming_value, specular_weight, eq, tol)
+        state_samples = reference_harmonic_state_to_samples(state, eq)
+        target = similar(state)
+        FermiHarmonics.specular_target!(target, state, unit_normal)
+        specular_samples = reference_harmonic_state_to_samples(target, eq)
+        data = FermiHarmonics.nonlinear_data(eq)
+        diffuse_weight = 1.0 - specular_weight
+        flux_samples = Vector{ComplexF64}(undef, length(state_samples))
+        for j in eachindex(state_samples)
+            projection = unit_normal[1] * data.cos_theta[j] + unit_normal[2] * data.sin_theta[j]
+            phi_trace = real(state_samples[j])
+            if projection < -tol
+                phi_trace = diffuse_weight * incoming_value + specular_weight * real(specular_samples[j])
+            end
+            directional = normal[1] * data.cos_theta[j] + normal[2] * data.sin_theta[j]
+            flux_samples[j] = ComplexF64(
+                directional * FermiHarmonics.parabolic_shifted_flux(phi_trace, eq),
+                0.0,
+            )
+        end
+        out = zeros(Float64, length(state))
+        FermiHarmonics.samples_to_harmonics!(out, flux_samples, eq)
+        return out
+    end
+
     eq = FermiHarmonics2D(
         9;
         gamma_mr=0.0,
@@ -565,6 +733,50 @@ end
     )
     @test collect(nonlinear_trace) ≈ expected_nonlinear_trace atol=1.0e-12 rtol=1.0e-12
     @test norm(collect(nonlinear_trace) - collect(linear_trace)) > 1.0e-6
+
+    wall_trace = zeros(Float64, 9)
+    FermiHarmonics.nonlinear_maxwell_wall!(
+        wall_trace,
+        nonlinear_state,
+        unit_normal,
+        0.7,
+        similar(nonlinear_state),
+        eq,
+        1.0e-12,
+    )
+    state_samples = reference_harmonic_state_to_samples(nonlinear_state, eq)
+    wall_incoming = FermiHarmonics.nonlinear_diffuse_incoming_value(state_samples, unit_normal, eq, 1.0e-12)
+    wall_trace_ref = reference_nonlinear_boundary_samples(
+        nonlinear_state,
+        unit_normal,
+        wall_incoming,
+        0.3,
+        eq,
+        1.0e-12,
+    )
+    @test wall_trace ≈ wall_trace_ref atol=1.0e-12 rtol=1.0e-12
+
+    wall_flux = zeros(Float64, 9)
+    FermiHarmonics.nonlinear_maxwell_wall_flux!(
+        wall_flux,
+        nonlinear_state,
+        unit_normal,
+        unit_normal,
+        0.7,
+        similar(nonlinear_state),
+        eq,
+        1.0e-12,
+    )
+    wall_flux_ref = reference_nonlinear_boundary_flux(
+        nonlinear_state,
+        unit_normal,
+        unit_normal,
+        wall_incoming,
+        0.3,
+        eq,
+        1.0e-12,
+    )
+    @test wall_flux ≈ wall_flux_ref atol=1.0e-12 rtol=1.0e-12
 
     chi_eq = FermiHarmonics2D(
         9;

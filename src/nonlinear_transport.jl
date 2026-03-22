@@ -3,6 +3,7 @@ Utilities for the opt-in nonlinear parabolic-band transport mode.
 """
 
 mutable struct NonlinearThreadCache{PF, PI}
+    spectrum::Vector{ComplexF64}
     samples::Vector{ComplexF64}
     scratch_samples::Vector{ComplexF64}
     work_samples::Vector{ComplexF64}
@@ -99,6 +100,7 @@ function create_nonlinear_transport_data(max_harmonic::Int, theta_oversample::In
     theta = collect(range(0.0, 2.0 * pi, length=ntheta + 1))[1:end-1]
     cos_theta = cos.(theta)
     sin_theta = sin.(theta)
+    spectrum = Vector{ComplexF64}(undef, ntheta)
     samples = Vector{ComplexF64}(undef, ntheta)
     scratch_samples = Vector{ComplexF64}(undef, ntheta)
     work_samples = Vector{ComplexF64}(undef, ntheta)
@@ -108,6 +110,7 @@ function create_nonlinear_transport_data(max_harmonic::Int, theta_oversample::In
     fft_plan = FFTW.plan_fft!(scratch_samples; flags=FFTW.ESTIMATE)
     ifft_plan = FFTW.plan_ifft!(samples; flags=FFTW.ESTIMATE)
     cache_template = NonlinearThreadCache(
+        spectrum,
         samples,
         scratch_samples,
         work_samples,
@@ -121,6 +124,7 @@ function create_nonlinear_transport_data(max_harmonic::Int, theta_oversample::In
     thread_caches = Vector{TC}(undef, Threads.nthreads())
     thread_caches[1] = cache_template
     for tid in 2:length(thread_caches)
+        spectrum_tid = Vector{ComplexF64}(undef, ntheta)
         samples_tid = Vector{ComplexF64}(undef, ntheta)
         scratch_samples_tid = Vector{ComplexF64}(undef, ntheta)
         work_samples_tid = Vector{ComplexF64}(undef, ntheta)
@@ -128,6 +132,7 @@ function create_nonlinear_transport_data(max_harmonic::Int, theta_oversample::In
         grady_samples_tid = Vector{ComplexF64}(undef, ntheta)
         theta_derivative_samples_tid = Vector{ComplexF64}(undef, ntheta)
         thread_caches[tid] = NonlinearThreadCache(
+            spectrum_tid,
             samples_tid,
             scratch_samples_tid,
             work_samples_tid,
@@ -215,24 +220,95 @@ end
     return 0.5 * Float64(state[1])
 end
 
+function harmonic_state_to_spectrum!(
+    spectrum::Vector{ComplexF64},
+    state::AbstractVector{<:Real},
+    equations::FermiHarmonics2D,
+)
+    ntheta = nonlinear_data(equations).theta_count
+    max_harmonic = (length(state) - 1) ÷ 2
+    fill!(spectrum, 0.0 + 0.0im)
+    spectrum[1] = ComplexF64(0.5 * ntheta * Float64(state[1]), 0.0)
+    @inbounds for m in 1:max_harmonic
+        coeff = 0.5 * ComplexF64(Float64(state[cosine_index(m)]), -Float64(state[sine_index(m)]))
+        scaled = ntheta * coeff
+        spectrum[m + 1] = scaled
+        spectrum[ntheta - m + 1] = conj(scaled)
+    end
+    return spectrum
+end
+
+@inline function harmonic_spectrum_to_samples!(
+    samples::Vector{ComplexF64},
+    spectrum::Vector{ComplexF64},
+    equations::FermiHarmonics2D,
+)
+    copy!(samples, spectrum)
+    mul!(samples, get_nonlinear_cache(equations).ifft_plan, samples)
+    return samples
+end
+
+function harmonic_spectrum_to_theta_derivative_samples!(
+    samples::Vector{ComplexF64},
+    spectrum::Vector{ComplexF64},
+    equations::FermiHarmonics2D,
+)
+    ntheta = nonlinear_data(equations).theta_count
+    max_harmonic = min((ntheta - 1) ÷ 2, length(samples) - 1)
+    copy!(samples, spectrum)
+    samples[1] = 0.0 + 0.0im
+    @inbounds for m in 1:max_harmonic
+        coeff = spectrum[m + 1]
+        derivative_coeff = ComplexF64(-imag(coeff) * m, real(coeff) * m)
+        samples[m + 1] = derivative_coeff
+        samples[ntheta - m + 1] = conj(derivative_coeff)
+    end
+    mul!(samples, get_nonlinear_cache(equations).ifft_plan, samples)
+    return samples
+end
+
+function prepare_harmonic_theta_work!(
+    samples::Vector{ComplexF64},
+    theta_derivative_samples::Vector{ComplexF64},
+    spectrum::Vector{ComplexF64},
+    state::AbstractVector{<:Real},
+    equations::FermiHarmonics2D,
+)
+    harmonic_state_to_spectrum!(spectrum, state, equations)
+    harmonic_spectrum_to_samples!(samples, spectrum, equations)
+    harmonic_spectrum_to_theta_derivative_samples!(theta_derivative_samples, spectrum, equations)
+    return samples, theta_derivative_samples
+end
+
+function prepare_harmonic_gradient_theta_work!(
+    state_samples::Vector{ComplexF64},
+    theta_derivative_samples::Vector{ComplexF64},
+    gradx_samples::Vector{ComplexF64},
+    grady_samples::Vector{ComplexF64},
+    spectrum::Vector{ComplexF64},
+    state::AbstractVector{<:Real},
+    gradients,
+    equations::FermiHarmonics2D,
+)
+    prepare_harmonic_theta_work!(
+        state_samples,
+        theta_derivative_samples,
+        spectrum,
+        state,
+        equations,
+    )
+    harmonic_state_to_samples!(gradx_samples, gradients[1], equations)
+    harmonic_state_to_samples!(grady_samples, gradients[2], equations)
+    return state_samples, theta_derivative_samples, gradx_samples, grady_samples
+end
+
 function harmonic_state_to_samples!(
     samples::Vector{ComplexF64},
     state::AbstractVector{<:Real},
     equations::FermiHarmonics2D,
 )
-    data = nonlinear_data(equations)
-    ntheta = data.theta_count
-    max_harmonic = (length(state) - 1) ÷ 2
-    fill!(samples, 0.0 + 0.0im)
-    samples[1] = ComplexF64(0.5 * ntheta * Float64(state[1]), 0.0)
-    @inbounds for m in 1:max_harmonic
-        coeff = 0.5 * ComplexF64(Float64(state[cosine_index(m)]), -Float64(state[sine_index(m)]))
-        scaled = ntheta * coeff
-        samples[m + 1] = scaled
-        samples[ntheta - m + 1] = conj(scaled)
-    end
-    mul!(samples, get_nonlinear_cache(equations).ifft_plan, samples)
-    return samples
+    harmonic_state_to_spectrum!(get_nonlinear_cache(equations).spectrum, state, equations)
+    return harmonic_spectrum_to_samples!(samples, get_nonlinear_cache(equations).spectrum, equations)
 end
 
 function samples_to_harmonics!(
@@ -260,18 +336,12 @@ function harmonic_theta_derivative_to_samples!(
     state::AbstractVector{<:Real},
     equations::FermiHarmonics2D,
 )
-    ntheta = nonlinear_data(equations).theta_count
-    max_harmonic = (length(state) - 1) ÷ 2
-    fill!(samples, 0.0 + 0.0im)
-    @inbounds for m in 1:max_harmonic
-        coeff = 0.5 * ComplexF64(Float64(state[cosine_index(m)]), -Float64(state[sine_index(m)]))
-        derivative_coeff = ComplexF64(-imag(coeff) * m, real(coeff) * m)
-        scaled = ntheta * derivative_coeff
-        samples[m + 1] = scaled
-        samples[ntheta - m + 1] = conj(scaled)
-    end
-    mul!(samples, get_nonlinear_cache(equations).ifft_plan, samples)
-    return samples
+    harmonic_state_to_spectrum!(get_nonlinear_cache(equations).spectrum, state, equations)
+    return harmonic_spectrum_to_theta_derivative_samples!(
+        samples,
+        get_nonlinear_cache(equations).spectrum,
+        equations,
+    )
 end
 
 function nonlinear_flux!(
@@ -331,7 +401,8 @@ function nonlinear_current_components(
 )
     length(state) >= 3 || return (0.0, 0.0)
     cache = get_nonlinear_cache(equations)
-    harmonic_state_to_samples!(cache.samples, state, equations)
+    harmonic_state_to_spectrum!(cache.spectrum, state, equations)
+    harmonic_spectrum_to_samples!(cache.samples, cache.spectrum, equations)
     return nonlinear_current_from_samples!(cache.scratch_samples, cache.samples, equations)
 end
 
@@ -550,10 +621,16 @@ function electrostatic_force_sources!(
     equations::FermiHarmonics2D,
 )
     cache = get_nonlinear_cache(equations)
-    harmonic_state_to_samples!(cache.samples, state, equations)
-    harmonic_state_to_samples!(cache.gradx_samples, gradients[1], equations)
-    harmonic_state_to_samples!(cache.grady_samples, gradients[2], equations)
-    harmonic_theta_derivative_to_samples!(cache.theta_derivative_samples, state, equations)
+    prepare_harmonic_gradient_theta_work!(
+        cache.samples,
+        cache.theta_derivative_samples,
+        cache.gradx_samples,
+        cache.grady_samples,
+        cache.spectrum,
+        state,
+        gradients,
+        equations,
+    )
     data = nonlinear_data(equations)
     v0 = equations.max_speed
     inv_2mu0 = 0.5 / equations.mu0

@@ -6,14 +6,6 @@ using HDF5
 using NLsolve
 using Trixi
 
-function analysis_progress_bar(completed::Integer, total::Integer; width::Integer=24)
-    total_int = max(Int(total), 1)
-    completed_int = clamp(Int(completed), 0, total_int)
-    frac = completed_int / total_int
-    filled = clamp(round(Int, width * frac), 0, Int(width))
-    return "[" * repeat("=", filled) * repeat(".", Int(width) - filled) * "]"
-end
-
 # ======================================================================================================================
 # Analysis Output
 # ======================================================================================================================
@@ -261,8 +253,6 @@ function compute_analysis_grids(solution_vector, semi; nvisnodes=400)
     jx_grid = nonlinear_currents ? fill(NaN, num_x, num_y) : nothing
     jy_grid = nonlinear_currents ? fill(NaN, num_x, num_y) : nothing
     in_domain_mask = fill(false, num_x, num_y)
-    progress_stride = max(1, num_y ÷ 20)
-
     @inbounds for y_index in 1:num_y
         for x_index in 1:num_x
             x_target = x_uniform[x_index]
@@ -277,12 +267,6 @@ function compute_analysis_grids(solution_vector, semi; nvisnodes=400)
                 jy_grid[x_index, y_index] = jy_value
             end
             in_domain_mask[x_index, y_index] = in_domain
-        end
-        if y_index == 1 || y_index == num_y || (y_index % progress_stride == 0)
-            percent = round(100 * y_index / num_y; digits=1)
-            @info "Analysis progress" rows="$y_index/$num_y" percent=percent bar=analysis_progress_bar(y_index, num_y)
-            flush(stdout)
-            flush(stderr)
         end
     end
 

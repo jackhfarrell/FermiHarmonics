@@ -459,45 +459,19 @@ function nonlinear_visualization_callback(params, semi, name::AbstractString)
         integrator -> begin
             grids = compute_analysis_grids(integrator.u, semi; nvisnodes=nvisnodes)
             mask = grids.mask
-            density = ifelse.(mask, grids.density, NaN)
-            a1 = ifelse.(mask, grids.a1, NaN)
             jx = ifelse.(mask, something(grids.jx, grids.a1), NaN)
             jy = ifelse.(mask, something(grids.jy, grids.b1), NaN)
-
-            p1 = Plots.heatmap(
-                grids.x, grids.y, permutedims(density);
-                title = "n",
+            speed = ifelse.(mask, hypot.(jx, jy), NaN)
+            plot_title = "Nonlinear live viz: t=$(round(integrator.t, digits=4))"
+            live_plot = Plots.heatmap(
+                grids.x, grids.y, permutedims(speed);
+                title = plot_title,
                 aspect_ratio = :equal,
                 color = :magma,
                 colorbar = true,
+                size = (900, 700),
             )
-            p2 = Plots.heatmap(
-                grids.x, grids.y, permutedims(a1);
-                title = "a1",
-                aspect_ratio = :equal,
-                color = :balance,
-                colorbar = true,
-                clims = symmetric_clims(a1),
-            )
-            p3 = Plots.heatmap(
-                grids.x, grids.y, permutedims(jx);
-                title = "jx",
-                aspect_ratio = :equal,
-                color = :balance,
-                colorbar = true,
-                clims = symmetric_clims(jx),
-            )
-            p4 = Plots.heatmap(
-                grids.x, grids.y, permutedims(jy);
-                title = "jy",
-                aspect_ratio = :equal,
-                color = :balance,
-                colorbar = true,
-                clims = symmetric_clims(jy),
-            )
-            plot_title = "Nonlinear live viz: t=$(round(integrator.t, digits=4))"
-            composed = Plots.plot(p1, p2, p3, p4; layout=(2, 2), size=(1200, 900), plot_title=plot_title)
-            Plots.savefig(composed, output_path)
+            Plots.savefig(live_plot, output_path)
             @info "Updated nonlinear live visualization" path=output_path t=round(integrator.t, digits=4)
             nothing
         end;

@@ -217,6 +217,7 @@ end
 
 function nonlinear_boundary_samples!(
     out::AbstractVector{Float64},
+    state_samples::Vector{ComplexF64},
     state::AbstractVector{Float64},
     unit_normal::SVector{2, Float64},
     incoming_value::Float64,
@@ -226,29 +227,31 @@ function nonlinear_boundary_samples!(
     tol::Float64,
 )
     cache = get_nonlinear_cache(equations)
-    harmonic_state_to_samples!(cache.samples, state, equations)
-    copy!(cache.scratch_samples, cache.samples)
+    copy!(cache.work_samples, state_samples)
 
-    specular_target!(target, state, unit_normal)
-    harmonic_state_to_samples!(cache.samples, target, equations)
+    if specular_weight > 0.0
+        specular_target!(target, state, unit_normal)
+        harmonic_state_to_samples!(cache.scratch_samples, target, equations)
+    end
 
     data = nonlinear_data(equations)
     nx, ny = unit_normal
     diffuse_weight = 1.0 - specular_weight
-    @inbounds for j in eachindex(cache.scratch_samples)
+    @inbounds for j in eachindex(state_samples)
         projection = nx * data.cos_theta[j] + ny * data.sin_theta[j]
         if projection < -tol
-            specular_value = real(cache.samples[j])
+            specular_value = specular_weight > 0.0 ? real(cache.scratch_samples[j]) : 0.0
             incoming_sample = diffuse_weight * incoming_value + specular_weight * specular_value
-            cache.scratch_samples[j] = ComplexF64(incoming_sample, 0.0)
+            cache.work_samples[j] = ComplexF64(incoming_sample, 0.0)
         end
     end
 
-    return samples_to_harmonics!(out, cache.scratch_samples, equations)
+    return samples_to_harmonics!(out, cache.work_samples, equations)
 end
 
 function nonlinear_boundary_flux!(
     out_flux::AbstractVector{Float64},
+    state_samples::Vector{ComplexF64},
     state::AbstractVector{Float64},
     normal::SVector{2, Float64},
     unit_normal::SVector{2, Float64},
@@ -259,8 +262,6 @@ function nonlinear_boundary_flux!(
     tol::Float64,
 )
     cache = get_nonlinear_cache(equations)
-    harmonic_state_to_samples!(cache.samples, state, equations)
-
     if specular_weight > 0.0
         specular_target!(target, state, unit_normal)
         harmonic_state_to_samples!(cache.scratch_samples, target, equations)
@@ -270,9 +271,9 @@ function nonlinear_boundary_flux!(
     nx, ny = unit_normal
     normal_x, normal_y = normal
     diffuse_weight = 1.0 - specular_weight
-    @inbounds for j in eachindex(cache.samples)
+    @inbounds for j in eachindex(state_samples)
         projection = nx * data.cos_theta[j] + ny * data.sin_theta[j]
-        phi_trace = real(cache.samples[j])
+        phi_trace = real(state_samples[j])
         if projection < -tol
             specular_value = specular_weight > 0.0 ? real(cache.scratch_samples[j]) : 0.0
             phi_trace = diffuse_weight * incoming_value + specular_weight * specular_value
@@ -300,7 +301,15 @@ function nonlinear_maxwell_wall!(
     harmonic_state_to_samples!(cache.samples, state, equations)
     diffuse_value = nonlinear_diffuse_incoming_value(cache.samples, unit_normal, equations, tol)
     return nonlinear_boundary_samples!(
-        out, state, unit_normal, diffuse_value, 1.0 - Float64(p_scatter), target, equations, tol
+        out,
+        cache.samples,
+        state,
+        unit_normal,
+        diffuse_value,
+        1.0 - Float64(p_scatter),
+        target,
+        equations,
+        tol,
     )
 end
 
@@ -319,6 +328,7 @@ function nonlinear_maxwell_wall_flux!(
     diffuse_value = nonlinear_diffuse_incoming_value(cache.samples, unit_normal, equations, tol)
     return nonlinear_boundary_flux!(
         out_flux,
+        cache.samples,
         state,
         normal,
         unit_normal,
@@ -331,6 +341,7 @@ function nonlinear_maxwell_wall_flux!(
 end
 
 function nonlinear_ohmic_incoming_value(
+    state_samples::Vector{ComplexF64},
     state::AbstractVector{Float64},
     unit_normal::SVector{2, Float64},
     p_ohmic_absorb::Real,
@@ -345,8 +356,6 @@ function nonlinear_ohmic_incoming_value(
     end
 
     cache = get_nonlinear_cache(equations)
-    harmonic_state_to_samples!(cache.samples, state, equations)
-
     specular_weight = 1.0 - Float64(p_ohmic_absorb)
     if specular_weight > 0.0
         specular_target!(target, state, unit_normal)
@@ -360,14 +369,14 @@ function nonlinear_ohmic_incoming_value(
     phi0_coeff = 0.0
     inv_ntheta = 1.0 / data.theta_count
 
-    @inbounds for j in eachindex(cache.samples)
+    @inbounds for j in eachindex(state_samples)
         projection = nx * data.cos_theta[j] + ny * data.sin_theta[j]
         if projection < -tol
             specular_value = specular_weight > 0.0 ? real(cache.scratch_samples[j]) : 0.0
             base_sum += specular_weight * specular_value
             phi0_coeff += diffuse_weight * inv_ntheta
         else
-            base_sum += real(cache.samples[j])
+            base_sum += real(state_samples[j])
         end
     end
 
@@ -380,6 +389,29 @@ function nonlinear_ohmic_incoming_value(
     return (electrochemical_bias - equations.electrostatic_coupling * phi0_base) / denominator
 end
 
+function nonlinear_ohmic_incoming_value(
+    state::AbstractVector{Float64},
+    unit_normal::SVector{2, Float64},
+    p_ohmic_absorb::Real,
+    bias::Real,
+    target::AbstractVector{Float64},
+    equations::FermiHarmonics2D,
+    tol::Float64,
+)
+    cache = get_nonlinear_cache(equations)
+    harmonic_state_to_samples!(cache.samples, state, equations)
+    return nonlinear_ohmic_incoming_value(
+        cache.samples,
+        state,
+        unit_normal,
+        p_ohmic_absorb,
+        bias,
+        target,
+        equations,
+        tol,
+    )
+end
+
 function nonlinear_ohmic_contact!(
     out::AbstractVector{Float64},
     state::AbstractVector{Float64},
@@ -390,7 +422,9 @@ function nonlinear_ohmic_contact!(
     equations::FermiHarmonics2D,
     tol::Float64,
 )
+    harmonic_state_to_samples!(get_nonlinear_cache(equations).samples, state, equations)
     incoming_value = nonlinear_ohmic_incoming_value(
+        get_nonlinear_cache(equations).samples,
         state,
         unit_normal,
         p_ohmic_absorb,
@@ -401,6 +435,7 @@ function nonlinear_ohmic_contact!(
     )
     return nonlinear_boundary_samples!(
         out,
+        get_nonlinear_cache(equations).samples,
         state,
         unit_normal,
         incoming_value,
@@ -422,7 +457,9 @@ function nonlinear_ohmic_contact_flux!(
     equations::FermiHarmonics2D,
     tol::Float64,
 )
+    harmonic_state_to_samples!(get_nonlinear_cache(equations).samples, state, equations)
     incoming_value = nonlinear_ohmic_incoming_value(
+        get_nonlinear_cache(equations).samples,
         state,
         unit_normal,
         p_ohmic_absorb,
@@ -433,6 +470,7 @@ function nonlinear_ohmic_contact_flux!(
     )
     return nonlinear_boundary_flux!(
         out_flux,
+        get_nonlinear_cache(equations).samples,
         state,
         normal,
         unit_normal,
