@@ -366,7 +366,7 @@ initialized and reuses it across multiple solves, which is critical for paramete
 # Performance note
 Building projectors is expensive (eigendecomposition of flux Jacobians). Reusing the cache
 can save significant time when running multiple cases with the same mesh/solver but 
-different physics parameters (gamma_mr, gamma_mc, etc.).
+different physics parameters (gamma_mr, gamma_ee, etc.).
 """
 function init_projector_cache!(
     semi::Trixi.SemidiscretizationHyperbolic{<:Any, <:FermiHarmonics2D},

@@ -22,10 +22,10 @@ visualize = true
 bias = 1.0
 p_scatter = 1.0
 gamma_mr = 0.0
-gamma_mc = 50.0
+gamma_ee = 50.0
 
 reference_max_harmonic = 100
-estimated_max_harmonic = FermiHarmonics.estimate_max_harmonic(gamma_mr, gamma_mc)
+estimated_max_harmonic = FermiHarmonics.estimate_max_harmonic(gamma_mr, gamma_ee)
 
 boundary_conditions = Dict(
     :walls => MaxwellWallBC(p_scatter),
@@ -44,7 +44,7 @@ params = SolveParams(;
     log_every = 500,
 )
 
-@info "Harmonic estimate comparison setup" gamma_mr gamma_mc reference_max_harmonic estimated_max_harmonic visualize
+@info "Harmonic estimate comparison setup" gamma_mr gamma_ee reference_max_harmonic estimated_max_harmonic visualize
 
 # ======================================================================================================================
 # Solve: 100-harmonic reference
@@ -56,7 +56,7 @@ sol_ref, semi_ref = FermiHarmonics.solve(
     boundary_conditions,
     params,
     gamma_mr,
-    gamma_mc;
+    gamma_ee;
     max_harmonic = reference_max_harmonic,
     visualize = visualize,
     name = "$(name)_reference_m$(reference_max_harmonic)",
@@ -72,7 +72,7 @@ sol_est, semi_est = FermiHarmonics.solve(
     boundary_conditions,
     params,
     gamma_mr,
-    gamma_mc;
+    gamma_ee;
     max_harmonic = estimated_max_harmonic,
     visualize = visualize,
     name = "$(name)_estimated_m$(estimated_max_harmonic)",

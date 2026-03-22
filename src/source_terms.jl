@@ -30,10 +30,11 @@ end
 """
     physical_sources(u, x, t, equations) -> SVector
 
-Source terms from a BGK-type approximation to the collision integral.  We do not damp 
-``a_0`` (density). The momentum modes ``a_1, b_1`` are damped at the momentum-relaxing rate 
-``\\gamma_mr``, while higher harmonics are damped at the full scattering rate 
-``\\gamma_mr + \\gamma_mc``.
+Source terms from a tomographic approximation to the collision integral. We do not damp
+``a_0`` (density). The momentum modes ``a_1, b_1`` are damped at the momentum-relaxing rate
+``\\gamma_{mr}``. Higher even harmonics are damped at ``\\gamma_{mr} + \\gamma_{ee}``, while
+higher odd harmonics receive the extra capped enhancement
+``\\min(\\gamma_3 m^4, \\gamma_{ee})``.
 """
 @inline function physical_sources(u, x, t, equations::FermiHarmonics2D)::SVector
     n = length(u)
@@ -50,15 +51,20 @@ Source terms from a BGK-type approximation to the collision integral.  We do not
             out[3] = -gamma_mr * u[3] + omega_c * u[2]
         end
         
-        # Higher harmonics: full scattering (momentum-relaxing + momentum-conserving)
+        # Higher harmonics: tomographic odd/even scattering rates
         if n > 3
-            gamma_hi = equations.gamma_mr + equations.gamma_mc
+            gamma_even = equations.gamma_mr + equations.gamma_ee
             max_harmonic = (n - 1) ÷ 2
             for m in 2:max_harmonic
                 ci = cosine_index(m)
                 si = sine_index(m)
-                out[ci] = -gamma_hi * u[ci] - m * omega_c * u[si]
-                out[si] = -gamma_hi * u[si] + m * omega_c * u[ci]
+                gamma_mode = if iseven(m)
+                    gamma_even
+                else
+                    gamma_even + min(equations.gamma_3 * m^4, equations.gamma_ee)
+                end
+                out[ci] = -gamma_mode * u[ci] - m * omega_c * u[si]
+                out[si] = -gamma_mode * u[si] + m * omega_c * u[ci]
             end
         end
     end

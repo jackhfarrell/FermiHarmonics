@@ -15,12 +15,13 @@
 
 Linearized 2D Boltzmann system in harmonic form:
 ```math
-\\partial_t u + A_x \\partial_x u + A_y \\partial_y u = S(u;\\gamma_{mr},\\gamma_{mc})```.
+\\partial_t u + A_x \\partial_x u + A_y \\partial_y u = S(u;\\gamma_{mr},\\gamma_{ee}, \\gamma_3)```.
 ```
 """
 struct FermiHarmonics2D{NVARS} <: Trixi.AbstractEquations{2, NVARS}
     gamma_mr::Float64
-    gamma_mc::Float64
+    gamma_ee::Float64
+    gamma_3::Float64
     omega_c::Float64
     max_speed::Float64
     Ax::Matrix{Float64}
@@ -28,14 +29,15 @@ struct FermiHarmonics2D{NVARS} <: Trixi.AbstractEquations{2, NVARS}
 end
 
 """
-    FermiHarmonics2D(nvars; gamma_mr, gamma_mc, max_harmonic=0)
+    FermiHarmonics2D(nvars; gamma_mr, gamma_ee, gamma_3=0.0, max_harmonic=0)
 
 Construct `FermiHarmonics2D`.
 
 Parameters:
 - `nvars`: number of state variables, must be odd (`1 + 2M`).
 - `gamma_mr`: momentum-relaxing scattering rate.
-- `gamma_mc`: momentum-conserving scattering rate.
+- `gamma_ee`: electron-electron scattering rate.
+- `gamma_3`: odd-mode tomographic enhancement prefactor.
 - `max_harmonic`: optional explicit harmonic cutoff; if set, must satisfy `nvars == 1 + 2*max_harmonic`.
 
 Returns:
@@ -44,7 +46,8 @@ Returns:
 function FermiHarmonics2D(
     nvars::Integer;
     gamma_mr::Real,
-    gamma_mc::Real,
+    gamma_ee::Real,
+    gamma_3::Real = 0.0,
     omega_c::Real = 0.0,
     max_harmonic::Integer = 0,
 )
@@ -63,7 +66,8 @@ function FermiHarmonics2D(
 
     return FermiHarmonics2D{nvars_int}(
         Float64(gamma_mr),
-        Float64(gamma_mc),
+        Float64(gamma_ee),
+        Float64(gamma_3),
         Float64(omega_c),
         max_speed,
         Ax,
@@ -178,7 +182,8 @@ function Base.show(io::IO, equations::FermiHarmonics2D{NVARS}) where {NVARS}
     print(io, "FermiHarmonics2D{$NVARS}(")
     print(io, "max_harmonic=$max_harmonic, ")
     print(io, "γ_mr=$(equations.gamma_mr), ")
-    print(io, "γ_mc=$(equations.gamma_mc), ")
+    print(io, "γ_ee=$(equations.gamma_ee), ")
+    print(io, "γ_3=$(equations.gamma_3), ")
     print(io, "ω_c=$(equations.omega_c)")
     print(io, ")")
 end
@@ -191,7 +196,8 @@ function Base.show(io::IO, ::MIME"text/plain", equations::FermiHarmonics2D{NVARS
         Trixi.summary_header(io, "FermiHarmonics2D{$NVARS}")
         Trixi.summary_line(io, "max harmonic", max_harmonic)
         Trixi.summary_line(io, "γ_mr (momentum-relaxing)", equations.gamma_mr)
-        Trixi.summary_line(io, "γ_mc (momentum-conserving)", equations.gamma_mc)
+        Trixi.summary_line(io, "γ_ee (electron-electron)", equations.gamma_ee)
+        Trixi.summary_line(io, "γ_3 (odd-mode enhancement)", equations.gamma_3)
         Trixi.summary_line(io, "ω_c (cyclotron frequency)", equations.omega_c)
         Trixi.summary_footer(io)
     end

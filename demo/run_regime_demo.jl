@@ -1,7 +1,7 @@
 # simple script to run a demo with three regimes:
-# 1. ohmic/diffusive (gamma_mr=100, gamma_mc=0)
-# 2. hydrodynamic (gamma_mr=0, gamma_mc=100)
-# 3. ballistic (gamma_mr=0, gamma_mc=0)
+# 1. ohmic/diffusive (gamma_mr=100, gamma_ee=0)
+# 2. hydrodynamic (gamma_mr=0, gamma_ee=100)
+# 3. ballistic (gamma_mr=0, gamma_ee=0)
 # runs are warm-started in sequence. harmonics are chosen automatically with
 # min_harmonic=4 and max_harmonic_auto=100.
 
@@ -38,9 +38,9 @@ function main()
     )
 
     regimes = [
-        (name = "diffusive", gamma_mr = 100.0, gamma_mc = 0.0),
-        (name = "hydrodynamic", gamma_mr = 0.0, gamma_mc = 100.0),
-        (name = "ballistic", gamma_mr = 0.0, gamma_mc = 0.0),
+        (name = "diffusive", gamma_mr = 100.0, gamma_ee = 0.0),
+        (name = "hydrodynamic", gamma_mr = 0.0, gamma_ee = 100.0),
+        (name = "ballistic", gamma_mr = 0.0, gamma_ee = 0.0),
     ]
 
 # ======================================================================================================================
@@ -50,14 +50,14 @@ function main()
     u0 = nothing
 
     for regime in regimes
-        @info "Running regime" name=regime.name gamma_mr=regime.gamma_mr gamma_mc=regime.gamma_mc
+        @info "Running regime" name=regime.name gamma_mr=regime.gamma_mr gamma_ee=regime.gamma_ee
 
         sol, semi = FermiHarmonics.solve(
             mesh_path,
             boundary_conditions,
             params,
             regime.gamma_mr,
-            regime.gamma_mc;
+            regime.gamma_ee;
             max_harmonic=:auto,
             u0_override=u0,
             visualize=true,

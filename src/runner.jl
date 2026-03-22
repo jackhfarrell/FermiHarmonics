@@ -58,31 +58,31 @@ end
 # ======================================================================================================================
 
 """
-    estimate_max_harmonic(gamma_mr, gamma_mc; min_harmonic=4, max_harmonic=100)
+    estimate_max_harmonic(gamma_mr, gamma_ee; min_harmonic=4, max_harmonic=100)
 
 Estimate an efficient harmonic cutoff from physical scattering rates.
 
 The estimate uses the total scattering rate
-`gamma_total = gamma_mr + gamma_mc` and logarithmically interpolates:
+`gamma_total = gamma_mr + gamma_ee` and logarithmically interpolates:
 - `gamma_total = 0` -> `max_harmonic`,
 - `gamma_total >= 300` -> `min_harmonic`,
 - intermediate values map via `log1p(gamma_total)` between those endpoints.
 """
 function estimate_max_harmonic(
     gamma_mr::Real,
-    gamma_mc::Real;
+    gamma_ee::Real;
     min_harmonic::Integer = 4,
     max_harmonic::Integer = 100,
 )::Int
     gamma_mr < 0 && throw(ArgumentError("gamma_mr must be >= 0"))
-    gamma_mc < 0 && throw(ArgumentError("gamma_mc must be >= 0"))
+    gamma_ee < 0 && throw(ArgumentError("gamma_ee must be >= 0"))
 
     min_h = Int(min_harmonic)
     max_h = Int(max_harmonic)
     min_h >= 1 || throw(ArgumentError("min_harmonic must be >= 1"))
     max_h >= min_h || throw(ArgumentError("max_harmonic must be >= min_harmonic"))
 
-    gamma_total = Float64(gamma_mr) + Float64(gamma_mc)
+    gamma_total = Float64(gamma_mr) + Float64(gamma_ee)
     gamma_total <= 0 && return max_h
     gamma_total >= AUTO_HARMONIC_GAMMA_HIGH && return min_h
 
@@ -92,18 +92,18 @@ function estimate_max_harmonic(
 end
 
 """
-    resolve_max_harmonic(max_harmonic_kw, params, gamma_mr, gamma_mc)
+    resolve_max_harmonic(max_harmonic_kw, params, gamma_mr, gamma_ee)
 
 Resolve the harmonic cutoff for one solve.
 
 - `Integer`: use fixed cutoff.
-- `:auto` or `nothing`: estimate from `gamma_mr`, `gamma_mc`.
+- `:auto` or `nothing`: estimate from `gamma_mr`, `gamma_ee`.
 
 Auto mode can be tuned through optional `params` fields:
 - `min_harmonic` (default `4`)
 - `max_harmonic_auto` (default `100`)
 """
-function resolve_max_harmonic(max_harmonic_kw, params::SolveParams, gamma_mr::Real, gamma_mc::Real)
+function resolve_max_harmonic(max_harmonic_kw, params::SolveParams, gamma_mr::Real, gamma_ee::Real)
     if max_harmonic_kw isa Integer
         M = Int(max_harmonic_kw)
         M >= 1 || throw(ArgumentError("max_harmonic must be >= 1"))
@@ -115,7 +115,7 @@ function resolve_max_harmonic(max_harmonic_kw, params::SolveParams, gamma_mr::Re
         max_h = params.max_harmonic_auto
         M = estimate_max_harmonic(
             gamma_mr,
-            gamma_mc;
+            gamma_ee;
             min_harmonic=min_h,
             max_harmonic=max_h,
         )
@@ -193,7 +193,7 @@ end
 
 """
     solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any},
-          params, gamma_mr::Real, gamma_mc::Real; kwargs...)
+          params, gamma_mr::Real, gamma_ee::Real; kwargs...)
 
 Solve one FermiHarmonics case.
 
@@ -201,10 +201,10 @@ Arguments:
 - `mesh_path`: path to mesh input file.
 - `boundary_conditions`: boundary-condition map used by Trixi.
 - `params`: solver configuration, as [`SolveParams`](@ref).
-- `gamma_mr`, `gamma_mc`: physical scattering rates.
+- `gamma_mr`, `gamma_ee`: physical scattering rates.
 
 Keywords:
-- `max_harmonic`: harmonic cutoff. Use `:auto` (default) to estimate from `gamma_mr`, `gamma_mc`,
+- `max_harmonic`: harmonic cutoff. Use `:auto` (default) to estimate from `gamma_mr`, `gamma_ee`,
   or pass an integer for a fixed cutoff (`nvars = 1 + 2*max_harmonic`).
 - `u0_override`: optional warm-start state vector.
 - `visualize`: enable live visualization callback.
@@ -214,8 +214,9 @@ Returns:
 - `(sol, semi)`: Trixi time-integration solution and semidiscretization.
 """
 function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any},
-               params::SolveParams, gamma_mr::Real, gamma_mc::Real;
+               params::SolveParams, gamma_mr::Real, gamma_ee::Real;
                max_harmonic::Union{Integer, Symbol, Nothing}=:auto,
+               gamma_3::Real=0.0,
                omega_c::Real=0.0,
                u0_override::Union{Nothing, AbstractVector}=nothing,
                visualize::Bool=false,
@@ -227,12 +228,13 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
     isfile(mesh_path) || error("Mesh file not found: $mesh_path")
     validate(params)
 
-    max_harmonic_resolved, harmonic_mode = resolve_max_harmonic(max_harmonic, params, gamma_mr, gamma_mc)
+    max_harmonic_resolved, harmonic_mode = resolve_max_harmonic(max_harmonic, params, gamma_mr, gamma_ee)
     nvars = 1 + 2 * max_harmonic_resolved
     equations = FermiHarmonics2D(
         nvars;
         gamma_mr=gamma_mr,
-        gamma_mc=gamma_mc,
+        gamma_ee=gamma_ee,
+        gamma_3=gamma_3,
         omega_c=omega_c,
         max_harmonic=max_harmonic_resolved,
     )
@@ -247,7 +249,7 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
     )
 
     boundary_types = Dict(key => boundary_condition_name(value) for (key, value) in boundary_conditions)
-    @info "Starting solve" name=name max_harmonic=max_harmonic_resolved harmonic_mode=harmonic_mode gamma_mr=gamma_mr gamma_mc=gamma_mc omega_c=omega_c polydeg=params.polydeg cfl=params.cfl residual_tol=params.residual_tol boundaries=boundary_types
+    @info "Starting solve" name=name max_harmonic=max_harmonic_resolved harmonic_mode=harmonic_mode gamma_mr=gamma_mr gamma_ee=gamma_ee gamma_3=gamma_3 omega_c=omega_c polydeg=params.polydeg cfl=params.cfl residual_tol=params.residual_tol boundaries=boundary_types
     flush(stdout)
     flush(stderr)
 

@@ -82,7 +82,7 @@ end
 """
     write_sweep_metadata!(data_dir::AbstractString, 
                           params, sweep_metadata, slurm_metadata,
-                          gamma_mr_vals, gamma_mc_vals)
+                          gamma_mr_vals, gamma_ee_vals)
     
 Write sweep metadata to `sweep_metadata.toml`.
 
@@ -91,14 +91,14 @@ Returns:
 """
 function write_sweep_metadata!(data_dir::AbstractString, 
                                params, sweep_metadata, slurm_metadata, 
-                               gamma_mr_vals, gamma_mc_vals)
+                               gamma_mr_vals, gamma_ee_vals)
         # put all metadata together
         metadata = Dict(
         "solver_metadata" => solver_metadata_dict(params),
         "sweep_metadata" => merge(
             Dict(
                 "gamma_mr_values" => collect(gamma_mr_vals),
-                "gamma_mc_values" => collect(gamma_mc_vals),
+                "gamma_ee_values" => collect(gamma_ee_vals),
             ),
             Dict(pairs(sweep_metadata)),
         ),
@@ -151,16 +151,16 @@ end
 
 
 """
-    select_cases(gamma_mr_vals, gamma_mc_vals; cases_per_task::Int, env::AbstractDict=ENV)
+    select_cases(gamma_mr_vals, gamma_ee_vals; cases_per_task::Int, env::AbstractDict=ENV)
 
 Determine which cases to run for the current task based on the total parameter grid and the SLURM_ARRAY_TASK_ID. 
 
 Returns:
 - `(case_indices, total_cases, n_cases_this_task, task_id)`.
 """
-function select_cases(gamma_mr_vals, gamma_mc_vals; cases_per_task::Int, env::AbstractDict=ENV)
+function select_cases(gamma_mr_vals, gamma_ee_vals; cases_per_task::Int, env::AbstractDict=ENV)
     task_id = parse(Int, get(env, "SLURM_ARRAY_TASK_ID", "1"))
-    total_cases = length(gamma_mr_vals) * length(gamma_mc_vals)
+    total_cases = length(gamma_mr_vals) * length(gamma_ee_vals)
     base_index = (task_id - 1) * cases_per_task
     last_index = min(base_index + cases_per_task, total_cases)
     case_indices = (base_index + 1):last_index
@@ -169,17 +169,17 @@ end
 
 
 """
-    grid_lookup(gamma_mr_vals, gamma_mc_vals, index_global::Int)
+    grid_lookup(gamma_mr_vals, gamma_ee_vals, index_global::Int)
 
-Given a global case index, look up the corresponding gamma_mr and gamma_mc values from the parameter grid. Assumes the 
-grid is ordered with gamma_mc varying fastest.
+Given a global case index, look up the corresponding gamma_mr and gamma_ee values from the parameter grid. Assumes the 
+grid is ordered with gamma_ee varying fastest.
 
 Returns:
-- `(gamma_mr, gamma_mc)` for `index_global`.
+- `(gamma_mr, gamma_ee)` for `index_global`.
 """
-function grid_lookup(gamma_mr_vals, gamma_mc_vals, index_global::Int)
-    n_mc = length(gamma_mc_vals)
-    index_mr = div(index_global - 1, n_mc) + 1
-    index_mc = mod(index_global - 1, n_mc) + 1
-    return gamma_mr_vals[index_mr], gamma_mc_vals[index_mc]
+function grid_lookup(gamma_mr_vals, gamma_ee_vals, index_global::Int)
+    n_ee = length(gamma_ee_vals)
+    index_mr = div(index_global - 1, n_ee) + 1
+    index_ee = mod(index_global - 1, n_ee) + 1
+    return gamma_mr_vals[index_mr], gamma_ee_vals[index_ee]
 end
