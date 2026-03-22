@@ -82,12 +82,13 @@ end
 @inline function Trixi.max_abs_speed_naive(u_ll, u_rr, orientation::Integer,
                                           equations::AbstractFermiTransportEquations2D)
     if transport_is_nonlinear(equations)
-        equations isa FermiHarmonics2D && return equations.timestep_speed
         normal = orientation == 1 ? SVector(1.0, 0.0) : SVector(0.0, 1.0)
-        return max(
+        flux_speed = max(
             nonlinear_max_abs_speed(u_ll, normal, equations),
             nonlinear_max_abs_speed(u_rr, normal, equations),
         )
+        equations isa FermiHarmonics2D && return max(flux_speed, equations.timestep_speed)
+        return flux_speed
     end
     return equations.max_speed
 end
@@ -95,12 +96,14 @@ end
 @inline function Trixi.max_abs_speed_naive(u_ll, u_rr, normal_direction::AbstractVector,
                                           equations::AbstractFermiTransportEquations2D)
     if transport_is_nonlinear(equations)
-        equations isa FermiHarmonics2D && return equations.timestep_speed * hypot(normal_direction[1], normal_direction[2])
         normal = SVector(normal_direction[1], normal_direction[2])
-        return max(
+        flux_speed = max(
             nonlinear_max_abs_speed(u_ll, normal, equations),
             nonlinear_max_abs_speed(u_rr, normal, equations),
         )
+        equations isa FermiHarmonics2D &&
+            return max(flux_speed, equations.timestep_speed * hypot(normal_direction[1], normal_direction[2]))
+        return flux_speed
     end
     nrm = hypot(normal_direction[1], normal_direction[2])
     return equations.max_speed * nrm

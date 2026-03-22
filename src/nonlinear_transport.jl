@@ -31,6 +31,7 @@ mutable struct NonlinearGradientCacheEntry
 end
 
 const NONLINEAR_GRADIENT_CACHE = IdDict{UInt, NonlinearGradientCacheEntry}()
+const NONLINEAR_MEAN_GRADIENT_CACHE = IdDict{UInt, NonlinearGradientCacheEntry}()
 
 @inline transport_is_nonlinear(equations::FermiHarmonics2D) = equations.transport === :parabolic_nonlinear
 @inline transport_is_nonlinear(::FermiAngles2D) = true
@@ -38,7 +39,10 @@ const NONLINEAR_GRADIENT_CACHE = IdDict{UInt, NonlinearGradientCacheEntry}()
 @inline nonlinear_data(equations::FermiAngles2D) = equations.nonlinear_data
 @inline nonlinear_collision_is_exact_bgk(equations::FermiHarmonics2D) =
     false
-@inline nonlinear_collision_is_exact_bgk(equations::FermiAngles2D) = true
+@inline nonlinear_collision_is_exact_bgk(equations::FermiAngles2D) =
+    equations.collision_model === :exact_bgk
+@inline nonlinear_collision_is_two_rate_bgk(equations::FermiAngles2D) =
+    equations.collision_model === :two_rate_bgk
 @inline nonlinear_collision_is_quadratic_bgk(equations::FermiHarmonics2D) =
     transport_is_nonlinear(equations) && equations.collision_model === :quadratic_bgk
 @inline nonlinear_collision_is_quadratic_bgk(::FermiAngles2D) = false
@@ -47,7 +51,7 @@ const NONLINEAR_GRADIENT_CACHE = IdDict{UInt, NonlinearGradientCacheEntry}()
 @inline nonlinear_has_electrostatic_force(equations::FermiAngles2D) =
     equations.electrostatic_coupling != 0.0
 @inline nonlinear_uses_gradient_sources(equations::FermiHarmonics2D) =
-    transport_is_nonlinear(equations)
+    transport_is_nonlinear(equations) && nonlinear_has_electrostatic_force(equations)
 @inline nonlinear_uses_gradient_sources(::FermiAngles2D) = false
 
 function validate_transport_mode(
@@ -80,8 +84,8 @@ function validate_collision_model(transport::Symbol, collision_model::Union{Noth
         return model
     end
 
-    model in (:quadratic_bgk, :exact_bgk) ||
-        throw(ArgumentError("collision_model must be :quadratic_bgk or :exact_bgk for :parabolic_nonlinear transport"))
+    model in (:quadratic_bgk, :exact_bgk, :two_rate_bgk) ||
+        throw(ArgumentError("collision_model must be :quadratic_bgk, :exact_bgk, or :two_rate_bgk for :parabolic_nonlinear transport"))
     return model
 end
 
@@ -350,34 +354,19 @@ function nonlinear_flux!(
     normal::SVector{2, Float64},
     equations::FermiHarmonics2D,
 )
-    n_vars = length(state)
-    max_harmonic_local = (n_vars - 1) ÷ 2
+    cache = get_nonlinear_cache(equations)
+    harmonic_state_to_spectrum!(cache.spectrum, state, equations)
+    harmonic_spectrum_to_samples!(cache.samples, cache.spectrum, equations)
     normal_x, normal_y = normal
-    v0 = equations.max_speed
-    @inbounds begin
-        out[cosine_index(0)] = (max_harmonic_local >= 1) ?
-            (normal_x * v0 * Float64(state[cosine_index(1)]) +
-             normal_y * v0 * Float64(state[sine_index(1)])) : 0.0
-        for m in 1:max_harmonic_local
-            out[cosine_index(m)] =
-                normal_x * (0.5 * v0) * Float64(state[cosine_index(m - 1)]) +
-                (m + 1 <= max_harmonic_local ? normal_x * (0.5 * v0) *
-                 Float64(state[cosine_index(m + 1)]) : 0.0) +
-                (m - 1 >= 1 ? normal_y * (-0.5 * v0) *
-                 Float64(state[sine_index(m - 1)]) : 0.0) +
-                (m + 1 <= max_harmonic_local ? normal_y * (0.5 * v0) *
-                 Float64(state[sine_index(m + 1)]) : 0.0)
-            out[sine_index(m)] =
-                (m - 1 >= 1 ? normal_x * (0.5 * v0) *
-                 Float64(state[sine_index(m - 1)]) : 0.0) +
-                (m + 1 <= max_harmonic_local ? normal_x * (0.5 * v0) *
-                 Float64(state[sine_index(m + 1)]) : 0.0) +
-                normal_y * (0.5 * v0) * Float64(state[cosine_index(m - 1)]) +
-                (m + 1 <= max_harmonic_local ? normal_y * (-0.5 * v0) *
-                 Float64(state[cosine_index(m + 1)]) : 0.0)
-        end
+    data = nonlinear_data(equations)
+    @inbounds for j in eachindex(cache.work_samples)
+        directional_factor = normal_x * data.cos_theta[j] + normal_y * data.sin_theta[j]
+        cache.work_samples[j] = ComplexF64(
+            directional_factor * quadratic_shifted_flux(real(cache.samples[j]), equations),
+            0.0,
+        )
     end
-    return out
+    return samples_to_harmonics!(out, cache.work_samples, equations)
 end
 
 function nonlinear_max_abs_speed(
@@ -385,14 +374,31 @@ function nonlinear_max_abs_speed(
     normal::SVector{2, Float64},
     equations::FermiHarmonics2D,
 )
-    return equations.max_speed * norm(normal)
+    cache = get_nonlinear_cache(equations)
+    harmonic_state_to_spectrum!(cache.spectrum, state, equations)
+    harmonic_spectrum_to_samples!(cache.samples, cache.spectrum, equations)
+    normal_x, normal_y = normal
+    vmax = 0.0
+    @inbounds for j in eachindex(cache.samples)
+        directional_factor = abs(normal_x * nonlinear_data(equations).cos_theta[j] +
+                                 normal_y * nonlinear_data(equations).sin_theta[j])
+        vmax = max(vmax, directional_factor * quadratic_speed(real(cache.samples[j]), equations))
+    end
+    return vmax
 end
 
 function nonlinear_max_abs_speeds(
     state::AbstractVector{<:Real},
     equations::FermiHarmonics2D,
 )
-    return (equations.max_speed, equations.max_speed)
+    cache = get_nonlinear_cache(equations)
+    harmonic_state_to_spectrum!(cache.spectrum, state, equations)
+    harmonic_spectrum_to_samples!(cache.samples, cache.spectrum, equations)
+    vmax = 0.0
+    @inbounds for j in eachindex(cache.samples)
+        vmax = max(vmax, quadratic_speed(real(cache.samples[j]), equations))
+    end
+    return (vmax, vmax)
 end
 
 function nonlinear_current_components(
@@ -843,50 +849,51 @@ function electrostatic_force_sources_sparse!(
     gradients,
     equations::FermiHarmonics2D,
 )
+    grad_phi0_x = 0.5 * Float64(gradients[1][1])
+    grad_phi0_y = 0.5 * Float64(gradients[2][1])
+    return electrostatic_force_a0_gradient_sources!(out, state, grad_phi0_x, grad_phi0_y, equations)
+end
+
+function electrostatic_force_a0_gradient_sources!(
+    out::AbstractVector{Float64},
+    state::AbstractVector{<:Real},
+    grad_phi0_x::Real,
+    grad_phi0_y::Real,
+    equations::FermiHarmonics2D,
+)
     cache = get_nonlinear_cache(equations)
     M = (length(state) - 1) ÷ 2
     state_modes = cache.spectrum
-    gradx_modes = cache.gradx_samples
-    grady_modes = cache.grady_samples
-    p_hat_grad_phi_modes = cache.work_samples
     product_modes = cache.samples
     dtheta_modes = cache.theta_derivative_samples
-    tmp_modes = cache.gradx_samples
+    tmp_modes = cache.work_samples
     offset = M + 1
     fill!(out, 0.0)
 
-    harmonic_state_to_complex_modes!(state_modes, state, M)
-    harmonic_state_to_complex_modes!(gradx_modes, gradients[1], M)
-    harmonic_state_to_complex_modes!(grady_modes, gradients[2], M)
-    harmonic_complex_directional_derivative!(p_hat_grad_phi_modes, gradx_modes, grady_modes, equations, M)
-    harmonic_complex_truncated_product!(product_modes, state_modes, p_hat_grad_phi_modes, M)
-    add_complex_modes_to_harmonics!(out, product_modes, -(equations.max_speed / (2.0 * equations.mu0)), M)
-
     chi = equations.electrostatic_coupling
-    if chi != 0.0
-        grad_phi0_x = 0.5 * Float64(gradients[1][1])
-        grad_phi0_y = 0.5 * Float64(gradients[2][1])
-        p0 = equations.mass * equations.max_speed
+    chi == 0.0 && return out
 
-        fill!(tmp_modes, 0.0 + 0.0im)
-        if M >= 1
-            tmp_modes[offset + 1] = 0.5 * equations.max_speed * ComplexF64(grad_phi0_x, -grad_phi0_y)
-            tmp_modes[offset - 1] = conj(tmp_modes[offset + 1])
-        end
-        add_complex_modes_to_harmonics!(out, tmp_modes, -chi, M)
+    harmonic_state_to_complex_modes!(state_modes, state, M)
+    p0 = equations.mass * equations.max_speed
 
-        harmonic_complex_truncated_product!(product_modes, state_modes, tmp_modes, M)
-        add_complex_modes_to_harmonics!(out, product_modes, -(chi / (2.0 * equations.mu0)), M)
-
-        harmonic_complex_theta_derivative!(dtheta_modes, state_modes, M)
-        fill!(tmp_modes, 0.0 + 0.0im)
-        if M >= 1
-            tmp_modes[offset + 1] = 0.5 * ComplexF64(grad_phi0_y / p0, grad_phi0_x / p0)
-            tmp_modes[offset - 1] = conj(tmp_modes[offset + 1])
-        end
-        harmonic_complex_truncated_product!(product_modes, tmp_modes, dtheta_modes, M)
-        add_complex_modes_to_harmonics!(out, product_modes, chi, M)
+    fill!(tmp_modes, 0.0 + 0.0im)
+    if M >= 1
+        tmp_modes[offset + 1] = 0.5 * equations.max_speed * ComplexF64(Float64(grad_phi0_x), -Float64(grad_phi0_y))
+        tmp_modes[offset - 1] = conj(tmp_modes[offset + 1])
     end
+    add_complex_modes_to_harmonics!(out, tmp_modes, -chi, M)
+
+    harmonic_complex_truncated_product!(product_modes, state_modes, tmp_modes, M)
+    add_complex_modes_to_harmonics!(out, product_modes, -(chi / (2.0 * equations.mu0)), M)
+
+    harmonic_complex_theta_derivative!(dtheta_modes, state_modes, M)
+    fill!(tmp_modes, 0.0 + 0.0im)
+    if M >= 1
+        tmp_modes[offset + 1] = 0.5 * ComplexF64(Float64(grad_phi0_y) / p0, Float64(grad_phi0_x) / p0)
+        tmp_modes[offset - 1] = conj(tmp_modes[offset + 1])
+    end
+    harmonic_complex_truncated_product!(product_modes, tmp_modes, dtheta_modes, M)
+    add_complex_modes_to_harmonics!(out, product_modes, chi, M)
 
     return out
 end
@@ -904,14 +911,32 @@ function ElectrostaticGradientEquation2D(equations_hyperbolic::FermiHarmonics2D)
     )
 end
 
+struct MeanModeGradientEquation2D{E} <: Trixi.AbstractLaplaceDiffusion{2, 1}
+    diffusivity::Float64
+    equations_hyperbolic::E
+end
+
+function MeanModeGradientEquation2D(equations_hyperbolic::FermiHarmonics2D)
+    return MeanModeGradientEquation2D{typeof(equations_hyperbolic)}(
+        0.0,
+        equations_hyperbolic,
+    )
+end
+
 Trixi.varnames(variable_mapping, equations_parabolic::ElectrostaticGradientEquation2D) =
     Trixi.varnames(variable_mapping, equations_parabolic.equations_hyperbolic)
+Trixi.varnames(variable_mapping, ::MeanModeGradientEquation2D) = ("a0",)
 
 Trixi.gradient_variable_transformation(::ElectrostaticGradientEquation2D) = Trixi.cons2cons
+@inline mean_mode_gradient_variables(u, ::MeanModeGradientEquation2D) = SVector{1, Float64}(Float64(u[1]))
+Trixi.gradient_variable_transformation(::MeanModeGradientEquation2D) = mean_mode_gradient_variables
 
 @inline Trixi.have_constant_diffusivity(::ElectrostaticGradientEquation2D) = Trixi.True()
 @inline Trixi.max_diffusivity(::ElectrostaticGradientEquation2D) = 0.0
 @inline Trixi.max_diffusivity(u, ::ElectrostaticGradientEquation2D) = 0.0
+@inline Trixi.have_constant_diffusivity(::MeanModeGradientEquation2D) = Trixi.True()
+@inline Trixi.max_diffusivity(::MeanModeGradientEquation2D) = 0.0
+@inline Trixi.max_diffusivity(u, ::MeanModeGradientEquation2D) = 0.0
 
 @inline function Trixi.flux(
     u,
@@ -922,11 +947,30 @@ Trixi.gradient_variable_transformation(::ElectrostaticGradientEquation2D) = Trix
     return 0.0 * u
 end
 
+@inline function Trixi.flux(
+    u,
+    gradients,
+    orientation::Integer,
+    equations_parabolic::MeanModeGradientEquation2D,
+)
+    return 0.0 * u
+end
+
 @inline function Trixi.penalty(
     u_outer,
     u_inner,
     inv_h,
     equations_parabolic::ElectrostaticGradientEquation2D,
+    dg,
+)
+    return 0.0 * u_inner
+end
+
+@inline function Trixi.penalty(
+    u_outer,
+    u_inner,
+    inv_h,
+    equations_parabolic::MeanModeGradientEquation2D,
     dg,
 )
     return 0.0 * u_inner
@@ -979,6 +1023,44 @@ function get_nonlinear_gradient_cache!(
     return cache_parabolic
 end
 
+function get_mean_mode_gradient_cache!(
+    mesh,
+    equations::FermiHarmonics2D,
+    dg::Trixi.DG,
+    cache,
+    u,
+)
+    key = objectid(cache)
+    nnodes = Trixi.nnodes(dg)
+    nelements = size(u, 4)
+    ueltype = eltype(u)
+    entry = get(NONLINEAR_MEAN_GRADIENT_CACHE, key, nothing)
+    if !isnothing(entry) &&
+       entry.nvars == 1 &&
+       entry.nnodes == nnodes &&
+       entry.nelements == nelements &&
+       entry.ueltype === ueltype
+        return entry.cache_parabolic
+    end
+
+    equations_parabolic = MeanModeGradientEquation2D(equations)
+    cache_parabolic = Trixi.create_cache_parabolic(
+        mesh,
+        equations_parabolic,
+        dg,
+        nelements,
+        ueltype,
+    )
+    NONLINEAR_MEAN_GRADIENT_CACHE[key] = NonlinearGradientCacheEntry(
+        cache_parabolic,
+        1,
+        nnodes,
+        nelements,
+        ueltype,
+    )
+    return cache_parabolic
+end
+
 function add_nonlinear_gradient_sources!(
     du,
     u,
@@ -989,15 +1071,14 @@ function add_nonlinear_gradient_sources!(
     dg::Trixi.DG,
     cache,
 )
-    equations_parabolic = ElectrostaticGradientEquation2D(equations)
-    cache_parabolic = get_nonlinear_gradient_cache!(mesh, equations, dg, cache, u)
+    equations_parabolic = MeanModeGradientEquation2D(equations)
+    cache_parabolic = get_mean_mode_gradient_cache!(mesh, equations, dg, cache, u)
     viscous_container = cache_parabolic.viscous_container
     u_transformed = viscous_container.u_transformed
     gradients = viscous_container.gradients
     parabolic_scheme = Trixi.ViscousFormulationLocalDG()
 
-    # The electrostatic/nonlinear transport correction is a source term that needs DG
-    # gradients of the hyperbolic state, not a separate parabolic semidiscretization.
+    # The remaining nonlinear source uses only the scalar mean-mode gradient ∇a0.
     Trixi.transform_variables!(u_transformed, u, mesh, equations_parabolic, dg, cache)
     Trixi.calc_gradient!(
         gradients,
@@ -1010,16 +1091,25 @@ function add_nonlinear_gradient_sources!(
         parabolic_scheme,
         cache,
     )
-    Trixi.calc_sources_parabolic!(
-        du,
-        u,
-        gradients,
-        t,
-        FermiHarmonics.source_terms,
-        equations_parabolic,
-        dg,
-        cache,
-    )
+
+    Threads.@threads for element in Trixi.eachelement(dg, cache)
+        source_node = MVector{Trixi.nvariables(equations), Float64}(undef)
+        for j in Trixi.eachnode(dg), i in Trixi.eachnode(dg)
+            state_node = Trixi.get_node_vars(u, equations, dg, i, j, element)
+            grad_phi0_x = 0.5 * Float64(gradients[1][1, i, j, element])
+            grad_phi0_y = 0.5 * Float64(gradients[2][1, i, j, element])
+            electrostatic_force_a0_gradient_sources!(
+                source_node,
+                state_node,
+                grad_phi0_x,
+                grad_phi0_y,
+                equations,
+            )
+            @inbounds for v in Trixi.eachvariable(equations)
+                du[v, i, j, element] += source_node[v]
+            end
+        end
+    end
     return nothing
 end
 
@@ -1339,6 +1429,11 @@ function recover_mu_u(state::AbstractVector{<:Real}, equations::FermiAngles2D)
         return mu, velocity
     end
     return match_local_equilibrium_moments(state, equations)
+end
+
+function recover_mu_u_two_rate(state::AbstractVector{<:Real}, equations::FermiAngles2D)
+    mu, velocity = recover_mu_u_closed_form(state, equations)
+    return mu, project_admissible_velocity(velocity, mu, equations)
 end
 
 function isotropic_equilibrium_state!(

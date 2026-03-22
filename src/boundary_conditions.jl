@@ -703,6 +703,30 @@ end
     return flux_inner
 end
 
+@inline function (bc::MaxwellWallBC)(
+    flux_inner,
+    u_inner,
+    normal_direction::AbstractVector,
+    x,
+    t,
+    operator_type::Trixi.Gradient,
+    equations_parabolic::MeanModeGradientEquation2D,
+)
+    return u_inner
+end
+
+@inline function (bc::MaxwellWallBC)(
+    flux_inner,
+    u_inner,
+    normal_direction::AbstractVector,
+    x,
+    t,
+    operator_type::Trixi.Divergence,
+    equations_parabolic::MeanModeGradientEquation2D,
+)
+    return flux_inner
+end
+
 @inline function (bc::OhmicContactBC)(
     flux_inner,
     u_inner,
@@ -739,6 +763,30 @@ end
     t,
     operator_type::Trixi.Divergence,
     equations_parabolic::ElectrostaticGradientEquation2D,
+)
+    return flux_inner
+end
+
+@inline function (bc::OhmicContactBC)(
+    flux_inner,
+    u_inner,
+    normal_direction::AbstractVector,
+    x,
+    t,
+    operator_type::Trixi.Gradient,
+    equations_parabolic::MeanModeGradientEquation2D,
+)
+    return u_inner
+end
+
+@inline function (bc::OhmicContactBC)(
+    flux_inner,
+    u_inner,
+    normal_direction::AbstractVector,
+    x,
+    t,
+    operator_type::Trixi.Divergence,
+    equations_parabolic::MeanModeGradientEquation2D,
 )
     return flux_inner
 end

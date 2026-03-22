@@ -136,18 +136,47 @@ end
 
     function reference_electrostatic_force_sources(state, gradients, eq)
         phi = reference_harmonic_state_to_samples(state, eq)
-        gradx = reference_harmonic_state_to_samples(gradients[1], eq)
-        grady = reference_harmonic_state_to_samples(gradients[2], eq)
         dtheta = reference_harmonic_theta_derivative_to_samples(state, eq)
         data = FermiHarmonics.nonlinear_data(eq)
         v0 = eq.max_speed
-        inv_2mu0 = 0.5 / eq.mu0
         chi = eq.electrostatic_coupling
         p0 = eq.mass * v0
         grad_phi0_x = 0.5 * Float64(gradients[1][1])
         grad_phi0_y = 0.5 * Float64(gradients[2][1])
         work = Vector{ComplexF64}(undef, length(phi))
         for j in eachindex(work)
+            phi_j = real(phi[j])
+            dphi_dtheta = real(dtheta[j])
+            cos_theta = data.cos_theta[j]
+            sin_theta = data.sin_theta[j]
+            p_hat_grad_phi0 = cos_theta * grad_phi0_x + sin_theta * grad_phi0_y
+            theta_hat_grad_phi0 = -sin_theta * grad_phi0_x + cos_theta * grad_phi0_y
+            source = 0.0
+            if chi != 0.0
+                source -= chi * v0 * p_hat_grad_phi0
+                source -= chi * v0 * (0.5 / eq.mu0) * phi_j * p_hat_grad_phi0
+                source += (chi / p0) * theta_hat_grad_phi0 * dphi_dtheta
+            end
+            work[j] = ComplexF64(source, 0.0)
+        end
+        out = zeros(Float64, length(state))
+        FermiHarmonics.samples_to_harmonics!(out, copy(work), eq)
+        return out
+    end
+
+    function reference_full_nonlinear_force_sources(state, gradients, eq)
+        phi = reference_harmonic_state_to_samples(state, eq)
+        gradx = reference_harmonic_state_to_samples(gradients[1], eq)
+        grady = reference_harmonic_state_to_samples(gradients[2], eq)
+        dtheta = reference_harmonic_theta_derivative_to_samples(state, eq)
+        data = FermiHarmonics.nonlinear_data(eq)
+        v0 = eq.max_speed
+        chi = eq.electrostatic_coupling
+        p0 = eq.mass * v0
+        grad_phi0_x = 0.5 * Float64(gradients[1][1])
+        grad_phi0_y = 0.5 * Float64(gradients[2][1])
+        work = Vector{ComplexF64}(undef, length(phi))
+        @inbounds for j in eachindex(work)
             phi_j = real(phi[j])
             dphi_dtheta = real(dtheta[j])
             dphi_dx = real(gradx[j])
@@ -157,10 +186,10 @@ end
             p_hat_grad_phi = cos_theta * dphi_dx + sin_theta * dphi_dy
             p_hat_grad_phi0 = cos_theta * grad_phi0_x + sin_theta * grad_phi0_y
             theta_hat_grad_phi0 = -sin_theta * grad_phi0_x + cos_theta * grad_phi0_y
-            source = -(v0 * inv_2mu0) * phi_j * p_hat_grad_phi
+            source = -(v0 * (0.5 / eq.mu0)) * phi_j * p_hat_grad_phi
             if chi != 0.0
                 source -= chi * v0 * p_hat_grad_phi0
-                source -= chi * v0 * inv_2mu0 * phi_j * p_hat_grad_phi0
+                source -= chi * v0 * (0.5 / eq.mu0) * phi_j * p_hat_grad_phi0
                 source += (chi / p0) * theta_hat_grad_phi0 * dphi_dtheta
             end
             work[j] = ComplexF64(source, 0.0)
@@ -226,7 +255,7 @@ end
     @test source_new ≈ source_ref atol=1e-12 rtol=1e-12
     source_reference_helper = similar(source_ref)
     FermiHarmonics.electrostatic_force_sources_reference!(source_reference_helper, sample_state, gradients, eq_chi)
-    @test source_reference_helper ≈ source_ref atol=1e-12 rtol=1e-12
+    @test source_reference_helper ≈ reference_full_nonlinear_force_sources(sample_state, gradients, eq_chi) atol=1e-12 rtol=1e-12
     alloc_source_sparse = @allocated FermiHarmonics.electrostatic_force_sources!(source_new, sample_state, gradients, eq_chi)
     alloc_source_reference = @allocated FermiHarmonics.electrostatic_force_sources_reference!(source_reference_helper, sample_state, gradients, eq_chi)
     @test alloc_source_sparse <= alloc_source_reference
@@ -362,7 +391,16 @@ end
         mass=2.0,
         chi=10.0,
     )
+    eq_fast = FermiAngles2D(
+        32;
+        gamma_mr=0.1,
+        gamma_mc=1.0,
+        collision_model=:two_rate_bgk,
+        mu0=1.0,
+        mass=2.0,
+    )
     @test eq.collision_model === :exact_bgk
+    @test eq_fast.collision_model === :two_rate_bgk
     @test eq.max_speed ≈ 1.0 atol=1e-12 rtol=1e-12
     @test eq.timestep_speed ≈ 1.0 atol=1e-12 rtol=1e-12
     @test eq_chi.max_speed ≈ eq.max_speed atol=1e-12 rtol=1e-12
@@ -378,6 +416,15 @@ end
     @test a0 ≈ 0.0 atol=1e-10 rtol=1e-10
     @test a1 ≈ 0.08 atol=1e-10 rtol=1e-10
     @test b1 ≈ -0.05 atol=1e-10 rtol=1e-10
+
+    weak_state = @. 0.02 * cos(data.theta) - 0.01 * sin(data.theta) + 0.005 * cos(2.0 * data.theta)
+    source_exact = FermiHarmonics.physical_sources(weak_state, nothing, 0.0, eq)
+    source_fast = FermiHarmonics.physical_sources(weak_state, nothing, 0.0, eq_fast)
+    @test all(isfinite, source_fast)
+    @test norm(source_exact - source_fast) < 1.0e-3
+    alloc_exact = @allocated FermiHarmonics.physical_sources(weak_state, nothing, 0.0, eq)
+    alloc_fast = @allocated FermiHarmonics.physical_sources(weak_state, nothing, 0.0, eq_fast)
+    @test alloc_fast <= alloc_exact
 
     @test_throws ArgumentError FermiAngles2D(
         7;
@@ -404,32 +451,26 @@ end
 end
 
 @testset "Electrostatic self-consistent force" begin
-    function expected_quadratic_transport_source(state, gradients, eq)
+    function expected_electrostatic_force_source(state, gradients, eq)
         ntheta = FermiHarmonics.nonlinear_data(eq).theta_count
         phi = Vector{ComplexF64}(undef, ntheta)
-        gradx = Vector{ComplexF64}(undef, ntheta)
-        grady = Vector{ComplexF64}(undef, ntheta)
         dtheta = Vector{ComplexF64}(undef, ntheta)
         work = Vector{ComplexF64}(undef, ntheta)
         FermiHarmonics.harmonic_state_to_samples!(phi, state, eq)
-        FermiHarmonics.harmonic_state_to_samples!(gradx, gradients[1], eq)
-        FermiHarmonics.harmonic_state_to_samples!(grady, gradients[2], eq)
         FermiHarmonics.harmonic_theta_derivative_to_samples!(dtheta, state, eq)
         data = FermiHarmonics.nonlinear_data(eq)
         v0 = eq.max_speed
         p0 = eq.mass * v0
-        inv_2mu0 = 0.5 / eq.mu0
         grad_phi0_x = 0.5 * gradients[1][1]
         grad_phi0_y = 0.5 * gradients[2][1]
         @inbounds for j in eachindex(work)
             phi_j = real(phi[j])
-            p_hat_grad_phi = data.cos_theta[j] * real(gradx[j]) + data.sin_theta[j] * real(grady[j])
             p_hat_grad_phi0 = data.cos_theta[j] * grad_phi0_x + data.sin_theta[j] * grad_phi0_y
             theta_hat_grad_phi0 = -data.sin_theta[j] * grad_phi0_x + data.cos_theta[j] * grad_phi0_y
-            source = -(v0 * inv_2mu0) * phi_j * p_hat_grad_phi
+            source = 0.0
             if eq.electrostatic_coupling != 0.0
                 source -= eq.electrostatic_coupling * v0 * p_hat_grad_phi0
-                source -= eq.electrostatic_coupling * v0 * inv_2mu0 * phi_j * p_hat_grad_phi0
+                source -= eq.electrostatic_coupling * v0 * (0.5 / eq.mu0) * phi_j * p_hat_grad_phi0
                 source += (eq.electrostatic_coupling / p0) * theta_hat_grad_phi0 * real(dtheta[j])
             end
             work[j] = ComplexF64(source, 0.0)
@@ -465,7 +506,7 @@ end
     force_source = FermiHarmonics.source_terms(driven_state, gradients, nothing, 0.0, eq_parabolic)
     @test all(isfinite, force_source)
     @test norm(force_source) > 0.0
-    @test collect(force_source) ≈ expected_quadratic_transport_source(driven_state, gradients, eq) atol=1.0e-12 rtol=1.0e-12
+    @test collect(force_source) ≈ expected_electrostatic_force_source(driven_state, gradients, eq) atol=1.0e-12 rtol=1.0e-12
 
     eq_zero = FermiHarmonics2D(
         9;
@@ -480,8 +521,7 @@ end
     eq_zero_parabolic = FermiHarmonics.ElectrostaticGradientEquation2D(eq_zero)
     force_zero = FermiHarmonics.source_terms(driven_state, gradients, nothing, 0.0, eq_zero_parabolic)
     @test all(isfinite, force_zero)
-    @test norm(force_zero) > 0.0
-    @test collect(force_zero) ≈ expected_quadratic_transport_source(driven_state, gradients, eq_zero) atol=1.0e-12 rtol=1.0e-12
+    @test force_zero ≈ zeros(9) atol=1.0e-12 rtol=1.0e-12
 end
 
 @testset "Nonlinear BGK source terms" begin
@@ -870,6 +910,22 @@ end
     @test semi_exact.equations.collision_model === :exact_bgk
     @test semi_exact.equations isa FermiAngles2D
 
+    sol_two_rate, semi_two_rate = solve(
+        mesh_path,
+        boundary_conditions,
+        params,
+        0.0,
+        0.5;
+        transport=:parabolic_nonlinear,
+        collision_model=:two_rate_bgk,
+        n_angles=16,
+        mu0=1.0,
+        mass=2.0,
+        name="test_two_rate_nonlinear",
+    )
+    @test semi_two_rate.equations.collision_model === :two_rate_bgk
+    @test semi_two_rate.equations isa FermiAngles2D
+
     linear_probe = evaluate_observables(sol_linear, semi_linear, 0.0, 0.0)
     @test linear_probe.in_domain
     @test linear_probe.jx ≈ linear_probe.a1 atol=1e-10 rtol=1e-10
@@ -885,6 +941,9 @@ end
     exact_probe = evaluate_observables(sol_exact, semi_exact, 0.0, 0.0)
     @test exact_probe.in_domain
     @test isfinite(exact_probe.n)
+    two_rate_probe = evaluate_observables(sol_two_rate, semi_two_rate, 0.0, 0.0)
+    @test two_rate_probe.in_domain
+    @test isfinite(two_rate_probe.n)
 
     @test_throws ArgumentError solve(
         mesh_path,
@@ -897,6 +956,18 @@ end
         mu0=1.0,
         mass=2.0,
         name="missing_exact_angles",
+    )
+    @test_throws ArgumentError solve(
+        mesh_path,
+        boundary_conditions,
+        params,
+        0.0,
+        0.5;
+        transport=:parabolic_nonlinear,
+        collision_model=:two_rate_bgk,
+        mu0=1.0,
+        mass=2.0,
+        name="missing_two_rate_angles",
     )
     @test_throws ArgumentError solve(
         mesh_path,
@@ -923,6 +994,20 @@ end
         mu0=1.0,
         mass=2.0,
         name="invalid_exact_max_harmonic",
+    )
+    @test_throws ArgumentError solve(
+        mesh_path,
+        boundary_conditions,
+        params,
+        0.0,
+        0.5;
+        transport=:parabolic_nonlinear,
+        collision_model=:two_rate_bgk,
+        max_harmonic=2,
+        n_angles=16,
+        mu0=1.0,
+        mass=2.0,
+        name="invalid_two_rate_max_harmonic",
     )
     @test_throws ArgumentError solve(
         mesh_path,

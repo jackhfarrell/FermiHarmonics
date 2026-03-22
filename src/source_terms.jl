@@ -87,7 +87,9 @@ end
     drift_equilibrium = MVector{n, Float64}(undef)
     isotropic_equilibrium = MVector{n, Float64}(undef)
 
-    mu, velocity = recover_mu_u(u, equations)
+    mu, velocity = nonlinear_collision_is_two_rate_bgk(equations) ?
+        recover_mu_u_two_rate(u, equations) :
+        recover_mu_u(u, equations)
     local_equilibrium_state!(drift_equilibrium, mu, velocity, equations)
     isotropic_equilibrium_state!(isotropic_equilibrium, mu, equations)
 

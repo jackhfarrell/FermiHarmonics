@@ -205,8 +205,8 @@ function FermiAngles2D(
     ntheta >= 8 || throw(ArgumentError("n_angles must be >= 8"))
     iseven(ntheta) || throw(ArgumentError("n_angles must be even"))
     collision_model_value = something(collision_model, :exact_bgk)
-    collision_model_value === :exact_bgk ||
-        throw(ArgumentError("collision_model must be :exact_bgk for :parabolic_nonlinear transport"))
+    collision_model_value in (:exact_bgk, :two_rate_bgk) ||
+        throw(ArgumentError("collision_model must be :exact_bgk or :two_rate_bgk for :parabolic_nonlinear transport"))
     mu0_value = Float64(mu0)
     mass_value = Float64(mass)
     mu0_value > 0.0 || throw(ArgumentError("mu0 must be > 0 for :parabolic_nonlinear transport"))

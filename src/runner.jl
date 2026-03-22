@@ -256,10 +256,10 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
     validate(params)
     collision_model_value = validate_collision_model(transport, collision_model)
 
-    if transport === :parabolic_nonlinear && collision_model_value === :exact_bgk
-        isnothing(n_angles) && throw(ArgumentError("n_angles is required for :parabolic_nonlinear transport with collision_model=:exact_bgk"))
+    if transport === :parabolic_nonlinear && collision_model_value in (:exact_bgk, :two_rate_bgk)
+        isnothing(n_angles) && throw(ArgumentError("n_angles is required for :parabolic_nonlinear transport with collision_model=$(collision_model_value)"))
         max_harmonic === :auto || isnothing(max_harmonic) ||
-            throw(ArgumentError("max_harmonic is not supported for collision_model=:exact_bgk; use n_angles"))
+            throw(ArgumentError("max_harmonic is not supported for collision_model=$(collision_model_value); use n_angles"))
         isnothing(mu0) && throw(ArgumentError("mu0 is required for :parabolic_nonlinear transport"))
         isnothing(mass) && throw(ArgumentError("mass is required for :parabolic_nonlinear transport"))
         nvars = Int(n_angles)
@@ -277,7 +277,7 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
     else
         if transport === :parabolic_nonlinear
             !isnothing(n_angles) &&
-                throw(ArgumentError("n_angles is only supported for collision_model=:exact_bgk"))
+                throw(ArgumentError("n_angles is only supported for collision_model=:exact_bgk or :two_rate_bgk"))
         else
             !isnothing(n_angles) &&
                 throw(ArgumentError("n_angles is only supported for :parabolic_nonlinear transport"))
@@ -442,36 +442,29 @@ end
 
 function nonlinear_visualization_callback(params, semi, name::AbstractString)
     output_path = "live_viz_$(name).png"
+    analysis_path = "live_viz_$(name).h5"
+    project_root = normpath(joinpath(@__DIR__, ".."))
+    plot_script = joinpath(project_root, "demo", "plot_nonlinear_streamlines.py")
     nvisnodes = 120
-
-    symmetric_clims(field) = begin
-        finite_values = vec(field[isfinite.(field)])
-        if isempty(finite_values)
-            return (-1.0, 1.0)
-        end
-        amplitude = maximum(abs, finite_values)
-        amplitude > 0.0 || return (-1.0, 1.0)
-        return (-amplitude, amplitude)
-    end
 
     return SciMLBase.DiscreteCallback(
         (u, t, integrator) -> integrator.stats.naccept % params.log_every == 0,
         integrator -> begin
             grids = compute_analysis_grids(integrator.u, semi; nvisnodes=nvisnodes)
-            mask = grids.mask
-            jx = ifelse.(mask, something(grids.jx, grids.a1), NaN)
-            jy = ifelse.(mask, something(grids.jy, grids.b1), NaN)
-            speed = ifelse.(mask, hypot.(jx, jy), NaN)
-            plot_title = "Nonlinear live viz: t=$(round(integrator.t, digits=4))"
-            live_plot = Plots.heatmap(
-                grids.x, grids.y, permutedims(speed);
-                title = plot_title,
-                aspect_ratio = :equal,
-                color = :magma,
-                colorbar = true,
-                size = (900, 700),
+            analysis_write_hdf5(
+                analysis_path,
+                grids.density,
+                grids.a1,
+                grids.b1,
+                grids.jx,
+                grids.jy,
+                grids.x,
+                grids.y,
+                grids.mask,
+                integrator.t,
+                grids.equations,
             )
-            Plots.savefig(live_plot, output_path)
+            run(`python3 $plot_script $analysis_path --output $output_path`)
             @info "Updated nonlinear live visualization" path=output_path t=round(integrator.t, digits=4)
             nothing
         end;
