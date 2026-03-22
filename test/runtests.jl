@@ -120,6 +120,7 @@ end
     @test FermiHarmonics.nonlinear_data(eq).theta_count == 16
     @test eq.max_speed ≈ 1.0 atol=1e-12 rtol=1e-12
     @test eq.timestep_speed ≈ 1.0 atol=1e-12 rtol=1e-12
+    @test FermiHarmonics.nonlinear_bias_scale(eq) ≈ 1.0 atol=1e-12 rtol=1e-12
 
     eq_chi = FermiHarmonics2D(
         9;
@@ -133,6 +134,8 @@ end
     )
     @test eq_chi.max_speed ≈ eq.max_speed atol=1e-12 rtol=1e-12
     @test eq_chi.timestep_speed ≈ 11.0 atol=1e-12 rtol=1e-12
+    @test FermiHarmonics.nonlinear_bias_scale(eq_chi) ≈ 11.0 atol=1e-12 rtol=1e-12
+    @test FermiHarmonics.nonlinear_electrochemical_bias(0.1, eq_chi) ≈ 1.1 atol=1e-12 rtol=1e-12
 
     state = zeros(Float64, 9)
     state[1] = 0.04
@@ -562,6 +565,30 @@ end
     )
     @test collect(nonlinear_trace) ≈ expected_nonlinear_trace atol=1.0e-12 rtol=1.0e-12
     @test norm(collect(nonlinear_trace) - collect(linear_trace)) > 1.0e-6
+
+    chi_eq = FermiHarmonics2D(
+        9;
+        gamma_mr=0.0,
+        gamma_mc=0.5,
+        max_harmonic=4,
+        transport=:parabolic_nonlinear,
+        mu0=1.0,
+        mass=2.0,
+        chi=10.0,
+    )
+    zero_state = zeros(Float64, 9)
+    incoming_value = FermiHarmonics.nonlinear_ohmic_incoming_value(
+        zero_state,
+        SVector(1.0, 0.0),
+        1.0,
+        0.1,
+        similar(zero_state),
+        chi_eq,
+        1.0e-12,
+    )
+    expected_incoming = FermiHarmonics.nonlinear_electrochemical_bias(0.1, chi_eq) /
+                        (1.0 + chi_eq.electrostatic_coupling * (7.0 / 16.0))
+    @test incoming_value ≈ expected_incoming atol=1e-12 rtol=1e-12
 end
 
 @testset "Solve smoke tests" begin

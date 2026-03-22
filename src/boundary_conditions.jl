@@ -100,7 +100,10 @@ get the final BC state.  Note that this means in the case p_ohmic_absorb = 0, we
 injected.
 
 Parameters:
-- `bias`: imposed contact value for the monopole mode
+- `bias`: imposed contact drive. For linear transport it is the raw monopole value. For
+  nonlinear transport it is interpreted as a normalized electrochemical bias, where
+  `bias = 1` corresponds to an electrochemical scale of approximately `(1 + chi) * mu0`,
+  i.e. the isotropic admissibility limit of the parabolic model.
 - `p_ohmic_absorb`: absorption fraction (`1.0` fully absorbing, `0.0` fully specular)
 - `tol`: eigenvalue tolerance for incoming-mode projector construction
 
@@ -121,6 +124,12 @@ OhmicContactBC(bias::Real; p_ohmic_absorb::Real = 1.0, tol::Real = 0.0) =
 boundary_condition_name(bc) = nameof(typeof(bc))
 boundary_condition_name(::MaxwellWallBC) = :maxwell_wall
 boundary_condition_name(::OhmicContactBC) = :ohmic_contact
+
+@inline nonlinear_bias_scale(equations::AbstractFermiTransportEquations2D) =
+    equations.mu0 * (1.0 + abs(equations.electrostatic_coupling))
+
+@inline nonlinear_electrochemical_bias(bias::Real, equations::AbstractFermiTransportEquations2D) =
+    Float64(bias) * nonlinear_bias_scale(equations)
 
 
 # ======================================================================================================================
@@ -330,8 +339,9 @@ function nonlinear_ohmic_incoming_value(
     equations::FermiHarmonics2D,
     tol::Float64,
 )
+    electrochemical_bias = nonlinear_electrochemical_bias(bias, equations)
     if !nonlinear_has_electrostatic_force(equations)
-        return Float64(bias)
+        return electrochemical_bias
     end
 
     cache = get_nonlinear_cache(equations)
@@ -367,7 +377,7 @@ function nonlinear_ohmic_incoming_value(
         denominator,
         "electrochemical contact solve became singular",
     ))
-    return (Float64(bias) - equations.electrostatic_coupling * phi0_base) / denominator
+    return (electrochemical_bias - equations.electrostatic_coupling * phi0_base) / denominator
 end
 
 function nonlinear_ohmic_contact!(
@@ -565,8 +575,9 @@ function nonlinear_ohmic_incoming_value(
     bias::Real,
     equations::FermiAngles2D,
 )
+    electrochemical_bias = nonlinear_electrochemical_bias(bias, equations)
     if !nonlinear_has_electrostatic_force(equations)
-        return Float64(bias)
+        return electrochemical_bias
     end
 
     specular_weight = 1.0 - Float64(p_ohmic_absorb)
@@ -591,7 +602,7 @@ function nonlinear_ohmic_incoming_value(
         denominator,
         "electrochemical contact solve became singular",
     ))
-    return (Float64(bias) - equations.electrostatic_coupling * phi0_base) / denominator
+    return (electrochemical_bias - equations.electrostatic_coupling * phi0_base) / denominator
 end
 
 function nonlinear_ohmic_contact!(
