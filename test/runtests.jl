@@ -224,6 +224,12 @@ end
     source_new = similar(source_ref)
     FermiHarmonics.electrostatic_force_sources!(source_new, sample_state, gradients, eq_chi)
     @test source_new ≈ source_ref atol=1e-12 rtol=1e-12
+    source_reference_helper = similar(source_ref)
+    FermiHarmonics.electrostatic_force_sources_reference!(source_reference_helper, sample_state, gradients, eq_chi)
+    @test source_reference_helper ≈ source_ref atol=1e-12 rtol=1e-12
+    alloc_source_sparse = @allocated FermiHarmonics.electrostatic_force_sources!(source_new, sample_state, gradients, eq_chi)
+    alloc_source_reference = @allocated FermiHarmonics.electrostatic_force_sources_reference!(source_reference_helper, sample_state, gradients, eq_chi)
+    @test alloc_source_sparse <= alloc_source_reference
     FermiHarmonics.prepare_harmonic_gradient_theta_work!(
         cache.samples,
         cache.theta_derivative_samples,

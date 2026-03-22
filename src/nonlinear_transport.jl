@@ -573,6 +573,324 @@ function local_equilibrium_state!(
     return local_equilibrium_state!(out, mu, velocity, equations)
 end
 
+@inline function harmonic_sparse_directional_derivative!(
+    out::AbstractVector,
+    gradx::AbstractVector,
+    grady::AbstractVector,
+    equations::FermiHarmonics2D,
+)
+    nvars = length(out)
+    M = (nvars - 1) ÷ 2
+    fill!(out, 0.0)
+    v0 = equations.max_speed
+    @inbounds begin
+        out[cosine_index(0)] = M >= 1 ?
+            v0 * real(gradx[cosine_index(1)]) + v0 * real(grady[sine_index(1)]) : 0.0
+        for m in 1:M
+            out[cosine_index(m)] =
+                0.5 * v0 * real(gradx[cosine_index(m - 1)]) +
+                (m + 1 <= M ? 0.5 * v0 * real(gradx[cosine_index(m + 1)]) : 0.0) +
+                (m - 1 >= 1 ? -0.5 * v0 * real(grady[sine_index(m - 1)]) : 0.0) +
+                (m + 1 <= M ? 0.5 * v0 * real(grady[sine_index(m + 1)]) : 0.0)
+            out[sine_index(m)] =
+                (m - 1 >= 1 ? 0.5 * v0 * real(gradx[sine_index(m - 1)]) : 0.0) +
+                (m + 1 <= M ? 0.5 * v0 * real(gradx[sine_index(m + 1)]) : 0.0) +
+                0.5 * v0 * real(grady[cosine_index(m - 1)]) +
+                (m + 1 <= M ? -0.5 * v0 * real(grady[cosine_index(m + 1)]) : 0.0)
+        end
+    end
+    return out
+end
+
+@inline function harmonic_theta_derivative_coefficients!(
+    out::AbstractVector,
+    state::AbstractVector,
+)
+    fill!(out, 0.0)
+    M = (length(state) - 1) ÷ 2
+    @inbounds for m in 1:M
+        out[cosine_index(m)] = m * real(state[sine_index(m)])
+        out[sine_index(m)] = -m * real(state[cosine_index(m)])
+    end
+    return out
+end
+
+function multiply_by_first_harmonic!(
+    out::AbstractVector,
+    c::Real,
+    s::Real,
+    state::AbstractVector,
+)
+    fill!(out, 0.0)
+    M = (length(state) - 1) ÷ 2
+    cval = Float64(c)
+    sval = Float64(s)
+
+    @inbounds begin
+        out[cosine_index(0)] =
+            0.5 * cval * (M >= 1 ? real(state[cosine_index(1)]) : 0.0) +
+            0.5 * sval * (M >= 1 ? real(state[sine_index(1)]) : 0.0)
+        if M >= 1
+            out[cosine_index(1)] += cval * real(state[cosine_index(0)])
+            out[sine_index(1)] += sval * real(state[cosine_index(0)])
+        end
+        for m in 1:M
+            a = real(state[cosine_index(m)])
+            b = real(state[sine_index(m)])
+            if m - 1 >= 1
+                out[cosine_index(m - 1)] += 0.5 * (cval * a + sval * b)
+                out[sine_index(m - 1)] += 0.5 * (cval * b - sval * a)
+            else
+                out[cosine_index(0)] += 0.5 * (cval * a + sval * b)
+            end
+            if m + 1 <= M
+                out[cosine_index(m + 1)] += 0.5 * (cval * a - sval * b)
+                out[sine_index(m + 1)] += 0.5 * (cval * b + sval * a)
+            end
+        end
+    end
+    return out
+end
+
+function multiply_harmonic_states!(
+    out::AbstractVector,
+    left::AbstractVector,
+    right::AbstractVector,
+)
+    fill!(out, 0.0)
+    M = (length(out) - 1) ÷ 2
+    if M < 0
+        return out
+    end
+
+    aL0 = 0.5 * real(left[1])
+    aR0 = 0.5 * real(right[1])
+    @inbounds begin
+        out[1] += 2.0 * aL0 * aR0
+        for m in 1:M
+            out[cosine_index(m)] += 2.0 * (aL0 * real(right[cosine_index(m)]) +
+                                            aR0 * real(left[cosine_index(m)]))
+            out[sine_index(m)] += 2.0 * (aL0 * real(right[sine_index(m)]) +
+                                         aR0 * real(left[sine_index(m)]))
+        end
+        for m in 1:M
+            aLm = real(left[cosine_index(m)])
+            bLm = real(left[sine_index(m)])
+            for n in 1:M
+                ksum = m + n
+                if ksum <= M
+                    out[cosine_index(ksum)] += 0.5 * (aLm * real(right[cosine_index(n)]) - bLm * real(right[sine_index(n)]))
+                    out[sine_index(ksum)] += 0.5 * (aLm * real(right[sine_index(n)]) + bLm * real(right[cosine_index(n)]))
+                end
+                kdiff = abs(m - n)
+                term_cos = 0.5 * (aLm * real(right[cosine_index(n)]) + bLm * real(right[sine_index(n)]))
+                term_sin = 0.5 * (bLm * real(right[cosine_index(n)]) - aLm * real(right[sine_index(n)]))
+                if kdiff == 0
+                    out[1] += term_cos
+                elseif kdiff <= M
+                    sign = m >= n ? 1.0 : -1.0
+                    out[cosine_index(kdiff)] += term_cos
+                    out[sine_index(kdiff)] += sign * term_sin
+                end
+            end
+        end
+    end
+    return out
+end
+
+@inline function harmonic_state_to_complex_modes!(
+    modes::AbstractVector{ComplexF64},
+    state::AbstractVector,
+    M::Integer,
+)
+    fill!(modes, 0.0 + 0.0im)
+    offset = M + 1
+    @inbounds begin
+        modes[offset] = ComplexF64(0.5 * real(state[cosine_index(0)]), 0.0)
+        for m in 1:M
+            coeff = 0.5 * ComplexF64(real(state[cosine_index(m)]), -real(state[sine_index(m)]))
+            modes[offset + m] = coeff
+            modes[offset - m] = conj(coeff)
+        end
+    end
+    return modes
+end
+
+@inline function add_complex_modes_to_harmonics!(
+    out::AbstractVector{Float64},
+    modes::AbstractVector{ComplexF64},
+    scale::Float64,
+    M::Integer,
+)
+    offset = M + 1
+    @inbounds begin
+        out[cosine_index(0)] += scale * 2.0 * real(modes[offset])
+        for m in 1:M
+            coeff = modes[offset + m]
+            out[cosine_index(m)] += scale * 2.0 * real(coeff)
+            out[sine_index(m)] += scale * (-2.0 * imag(coeff))
+        end
+    end
+    return out
+end
+
+@inline function harmonic_complex_directional_derivative!(
+    out::AbstractVector{ComplexF64},
+    gradx_modes::AbstractVector{ComplexF64},
+    grady_modes::AbstractVector{ComplexF64},
+    equations::FermiHarmonics2D,
+    M::Integer,
+)
+    fill!(out, 0.0 + 0.0im)
+    offset = M + 1
+    v0 = equations.max_speed
+    @inbounds for m in -M:M
+        coeff = 0.0 + 0.0im
+        if m - 1 >= -M
+            coeff += 0.5 * v0 * (gradx_modes[offset + (m - 1)] - im * grady_modes[offset + (m - 1)])
+        end
+        if m + 1 <= M
+            coeff += 0.5 * v0 * (gradx_modes[offset + (m + 1)] + im * grady_modes[offset + (m + 1)])
+        end
+        out[offset + m] = coeff
+    end
+    return out
+end
+
+@inline function harmonic_complex_theta_derivative!(
+    out::AbstractVector{ComplexF64},
+    state_modes::AbstractVector{ComplexF64},
+    M::Integer,
+)
+    fill!(out, 0.0 + 0.0im)
+    offset = M + 1
+    @inbounds for m in -M:M
+        out[offset + m] = im * m * state_modes[offset + m]
+    end
+    return out
+end
+
+@inline function harmonic_complex_truncated_product!(
+    out::AbstractVector{ComplexF64},
+    left_modes::AbstractVector{ComplexF64},
+    right_modes::AbstractVector{ComplexF64},
+    M::Integer,
+)
+    fill!(out, 0.0 + 0.0im)
+    offset = M + 1
+    @inbounds for m in -M:M
+        coeff = 0.0 + 0.0im
+        kmin = max(-M, m - M)
+        kmax = min(M, m + M)
+        for k in kmin:kmax
+            coeff += left_modes[offset + k] * right_modes[offset + (m - k)]
+        end
+        out[offset + m] = coeff
+    end
+    return out
+end
+
+function electrostatic_force_sources_reference!(
+    out::AbstractVector{Float64},
+    state::AbstractVector{<:Real},
+    gradients,
+    equations::FermiHarmonics2D,
+)
+    cache = get_nonlinear_cache(equations)
+    prepare_harmonic_gradient_theta_work!(
+        cache.samples,
+        cache.theta_derivative_samples,
+        cache.gradx_samples,
+        cache.grady_samples,
+        cache.spectrum,
+        state,
+        gradients,
+        equations,
+    )
+    data = nonlinear_data(equations)
+    v0 = equations.max_speed
+    inv_2mu0 = 0.5 / equations.mu0
+    chi = equations.electrostatic_coupling
+    p0 = equations.mass * v0
+    grad_phi0_x = 0.5 * Float64(gradients[1][1])
+    grad_phi0_y = 0.5 * Float64(gradients[2][1])
+
+    @inbounds for j in eachindex(cache.work_samples)
+        phi = real(cache.samples[j])
+        dphi_dtheta = real(cache.theta_derivative_samples[j])
+        dphi_dx = real(cache.gradx_samples[j])
+        dphi_dy = real(cache.grady_samples[j])
+        cos_theta = data.cos_theta[j]
+        sin_theta = data.sin_theta[j]
+        p_hat_grad_phi = cos_theta * dphi_dx + sin_theta * dphi_dy
+        p_hat_grad_phi0 = cos_theta * grad_phi0_x + sin_theta * grad_phi0_y
+        theta_hat_grad_phi0 = -sin_theta * grad_phi0_x + cos_theta * grad_phi0_y
+        source = -(v0 * inv_2mu0) * phi * p_hat_grad_phi
+        if chi != 0.0
+            source -= chi * v0 * p_hat_grad_phi0
+            source -= chi * v0 * inv_2mu0 * phi * p_hat_grad_phi0
+            source += (chi / p0) * theta_hat_grad_phi0 * dphi_dtheta
+        end
+        cache.work_samples[j] = ComplexF64(source, 0.0)
+    end
+
+    return samples_to_harmonics!(out, cache.work_samples, equations)
+end
+
+function electrostatic_force_sources_sparse!(
+    out::AbstractVector{Float64},
+    state::AbstractVector{<:Real},
+    gradients,
+    equations::FermiHarmonics2D,
+)
+    cache = get_nonlinear_cache(equations)
+    M = (length(state) - 1) ÷ 2
+    state_modes = cache.spectrum
+    gradx_modes = cache.gradx_samples
+    grady_modes = cache.grady_samples
+    p_hat_grad_phi_modes = cache.work_samples
+    product_modes = cache.samples
+    dtheta_modes = cache.theta_derivative_samples
+    tmp_modes = cache.gradx_samples
+    offset = M + 1
+    fill!(out, 0.0)
+
+    harmonic_state_to_complex_modes!(state_modes, state, M)
+    harmonic_state_to_complex_modes!(gradx_modes, gradients[1], M)
+    harmonic_state_to_complex_modes!(grady_modes, gradients[2], M)
+    harmonic_complex_directional_derivative!(p_hat_grad_phi_modes, gradx_modes, grady_modes, equations, M)
+    harmonic_complex_truncated_product!(product_modes, state_modes, p_hat_grad_phi_modes, M)
+    add_complex_modes_to_harmonics!(out, product_modes, -(equations.max_speed / (2.0 * equations.mu0)), M)
+
+    chi = equations.electrostatic_coupling
+    if chi != 0.0
+        grad_phi0_x = 0.5 * Float64(gradients[1][1])
+        grad_phi0_y = 0.5 * Float64(gradients[2][1])
+        p0 = equations.mass * equations.max_speed
+
+        fill!(tmp_modes, 0.0 + 0.0im)
+        if M >= 1
+            tmp_modes[offset + 1] = 0.5 * equations.max_speed * ComplexF64(grad_phi0_x, -grad_phi0_y)
+            tmp_modes[offset - 1] = conj(tmp_modes[offset + 1])
+        end
+        add_complex_modes_to_harmonics!(out, tmp_modes, -chi, M)
+
+        harmonic_complex_truncated_product!(product_modes, state_modes, tmp_modes, M)
+        add_complex_modes_to_harmonics!(out, product_modes, -(chi / (2.0 * equations.mu0)), M)
+
+        harmonic_complex_theta_derivative!(dtheta_modes, state_modes, M)
+        fill!(tmp_modes, 0.0 + 0.0im)
+        if M >= 1
+            tmp_modes[offset + 1] = 0.5 * ComplexF64(grad_phi0_y / p0, grad_phi0_x / p0)
+            tmp_modes[offset - 1] = conj(tmp_modes[offset + 1])
+        end
+        harmonic_complex_truncated_product!(product_modes, tmp_modes, dtheta_modes, M)
+        add_complex_modes_to_harmonics!(out, product_modes, chi, M)
+    end
+
+    return out
+end
+
 struct ElectrostaticGradientEquation2D{E, N} <: Trixi.AbstractLaplaceDiffusion{2, N}
     diffusivity::Float64
     equations_hyperbolic::E
@@ -620,45 +938,7 @@ function electrostatic_force_sources!(
     gradients,
     equations::FermiHarmonics2D,
 )
-    cache = get_nonlinear_cache(equations)
-    prepare_harmonic_gradient_theta_work!(
-        cache.samples,
-        cache.theta_derivative_samples,
-        cache.gradx_samples,
-        cache.grady_samples,
-        cache.spectrum,
-        state,
-        gradients,
-        equations,
-    )
-    data = nonlinear_data(equations)
-    v0 = equations.max_speed
-    inv_2mu0 = 0.5 / equations.mu0
-    chi = equations.electrostatic_coupling
-    p0 = equations.mass * v0
-    grad_phi0_x = 0.5 * Float64(gradients[1][1])
-    grad_phi0_y = 0.5 * Float64(gradients[2][1])
-
-    @inbounds for j in eachindex(cache.work_samples)
-        phi = real(cache.samples[j])
-        dphi_dtheta = real(cache.theta_derivative_samples[j])
-        dphi_dx = real(cache.gradx_samples[j])
-        dphi_dy = real(cache.grady_samples[j])
-        cos_theta = data.cos_theta[j]
-        sin_theta = data.sin_theta[j]
-        p_hat_grad_phi = cos_theta * dphi_dx + sin_theta * dphi_dy
-        p_hat_grad_phi0 = cos_theta * grad_phi0_x + sin_theta * grad_phi0_y
-        theta_hat_grad_phi0 = -sin_theta * grad_phi0_x + cos_theta * grad_phi0_y
-        source = -(v0 * inv_2mu0) * phi * p_hat_grad_phi
-        if chi != 0.0
-            source -= chi * v0 * p_hat_grad_phi0
-            source -= chi * v0 * inv_2mu0 * phi * p_hat_grad_phi0
-            source += (chi / p0) * theta_hat_grad_phi0 * dphi_dtheta
-        end
-        cache.work_samples[j] = ComplexF64(source, 0.0)
-    end
-
-    return samples_to_harmonics!(out, cache.work_samples, equations)
+    return electrostatic_force_sources_sparse!(out, state, gradients, equations)
 end
 
 function get_nonlinear_gradient_cache!(
