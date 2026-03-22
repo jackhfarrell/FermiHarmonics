@@ -21,6 +21,16 @@ struct NonlinearTransportData{TC<:NonlinearThreadCache}
     thread_caches::Vector{TC}
 end
 
+mutable struct NonlinearGradientCacheEntry
+    cache_parabolic
+    nvars::Int
+    nnodes::Int
+    nelements::Int
+    ueltype::DataType
+end
+
+const NONLINEAR_GRADIENT_CACHE = IdDict{UInt, NonlinearGradientCacheEntry}()
+
 @inline transport_is_nonlinear(equations::FermiHarmonics2D) = equations.transport === :parabolic_nonlinear
 @inline transport_is_nonlinear(::FermiAngles2D) = true
 @inline nonlinear_data(equations::FermiHarmonics2D) = something(equations.nonlinear_data)
@@ -35,6 +45,9 @@ end
     transport_is_nonlinear(equations) && equations.electrostatic_coupling != 0.0
 @inline nonlinear_has_electrostatic_force(equations::FermiAngles2D) =
     equations.electrostatic_coupling != 0.0
+@inline nonlinear_uses_gradient_sources(equations::FermiHarmonics2D) =
+    transport_is_nonlinear(equations)
+@inline nonlinear_uses_gradient_sources(::FermiAngles2D) = false
 
 function validate_transport_mode(
     transport::Symbol,
@@ -569,6 +582,176 @@ function electrostatic_force_sources!(
     end
 
     return samples_to_harmonics!(out, cache.work_samples, equations)
+end
+
+function get_nonlinear_gradient_cache!(
+    mesh,
+    equations::FermiHarmonics2D,
+    dg::Trixi.DG,
+    cache,
+    u,
+)
+    key = objectid(cache)
+    nvars = Trixi.nvariables(equations)
+    nnodes = Trixi.nnodes(dg)
+    nelements = size(u, 4)
+    ueltype = eltype(u)
+    entry = get(NONLINEAR_GRADIENT_CACHE, key, nothing)
+    if !isnothing(entry) &&
+       entry.nvars == nvars &&
+       entry.nnodes == nnodes &&
+       entry.nelements == nelements &&
+       entry.ueltype === ueltype
+        return entry.cache_parabolic
+    end
+
+    cache_parabolic = Trixi.create_cache_parabolic(
+        mesh,
+        equations,
+        dg,
+        nelements,
+        ueltype,
+    )
+    NONLINEAR_GRADIENT_CACHE[key] = NonlinearGradientCacheEntry(
+        cache_parabolic,
+        nvars,
+        nnodes,
+        nelements,
+        ueltype,
+    )
+    return cache_parabolic
+end
+
+function add_nonlinear_gradient_sources!(
+    du,
+    u,
+    t,
+    mesh,
+    equations::FermiHarmonics2D,
+    boundary_conditions,
+    dg::Trixi.DG,
+    cache,
+)
+    equations_parabolic = ElectrostaticGradientEquation2D(equations)
+    cache_parabolic = get_nonlinear_gradient_cache!(mesh, equations, dg, cache, u)
+    viscous_container = cache_parabolic.viscous_container
+    u_transformed = viscous_container.u_transformed
+    gradients = viscous_container.gradients
+    parabolic_scheme = Trixi.ViscousFormulationLocalDG()
+
+    # The electrostatic/nonlinear transport correction is a source term that needs DG
+    # gradients of the hyperbolic state, not a separate parabolic semidiscretization.
+    Trixi.transform_variables!(u_transformed, u, mesh, equations_parabolic, dg, cache)
+    Trixi.calc_gradient!(
+        gradients,
+        u_transformed,
+        t,
+        mesh,
+        equations_parabolic,
+        boundary_conditions,
+        dg,
+        parabolic_scheme,
+        cache,
+    )
+    Trixi.calc_sources_parabolic!(
+        du,
+        u,
+        gradients,
+        t,
+        FermiHarmonics.source_terms,
+        equations_parabolic,
+        dg,
+        cache,
+    )
+    return nothing
+end
+
+function Trixi.rhs!(
+    du,
+    u,
+    t,
+    mesh::Union{Trixi.TreeMesh{2}, Trixi.P4estMesh{2}, Trixi.P4estMeshView{2}, Trixi.T8codeMesh{2}},
+    equations::FermiHarmonics2D,
+    boundary_conditions,
+    source_terms,
+    dg::Trixi.DG,
+    cache,
+)
+    if !nonlinear_uses_gradient_sources(equations)
+        return invoke(
+            Trixi.rhs!,
+            Tuple{
+                typeof(du),
+                typeof(u),
+                typeof(t),
+                typeof(mesh),
+                Trixi.AbstractEquations{2},
+                typeof(boundary_conditions),
+                typeof(source_terms),
+                typeof(dg),
+                typeof(cache),
+            },
+            du,
+            u,
+            t,
+            mesh,
+            equations,
+            boundary_conditions,
+            source_terms,
+            dg,
+            cache,
+        )
+    end
+
+    Trixi.reset_du!(du, dg, cache)
+
+    Trixi.calc_volume_integral!(
+        du,
+        u,
+        mesh,
+        Trixi.have_nonconservative_terms(equations),
+        equations,
+        dg.volume_integral,
+        dg,
+        cache,
+    )
+    Trixi.prolong2interfaces!(cache, u, mesh, equations, dg)
+    Trixi.calc_interface_flux!(
+        cache.elements.surface_flux_values,
+        mesh,
+        Trixi.have_nonconservative_terms(equations),
+        equations,
+        dg.surface_integral,
+        dg,
+        cache,
+    )
+    Trixi.prolong2boundaries!(cache, u, mesh, equations, dg)
+    Trixi.calc_boundary_flux!(
+        cache,
+        t,
+        boundary_conditions,
+        mesh,
+        equations,
+        dg.surface_integral,
+        dg,
+    )
+    Trixi.prolong2mortars!(cache, u, mesh, equations, dg.mortar, dg)
+    Trixi.calc_mortar_flux!(
+        cache.elements.surface_flux_values,
+        mesh,
+        Trixi.have_nonconservative_terms(equations),
+        equations,
+        dg.mortar,
+        dg.surface_integral,
+        dg,
+        cache,
+    )
+    Trixi.calc_surface_integral!(du, u, mesh, equations, dg.surface_integral, dg, cache)
+    Trixi.apply_jacobian!(du, mesh, equations, dg, cache)
+    Trixi.calc_sources!(du, u, t, source_terms, equations, dg, cache)
+    add_nonlinear_gradient_sources!(du, u, t, mesh, equations, boundary_conditions, dg, cache)
+
+    return nothing
 end
 
 @inline function analysis_variables(u, equations::FermiHarmonics2D)

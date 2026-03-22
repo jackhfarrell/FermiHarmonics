@@ -648,6 +648,23 @@ end
     )
     @test semi_gamma3.equations.gamma3 ≈ 0.2 atol=1e-12 rtol=1e-12
 
+    sol_chi, semi_chi = solve(
+        mesh_path,
+        boundary_conditions,
+        params,
+        0.0,
+        0.5;
+        transport=:parabolic_nonlinear,
+        max_harmonic=2,
+        mu0=1.0,
+        mass=2.0,
+        chi=0.3,
+        name="test_nonlinear_chi_hyperbolic",
+    )
+    @test semi_chi isa Trixi.SemidiscretizationHyperbolic
+    @test semi_chi.equations.electrostatic_coupling ≈ 0.3 atol=1e-12 rtol=1e-12
+    @test sol_chi.t[end] > 0.0
+
     @test_throws ArgumentError solve(
         mesh_path,
         boundary_conditions,

@@ -302,16 +302,10 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
     solver = Trixi.DGSEM(polydeg=params.polydeg, surface_flux=Trixi.flux_lax_friedrichs)
     mesh = Trixi.P4estMesh{2}(mesh_path; boundary_symbols=boundary_symbols)
     if equations isa FermiHarmonics2D && transport_is_nonlinear(equations)
-        equations_parabolic = ElectrostaticGradientEquation2D(equations)
-        semi = Trixi.SemidiscretizationHyperbolicParabolic(
-            mesh,
-            (equations, equations_parabolic),
-            (x, t, eq) -> zeros(SVector{nvars, Float64}),
-            solver;
-            solver_parabolic=Trixi.ViscousFormulationLocalDG(),
+        semi = Trixi.SemidiscretizationHyperbolic(
+            mesh, equations, (x, t, eq) -> zeros(SVector{nvars, Float64}), solver;
+            boundary_conditions=boundary_conditions,
             source_terms=FermiHarmonics.source_terms,
-            source_terms_parabolic=FermiHarmonics.source_terms,
-            boundary_conditions=(boundary_conditions, boundary_conditions),
         )
     elseif nonlinear_has_electrostatic_force(equations)
         equations_parabolic = ElectrostaticGradientEquation2D(equations)
@@ -504,7 +498,6 @@ function nonlinear_visualization_callback(params, semi, name::AbstractString)
             plot_title = "Nonlinear live viz: t=$(round(integrator.t, digits=4))"
             composed = Plots.plot(p1, p2, p3, p4; layout=(2, 2), size=(1200, 900), plot_title=plot_title)
             Plots.savefig(composed, output_path)
-            Plots.display(composed)
             @info "Updated nonlinear live visualization" path=output_path t=round(integrator.t, digits=4)
             nothing
         end;
