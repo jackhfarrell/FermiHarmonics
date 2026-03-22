@@ -230,6 +230,8 @@ Keywords:
   defaults to `gamma_mc`.
 - `u0_override`: optional warm-start state vector.
 - `visualize`: enable live visualization callback.
+- `visualize_every`: accepted-step interval for live visualization. Defaults to `params.log_every`.
+- `visualization_mode`: `:cartesian` or `:mesh_native` for nonlinear live visualization.
 - `name`: run name used in logs/visualization filenames.
 
 Returns:
@@ -247,6 +249,8 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
                chi::Real=0.0,
                u0_override::Union{Nothing, AbstractVector}=nothing,
                visualize::Bool=false,
+               visualize_every::Union{Nothing, Integer}=nothing,
+               visualization_mode::Symbol=:cartesian,
                name::AbstractString="run")
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -361,7 +365,9 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
     callbacks = Any[stepsize_callback, steady_state_callback, monitor]
 
     if visualize
-        push!(callbacks, visualization_callback(params, semi, name))
+        interval = isnothing(visualize_every) ? params.log_every : Int(visualize_every)
+        interval > 0 || throw(ArgumentError("visualize_every must be positive"))
+        push!(callbacks, visualization_callback(params, semi, name; interval=interval, mode=visualization_mode))
     end
 
     # ------------------------------------------------------------------------------------------------------------------
@@ -424,15 +430,15 @@ end
 
 Create a live visualization callback every `params.log_every` accepted steps.
 """
-function visualization_callback(params, semi, name::AbstractString)
+function visualization_callback(params, semi, name::AbstractString; interval::Int=params.log_every, mode::Symbol=:cartesian)
     if transport_is_nonlinear(semi.equations)
-        return nonlinear_visualization_callback(params, semi, name)
+        return nonlinear_visualization_callback(params, semi, name; interval=interval, mode=mode)
     end
 
     variable_names = ["a0", "a1", "b1"]
     return Trixi.VisualizationCallback(
         semi;
-        interval=params.log_every,
+        interval=interval,
         variable_names=variable_names,
         filename="live_viz_$(name)",
         overwrite=true,
@@ -440,30 +446,39 @@ function visualization_callback(params, semi, name::AbstractString)
     )
 end
 
-function nonlinear_visualization_callback(params, semi, name::AbstractString)
+function nonlinear_visualization_callback(params, semi, name::AbstractString; interval::Int=params.log_every, mode::Symbol=:cartesian)
     output_path = "live_viz_$(name).png"
-    analysis_path = "live_viz_$(name).h5"
+    analysis_path = mode === :mesh_native ? "live_viz_$(name)_mesh_native.h5" : "live_viz_$(name).h5"
     project_root = normpath(joinpath(@__DIR__, ".."))
-    plot_script = joinpath(project_root, "demo", "plot_nonlinear_streamlines.py")
+    plot_script = mode === :mesh_native ?
+        joinpath(project_root, "demo", "plot_mesh_native_streamlines.py") :
+        joinpath(project_root, "demo", "plot_nonlinear_streamlines.py")
     nvisnodes = 120
 
     return SciMLBase.DiscreteCallback(
-        (u, t, integrator) -> integrator.stats.naccept % params.log_every == 0,
+        (u, t, integrator) -> integrator.stats.naccept % interval == 0,
         integrator -> begin
-            grids = compute_analysis_grids(integrator.u, semi; nvisnodes=nvisnodes)
-            analysis_write_hdf5(
-                analysis_path,
-                grids.density,
-                grids.a1,
-                grids.b1,
-                grids.jx,
-                grids.jy,
-                grids.x,
-                grids.y,
-                grids.mask,
-                integrator.t,
-                grids.equations,
-            )
+            if mode === :mesh_native
+                mesh_data = compute_mesh_native_analysis(integrator.u, semi; refine=6)
+                analysis_write_mesh_native_hdf5(analysis_path, mesh_data, integrator.t, semi.equations)
+            elseif mode === :cartesian
+                grids = compute_analysis_grids(integrator.u, semi; nvisnodes=nvisnodes)
+                analysis_write_hdf5(
+                    analysis_path,
+                    grids.density,
+                    grids.a1,
+                    grids.b1,
+                    grids.jx,
+                    grids.jy,
+                    grids.x,
+                    grids.y,
+                    grids.mask,
+                    integrator.t,
+                    grids.equations,
+                )
+            else
+                throw(ArgumentError("unsupported visualization_mode=$(mode); use :cartesian or :mesh_native"))
+            end
             run(`python3 $plot_script $analysis_path --output $output_path`)
             @info "Updated nonlinear live visualization" path=output_path t=round(integrator.t, digits=4)
             nothing

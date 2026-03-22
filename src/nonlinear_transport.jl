@@ -10,6 +10,8 @@ mutable struct NonlinearThreadCache{PF, PI}
     gradx_samples::Vector{ComplexF64}
     grady_samples::Vector{ComplexF64}
     theta_derivative_samples::Vector{ComplexF64}
+    real_work::Vector{Float64}
+    real_scratch::Vector{Float64}
     fft_plan::PF
     ifft_plan::PI
 end
@@ -111,6 +113,8 @@ function create_nonlinear_transport_data(max_harmonic::Int, theta_oversample::In
     gradx_samples = Vector{ComplexF64}(undef, ntheta)
     grady_samples = Vector{ComplexF64}(undef, ntheta)
     theta_derivative_samples = Vector{ComplexF64}(undef, ntheta)
+    real_work = zeros(Float64, 1 + 2 * max_harmonic)
+    real_scratch = zeros(Float64, 1 + 2 * max_harmonic)
     fft_plan = FFTW.plan_fft!(scratch_samples; flags=FFTW.ESTIMATE)
     ifft_plan = FFTW.plan_ifft!(samples; flags=FFTW.ESTIMATE)
     cache_template = NonlinearThreadCache(
@@ -121,6 +125,8 @@ function create_nonlinear_transport_data(max_harmonic::Int, theta_oversample::In
         gradx_samples,
         grady_samples,
         theta_derivative_samples,
+        real_work,
+        real_scratch,
         fft_plan,
         ifft_plan,
     )
@@ -135,6 +141,8 @@ function create_nonlinear_transport_data(max_harmonic::Int, theta_oversample::In
         gradx_samples_tid = Vector{ComplexF64}(undef, ntheta)
         grady_samples_tid = Vector{ComplexF64}(undef, ntheta)
         theta_derivative_samples_tid = Vector{ComplexF64}(undef, ntheta)
+        real_work_tid = zeros(Float64, 1 + 2 * max_harmonic)
+        real_scratch_tid = zeros(Float64, 1 + 2 * max_harmonic)
         thread_caches[tid] = NonlinearThreadCache(
             spectrum_tid,
             samples_tid,
@@ -143,6 +151,8 @@ function create_nonlinear_transport_data(max_harmonic::Int, theta_oversample::In
             gradx_samples_tid,
             grady_samples_tid,
             theta_derivative_samples_tid,
+            real_work_tid,
+            real_scratch_tid,
             FFTW.plan_fft!(scratch_samples_tid; flags=FFTW.ESTIMATE),
             FFTW.plan_ifft!(samples_tid; flags=FFTW.ESTIMATE),
         )
@@ -355,18 +365,17 @@ function nonlinear_flux!(
     equations::FermiHarmonics2D,
 )
     cache = get_nonlinear_cache(equations)
-    harmonic_state_to_spectrum!(cache.spectrum, state, equations)
-    harmonic_spectrum_to_samples!(cache.samples, cache.spectrum, equations)
+    vF = equations.max_speed
+    inv_quadratic_scale = 1.0 / (2.0 * equations.mass * vF)
     normal_x, normal_y = normal
-    data = nonlinear_data(equations)
-    @inbounds for j in eachindex(cache.work_samples)
-        directional_factor = normal_x * data.cos_theta[j] + normal_y * data.sin_theta[j]
-        cache.work_samples[j] = ComplexF64(
-            directional_factor * quadratic_shifted_flux(real(cache.samples[j]), equations),
-            0.0,
-        )
+
+    harmonics_flux_scaled!(out, state, normal_x, normal_y, vF)
+    multiply_harmonic_states!(cache.real_work, state, state)
+    multiply_by_first_harmonic!(cache.real_scratch, normal_x, normal_y, cache.real_work)
+    @inbounds for i in eachindex(out)
+        out[i] += inv_quadratic_scale * cache.real_scratch[i]
     end
-    return samples_to_harmonics!(out, cache.work_samples, equations)
+    return out
 end
 
 function nonlinear_max_abs_speed(
@@ -407,9 +416,13 @@ function nonlinear_current_components(
 )
     length(state) >= 3 || return (0.0, 0.0)
     cache = get_nonlinear_cache(equations)
-    harmonic_state_to_spectrum!(cache.spectrum, state, equations)
-    harmonic_spectrum_to_samples!(cache.samples, cache.spectrum, equations)
-    return nonlinear_current_from_samples!(cache.scratch_samples, cache.samples, equations)
+    multiply_harmonic_states!(cache.real_work, state, state)
+    vF = equations.max_speed
+    correction = 1.0 / (2.0 * equations.mass * vF)
+    return (
+        vF * Float64(state[cosine_index(1)]) + correction * cache.real_work[cosine_index(1)],
+        vF * Float64(state[sine_index(1)]) + correction * cache.real_work[sine_index(1)],
+    )
 end
 
 function nonlinear_current_from_samples!(
@@ -565,9 +578,24 @@ function local_equilibrium_state!(
     velocity::SVector{2, Float64},
     equations::FermiHarmonics2D,
 )
-    cache = get_nonlinear_cache(equations)
-    local_equilibrium_samples!(cache.samples, mu, velocity, equations)
-    return samples_to_harmonics!(out, cache.samples, equations)
+    fill!(out, 0.0)
+
+    delta_mu = Float64(mu) - equations.mu0
+    ux, uy = velocity
+    u_sq = ux * ux + uy * uy
+    vF = equations.max_speed
+    linear_drift_scale = equations.mass * vF + delta_mu / vF
+
+    out[cosine_index(0)] = 2.0 * delta_mu
+    if length(out) >= 3
+        out[cosine_index(1)] = linear_drift_scale * ux
+        out[sine_index(1)] = linear_drift_scale * uy
+    end
+    if length(out) >= 5
+        out[cosine_index(2)] = 0.5 * equations.mass * (ux * ux - uy * uy)
+        out[sine_index(2)] = equations.mass * ux * uy
+    end
+    return out
 end
 
 function local_equilibrium_state!(
@@ -603,6 +631,41 @@ end
                 (m + 1 <= M ? 0.5 * v0 * real(gradx[sine_index(m + 1)]) : 0.0) +
                 0.5 * v0 * real(grady[cosine_index(m - 1)]) +
                 (m + 1 <= M ? -0.5 * v0 * real(grady[cosine_index(m + 1)]) : 0.0)
+        end
+    end
+    return out
+end
+
+@inline function harmonics_flux_scaled!(
+    out::AbstractVector{Float64},
+    state::AbstractVector,
+    normal_x::Float64,
+    normal_y::Float64,
+    vF::Float64,
+)
+    n_vars = length(state)
+    max_harmonic_local = (n_vars - 1) ÷ 2
+    @inbounds begin
+        out[cosine_index(0)] = (max_harmonic_local >= 1) ?
+            (normal_x * vF * Float64(state[cosine_index(1)]) +
+             normal_y * vF * Float64(state[sine_index(1)])) : 0.0
+        for m in 1:max_harmonic_local
+            out[cosine_index(m)] =
+                normal_x * (0.5 * vF) * Float64(state[cosine_index(m - 1)]) +
+                (m + 1 <= max_harmonic_local ? normal_x * (0.5 * vF) *
+                 Float64(state[cosine_index(m + 1)]) : 0.0) +
+                (m - 1 >= 1 ? normal_y * (-0.5 * vF) *
+                 Float64(state[sine_index(m - 1)]) : 0.0) +
+                (m + 1 <= max_harmonic_local ? normal_y * (0.5 * vF) *
+                 Float64(state[sine_index(m + 1)]) : 0.0)
+            out[sine_index(m)] =
+                (m - 1 >= 1 ? normal_x * (0.5 * vF) *
+                 Float64(state[sine_index(m - 1)]) : 0.0) +
+                (m + 1 <= max_harmonic_local ? normal_x * (0.5 * vF) *
+                 Float64(state[sine_index(m + 1)]) : 0.0) +
+                normal_y * (0.5 * vF) * Float64(state[cosine_index(m - 1)]) +
+                (m + 1 <= max_harmonic_local ? normal_y * (-0.5 * vF) *
+                 Float64(state[cosine_index(m + 1)]) : 0.0)
         end
     end
     return out

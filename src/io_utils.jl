@@ -11,7 +11,7 @@ using Trixi
 # ======================================================================================================================
 # TODO: make save_for_analysis more flexible, we should be able to give it a list of variable names and it saves those
 """
-    save_for_analysis(sol, semi, filename; nvisnodes=400)
+    save_for_analysis(sol, semi, filename; nvisnodes=400, observables=nothing)
 
 Save observables on a uniform Cartesian grid in a lightweight HDF5 format for post-processing
 and analysis. The grid is determined from the simulation domain bounds.
@@ -21,31 +21,35 @@ Arguments:
 - `semi`: semidiscretization object.
 - `filename`: output HDF5 path.
 - `nvisnodes`: number of nodes per axis of uniform sampling grid.
+- `observables`: optional list of observable names to save. `nothing` preserves the
+  legacy full output. Supported nonlinear names are `:n`, `:a1`, `:b1`, `:jx`, `:jy`.
 
 Returns:
 - `filename::AbstractString`.
 """
-function save_for_analysis(sol, semi, filename; nvisnodes=400)
+function save_for_analysis(sol, semi, filename; nvisnodes=400, observables=nothing)
     final_time = sol.t[end]
     grids = compute_analysis_grids(sol.u[end], semi; nvisnodes=nvisnodes)
     @info "Analysis: writing HDF5" file=filename
     analysis_write_hdf5(filename, grids.density, grids.a1, grids.b1, grids.jx, grids.jy,
-                        grids.x, grids.y, grids.mask, final_time, grids.equations)
+                        grids.x, grids.y, grids.mask, final_time, grids.equations;
+                        observables=observables)
     @info "Analysis: write complete" file=filename
     return filename
 end
 
 """
-    save_mesh_native_analysis(sol, semi, filename; refine=6)
+    save_mesh_native_analysis(sol, semi, filename; refine=6, observables=nothing)
 
 Save observables on a mesh-following unstructured visualization grid created by
 subdividing each DG element in reference space.
 """
-function save_mesh_native_analysis(sol, semi, filename; refine=6)
+function save_mesh_native_analysis(sol, semi, filename; refine=6, observables=nothing)
     final_time = sol.t[end]
     mesh_data = compute_mesh_native_analysis(sol.u[end], semi; refine=refine)
     @info "Analysis: writing mesh-native HDF5" file=filename
-    analysis_write_mesh_native_hdf5(filename, mesh_data, final_time, semi.equations)
+    analysis_write_mesh_native_hdf5(filename, mesh_data, final_time, semi.equations;
+                                    observables=observables)
     @info "Analysis: mesh-native write complete" file=filename
     return filename
 end
@@ -59,6 +63,32 @@ export save_solution_custom,
        save_observables_for_python,
        evaluate_solution,
        evaluate_observables
+
+function normalize_analysis_observables(observables, equations)
+    observables === nothing && return nothing
+
+    normalized = Symbol[]
+    seen = Set{Symbol}()
+    density_name = transport_is_nonlinear(equations) ? :n : :a0
+    allowed = transport_is_nonlinear(equations) ?
+        Set((:n, :a1, :b1, :jx, :jy)) :
+        Set((:a0, :a1, :b1, :jx, :jy))
+
+    for observable in observables
+        name = Symbol(observable)
+        if !transport_is_nonlinear(equations) && name === :n
+            name = :a0
+        end
+        name in allowed || throw(ArgumentError("unsupported analysis observable $(repr(name))"))
+        if !(name in seen)
+            push!(normalized, name)
+            push!(seen, name)
+        end
+    end
+
+    density_name in seen || throw(ArgumentError("analysis output must include $(density_name)"))
+    return normalized
+end
 
 function analysis_grid_axes(solution_vector, semi, nvisnodes::Int)
     mesh, equations, solver, cache = Trixi.mesh_equations_solver_cache(semi)
@@ -601,17 +631,23 @@ function evaluate_analysis_observables(solution_vector, semi, x_target, y_target
 end
 
 function analysis_write_hdf5(filename, density_grid, a1_grid, b1_grid, jx_grid, jy_grid, x_uniform, y_uniform,
-                              in_domain_mask, t, equations)
+                              in_domain_mask, t, equations; observables=nothing)
+    requested = normalize_analysis_observables(observables, equations)
+    density_name = transport_is_nonlinear(equations) ? "n" : "a0"
     h5open(filename, "w") do file
-        if transport_is_nonlinear(equations)
-            file["n"] = density_grid
-        else
-            file["a0"] = density_grid
+        if isnothing(requested) || Symbol(density_name) in requested
+            file[density_name] = density_grid
         end
-        file["a1"] = a1_grid
-        file["b1"] = b1_grid
-        if !isnothing(jx_grid) && !isnothing(jy_grid)
+        if isnothing(requested) || :a1 in requested
+            file["a1"] = a1_grid
+        end
+        if isnothing(requested) || :b1 in requested
+            file["b1"] = b1_grid
+        end
+        if !isnothing(jx_grid) && (isnothing(requested) || :jx in requested)
             file["jx"] = jx_grid
+        end
+        if !isnothing(jy_grid) && (isnothing(requested) || :jy in requested)
             file["jy"] = jy_grid
         end
         file["x"] = collect(x_uniform)
@@ -623,35 +659,57 @@ function analysis_write_hdf5(filename, density_grid, a1_grid, b1_grid, jx_grid, 
         attributes(file)["ny"] = length(y_uniform)
         attributes(file)["grid_type"] = "uniform_cartesian"
         attributes(file)["mask_method"] = "direct"
+        attributes(file)["saved_observables"] = isnothing(requested) ?
+            join(transport_is_nonlinear(equations) ? ("n", "a1", "b1", "jx", "jy") : ("a0", "a1", "b1", "jx", "jy"), ",") :
+            join(string.(requested), ",")
         if transport_is_nonlinear(equations)
-            attributes(file)["description"] = "Nonlinear observables: density n, currents jx and jy, plus harmonic reference fields a1 and b1"
+            attributes(file)["description"] = isnothing(requested) ?
+                "Nonlinear observables: density n, currents jx and jy, plus harmonic reference fields a1 and b1" :
+                "Selected nonlinear observables on a uniform Cartesian grid"
         else
-            attributes(file)["description"] = "Observable harmonics: a0 (density), a1 (x-current), b1 (y-current)"
+            attributes(file)["description"] = isnothing(requested) ?
+                "Observable harmonics: a0 (density), a1 (x-current), b1 (y-current)" :
+                "Selected linear observables on a uniform Cartesian grid"
         end
     end
 end
 
-function analysis_write_mesh_native_hdf5(filename, mesh_data, t, equations)
+function analysis_write_mesh_native_hdf5(filename, mesh_data, t, equations; observables=nothing)
+    requested = normalize_analysis_observables(observables, equations)
+    density_name = transport_is_nonlinear(equations) ? "n" : "a0"
     h5open(filename, "w") do file
         file["x"] = mesh_data.x
         file["y"] = mesh_data.y
         file["triangles"] = mesh_data.triangles
-        if transport_is_nonlinear(equations)
-            file["n"] = mesh_data.n
-        else
-            file["a0"] = mesh_data.n
+        if isnothing(requested) || Symbol(density_name) in requested
+            file[density_name] = mesh_data.n
         end
-        file["a1"] = mesh_data.a1
-        file["b1"] = mesh_data.b1
-        file["jx"] = mesh_data.jx
-        file["jy"] = mesh_data.jy
+        if isnothing(requested) || :a1 in requested
+            file["a1"] = mesh_data.a1
+        end
+        if isnothing(requested) || :b1 in requested
+            file["b1"] = mesh_data.b1
+        end
+        if isnothing(requested) || :jx in requested
+            file["jx"] = mesh_data.jx
+        end
+        if isnothing(requested) || :jy in requested
+            file["jy"] = mesh_data.jy
+        end
 
         attributes(file)["time"] = Float64(t)
         attributes(file)["grid_type"] = "mesh_native_triangles"
         attributes(file)["refine"] = mesh_data.refine
         attributes(file)["connectivity_index_base"] = 0
+        attributes(file)["saved_observables"] = isnothing(requested) ?
+            join(transport_is_nonlinear(equations) ? ("n", "a1", "b1", "jx", "jy") : ("a0", "a1", "b1", "jx", "jy"), ",") :
+            join(string.(requested), ",")
         attributes(file)["description"] = transport_is_nonlinear(equations) ?
-            "Mesh-native nonlinear observables on a refined unstructured visualization grid" :
-            "Mesh-native linear observables on a refined unstructured visualization grid"
+            (isnothing(requested) ?
+             "Mesh-native nonlinear observables on a refined unstructured visualization grid" :
+             "Selected mesh-native nonlinear observables on a refined unstructured visualization grid") :
+            (isnothing(requested) ?
+             "Mesh-native linear observables on a refined unstructured visualization grid" :
+             "Selected mesh-native linear observables on a refined unstructured visualization grid")
     end
 end

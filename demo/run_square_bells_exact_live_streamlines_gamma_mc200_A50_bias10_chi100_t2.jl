@@ -15,8 +15,8 @@ function main()
     gamma_mr = 0.0
     gamma_mc = 200.0
     bias = 0.1
-    chi = 0.0
-    max_harmonic = 5
+    chi = 10.0
+    n_angles = 50
     p_scatter = reference.p_scatter
 
     boundary_conditions = Dict(
@@ -35,9 +35,9 @@ function main()
         max_harmonic_auto=20,
     )
 
-    run_name = "square_bells_live_streamlines_gamma_mc200_M5_bias10_chi000_poly3_t2"
+    run_name = "square_bells_exact_live_streamlines_gamma_mc200_A50_bias10_chi100_poly3_t2"
 
-    @info "Running square-bells nonlinear live streamline case" mu0 mass gamma_mr gamma_mc bias chi max_harmonic polydeg=params.polydeg tspan_end=params.tspan_end residual_tol=params.residual_tol
+    @info "Running square-bells exact-angle nonlinear live streamline case" mu0 mass gamma_mr gamma_mc bias chi n_angles polydeg=params.polydeg tspan_end=params.tspan_end residual_tol=params.residual_tol
 
     sol, semi = FermiHarmonics.solve(
         mesh_path,
@@ -46,7 +46,8 @@ function main()
         gamma_mr,
         gamma_mc;
         transport=:parabolic_nonlinear,
-        max_harmonic=max_harmonic,
+        collision_model=:exact_bgk,
+        n_angles=n_angles,
         mu0=mu0,
         mass=mass,
         chi=chi,
@@ -56,7 +57,7 @@ function main()
 
     save_path = joinpath(output_dir, "$(run_name).h5")
     FermiHarmonics.save_for_analysis(sol, semi, save_path)
-    @info "Saved nonlinear analysis output" path=save_path final_time=sol.t[end]
+    @info "Saved exact-angle nonlinear analysis output" path=save_path final_time=sol.t[end]
 
     return nothing
 end

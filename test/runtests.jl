@@ -86,6 +86,34 @@ end
             @test read(attributes(f)["time"]) ≈ sol.t[end] atol=1e-12 rtol=1e-12
         end
 
+        reduced_cartesian_path = joinpath(dir, "tesla_cartesian_reduced.h5")
+        FermiHarmonics.save_for_analysis(sol, semi, reduced_cartesian_path; nvisnodes=24, observables=[:n, :jx, :jy])
+        h5open(reduced_cartesian_path, "r") do f
+            @test haskey(f, "n")
+            @test haskey(f, "jx")
+            @test haskey(f, "jy")
+            @test haskey(f, "x")
+            @test haskey(f, "y")
+            @test haskey(f, "mask")
+            @test !haskey(f, "a1")
+            @test !haskey(f, "b1")
+            @test read(attributes(f)["saved_observables"]) == "n,jx,jy"
+        end
+
+        reduced_mesh_native_path = joinpath(dir, "tesla_mesh_native_reduced.h5")
+        FermiHarmonics.save_mesh_native_analysis(sol, semi, reduced_mesh_native_path; refine=2, observables=[:n, :jx, :jy])
+        h5open(reduced_mesh_native_path, "r") do f
+            @test haskey(f, "x")
+            @test haskey(f, "y")
+            @test haskey(f, "triangles")
+            @test haskey(f, "n")
+            @test haskey(f, "jx")
+            @test haskey(f, "jy")
+            @test !haskey(f, "a1")
+            @test !haskey(f, "b1")
+            @test read(attributes(f)["saved_observables"]) == "n,jx,jy"
+        end
+
         output_png = joinpath(dir, "tesla_mesh_native.png")
         run(`python3 demo/plot_mesh_native_streamlines.py $mesh_native_path --output $output_png --stream-grid 80`)
         @test isfile(output_png)
@@ -1106,4 +1134,33 @@ end
         mass=2.0,
         name="invalid_gamma3",
     )
+end
+
+@testset "Tesla cluster sweep helpers" begin
+    include(normpath(joinpath(@__DIR__, "..", "demo", "run_tesla_valve_cluster_bias_sweep.jl")))
+    include(normpath(joinpath(@__DIR__, "..", "demo", "submit_tesla_valve_cluster_bias_sweep.jl")))
+
+    biases = tesla_cluster_bias_values()
+    @test length(biases) == 30
+    @test first(biases) ≈ 0.01 atol=1e-12 rtol=1e-12
+    @test last(biases) ≈ 0.5 atol=1e-12 rtol=1e-12
+    @test all(diff(biases) .> 0.0)
+
+    forward_bcs = tesla_cluster_boundary_conditions("forward", 0.2, 1.0)
+    reverse_bcs = tesla_cluster_boundary_conditions("reverse", 0.2, 1.0)
+    @test forward_bcs[:inlet].bias ≈ 0.1 atol=1e-12 rtol=1e-12
+    @test forward_bcs[:outlet].bias ≈ -0.1 atol=1e-12 rtol=1e-12
+    @test reverse_bcs[:inlet].bias ≈ -0.1 atol=1e-12 rtol=1e-12
+    @test reverse_bcs[:outlet].bias ≈ 0.1 atol=1e-12 rtol=1e-12
+
+    commands = tesla_cluster_submission_commands(; dry_run=true)
+    @test Set(keys(commands)) == Set(("forward", "reverse"))
+    forward_cmd = sprint(show, commands["forward"])
+    reverse_cmd = sprint(show, commands["reverse"])
+    @test occursin("JULIA_NUM_THREADS=16", forward_cmd)
+    @test occursin("TESLA_DIRECTION=forward", forward_cmd)
+    @test occursin("--cpus-per-task=16", forward_cmd)
+    @test occursin("--mem=8G", forward_cmd)
+    @test occursin("TESLA_DIRECTION=reverse", reverse_cmd)
+    @test occursin("--array=1-1", reverse_cmd)
 end
