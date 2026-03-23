@@ -307,12 +307,13 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
                visualize::Bool=false,
                visualize_every::Union{Nothing, Integer}=nothing,
                visualization_mode::Symbol=:cartesian,
+               mesh_build::MeshBuildConfig=MeshBuildConfig(),
                name::AbstractString="run")
 
     # ------------------------------------------------------------------------------------------------------------------
     # Input validation and equations setup
     # ------------------------------------------------------------------------------------------------------------------
-    isfile(mesh_path) || error("Mesh file not found: $mesh_path")
+    resolved_mesh_path = resolve_mesh_path(mesh_path, boundary_conditions; mesh_build=mesh_build)
     validate(params)
     collision_model_value = validate_collision_model(transport, collision_model)
 
@@ -360,7 +361,8 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
 
     boundary_symbols = sort(collect(keys(boundary_conditions)))
     solver = Trixi.DGSEM(polydeg=params.polydeg, surface_flux=Trixi.flux_lax_friedrichs)
-    mesh = Trixi.P4estMesh{2}(mesh_path; boundary_symbols=boundary_symbols)
+    mesh = Trixi.P4estMesh{2}(resolved_mesh_path; boundary_symbols=boundary_symbols)
+    mesh.current_filename = resolved_mesh_path
     if equations isa FermiHarmonics2D && transport_is_nonlinear(equations)
         semi = Trixi.SemidiscretizationHyperbolic(
             mesh, equations, (x, t, eq) -> zeros(SVector{nvars, Float64}), solver;
@@ -464,9 +466,10 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
                visualize::Bool=false,
                visualize_every::Union{Nothing, Integer}=nothing,
                visualization_mode::Symbol=:cartesian,
+               mesh_build::MeshBuildConfig=MeshBuildConfig(),
                name::AbstractString="run")
 
-    isfile(mesh_path) || error("Mesh file not found: $mesh_path")
+    resolved_mesh_path = resolve_mesh_path(mesh_path, boundary_conditions; mesh_build=mesh_build)
     validate(params)
     transport === :linear || throw(ArgumentError("multiband solve currently supports only transport=:linear"))
     isnothing(n_angles) || throw(ArgumentError("n_angles is not supported for multiband linear solves"))
@@ -511,7 +514,8 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
 
     boundary_symbols = sort(collect(keys(boundary_conditions)))
     solver = Trixi.DGSEM(polydeg=params.polydeg, surface_flux=Trixi.flux_lax_friedrichs)
-    mesh = Trixi.P4estMesh{2}(mesh_path; boundary_symbols=boundary_symbols)
+    mesh = Trixi.P4estMesh{2}(resolved_mesh_path; boundary_symbols=boundary_symbols)
+    mesh.current_filename = resolved_mesh_path
     semi = Trixi.SemidiscretizationHyperbolic(
         mesh, equations, (x, t, eq) -> zeros(SVector{nvars, Float64}), solver;
         boundary_conditions=boundary_conditions,

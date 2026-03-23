@@ -38,6 +38,7 @@ import ElectronKinetics: solve,
                          LiveVisualizationSnapshot,
                          live_dashboard_is_open,
                          LinearBGKCollision,
+                         MeshBuildConfig,
                          MaxwellWallBC,
                          NonlinearBoundaryFaceData,
                          OddQuarticRateProfile,
@@ -191,6 +192,7 @@ function solve(
     visualize::Bool=false,
     visualize_every::Union{Nothing, Integer}=nothing,
     visualization_mode::Symbol=:cartesian,
+    mesh_build::MeshBuildConfig=MeshBuildConfig(),
     name::AbstractString="run",
 )
     validate(params)
@@ -220,7 +222,7 @@ function solve(
     )
 
     return solve(
-        TrixiProblem(; mesh_path=String(mesh_path), boundary_conditions=boundary_conditions),
+        TrixiProblem(; mesh_path=String(mesh_path), boundary_conditions=boundary_conditions, mesh_build=mesh_build),
         model,
         params;
         u0_override=u0_override,
@@ -246,6 +248,7 @@ function solve(
     visualize::Bool=false,
     visualize_every::Union{Nothing, Integer}=nothing,
     visualization_mode::Symbol=:cartesian,
+    mesh_build::MeshBuildConfig=MeshBuildConfig(),
     name::AbstractString="run",
 )
     validate(params)
@@ -270,7 +273,7 @@ function solve(
     )
 
     return solve(
-        TrixiProblem(; mesh_path=String(mesh_path), boundary_conditions=boundary_conditions),
+        TrixiProblem(; mesh_path=String(mesh_path), boundary_conditions=boundary_conditions, mesh_build=mesh_build),
         model,
         params;
         u0_override=u0_override,

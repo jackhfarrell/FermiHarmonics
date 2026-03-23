@@ -1,13 +1,14 @@
 # Mesh
 
-This project expects **2D quad meshes** in Abaqus `.inp` format (loaded with `Trixi.P4estMesh{2}`).
+This project expects **2D quad meshes** in Abaqus `.inp` format at runtime (loaded with `Trixi.P4estMesh{2}`).
+The editable geometry source of truth can now be a Gmsh `.geo` file generated into `.inp` directly from Julia.
 
-Workflow:
+Recommended workflow:
 
 1. Define geometry + physical boundary names in a `.geo` file.
-2. Force quad meshing in Gmsh.
-3. Export to `.inp`.
-4. Use those same names in your Julia `boundary_conditions` dictionary.
+2. Generate a quad mesh from Julia with [`generate_mesh_from_geo`](@ref).
+3. Let `solve` consume either the generated `.inp` or the `.geo` directly.
+4. Use the same physical names in your Julia `boundary_conditions` dictionary.
 
 ## Quad Requirement (Important)
 
@@ -47,16 +48,21 @@ Reference file:
 
 - `projects/square_bells_ucsb/mesh/square_bells.geo`
 
-## Build `.inp` From `.geo` With Gmsh
+## Build `.inp` From `.geo` In Julia
 
-From repository root (quad-focused command):
+From Julia:
 
-```bash
-gmsh -2 projects/square_bells_ucsb/mesh/square_bells.geo \
-  -string "Mesh.RecombineAll=1;" \
-  -format inp \
-  -o projects/square_bells_ucsb/mesh/square_bells.inp
+```julia
+using ElectronKinetics
+
+mesh_path = generate_mesh_from_geo(
+    "projects/square_bells_ucsb/mesh/square_bells.geo";
+    config=MeshBuildConfig(output_mode=:persistent),
+)
 ```
+
+By default, `MeshBuildConfig()` uses temporary unique output paths, which is safe for
+cluster sweeps and parallel parameter scans.
 
 ## Map Mesh Boundaries To Boundary Conditions
 
@@ -83,7 +89,7 @@ model = KineticModel2D(
 config = SolverConfig()
 
 problem = TrixiProblem(;
-    mesh_path = "projects/square_bells_ucsb/mesh/square_bells.inp",
+    geometry_path = "projects/square_bells_ucsb/mesh/square_bells.geo",
     boundary_conditions = boundary_conditions,
 )
 
@@ -97,6 +103,4 @@ If names do not match, boundary assignment fails.
 - Keep physical names stable once sweeps start.
 - When running on SLURM, this project copies the mesh to node-local scratch to avoid parallel file-system races.
 
-## TODO
-
-- Add a Julia-side mesh generation helper so `.geo -> .inp` can be called directly from Julia scripts (instead of shelling out to `gmsh` manually).
+You can also keep using `mesh_path = "…/square_bells.inp"` for prebuilt meshes.

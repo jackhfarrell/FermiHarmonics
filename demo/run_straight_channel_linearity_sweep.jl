@@ -11,36 +11,6 @@ function gamma_label(gamma_value::Real)
     return replace(string(round(Float64(gamma_value); sigdigits=6)), "." => "p")
 end
 
-function mesh_has_nodesets(mesh_path::AbstractString, names)
-    isfile(mesh_path) || return false
-    contents = read(mesh_path, String)
-    return all(occursin("*NSET,NSET=$(name)", contents) for name in names)
-end
-
-function ensure_straight_channel_mesh(geo_path::AbstractString, mesh_path::AbstractString)
-    required_nodesets = ("inlet", "outlet", "walls")
-    needs_rebuild = !isfile(mesh_path) ||
-                    mtime(mesh_path) < mtime(geo_path) ||
-                    !mesh_has_nodesets(mesh_path, required_nodesets)
-    needs_rebuild || return mesh_path
-
-    mkpath(dirname(mesh_path))
-    cmd = Cmd([
-        "gmsh",
-        "-2",
-        geo_path,
-        "-string",
-        "Mesh.SaveGroupsOfNodes=1;",
-        "-format",
-        "inp",
-        "-o",
-        mesh_path,
-    ])
-    @info "Building straight-channel mesh" geo_path mesh_path
-    run(cmd)
-    return mesh_path
-end
-
 function write_probe_table(path::AbstractString, rows)
     open(path, "w") do io
         println(
@@ -170,7 +140,10 @@ end
 function main()
     project_root = normpath(joinpath(@__DIR__, ".."))
     geo_path = joinpath(project_root, "demo", "mesh", "straight_channel.geo")
-    mesh_path = joinpath(project_root, "demo", "mesh", "straight_channel.inp")
+    mesh_path = ElectronKinetics.generate_mesh_from_geo(
+        geo_path;
+        config=MeshBuildConfig(output_mode=:persistent),
+    )
     reference = ElectronKinetics.blg_reference_setup()
     mu0 = reference.mu0
     mass = reference.mass
@@ -187,7 +160,6 @@ function main()
         joinpath(project_root, "demo", "data_straight_channel_linearity_gamma_mc_" * gamma_label(gamma_mc))
     output_dir = get(ENV, "STRAIGHT_CHANNEL_OUTPUT_DIR", output_dir_default)
     mkpath(output_dir)
-    ensure_straight_channel_mesh(geo_path, mesh_path)
 
     bias_values = collect(10.0 .^ range(log10(0.01), log10(1.0), length=7))
 

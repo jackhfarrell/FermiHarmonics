@@ -30,11 +30,13 @@ Returns:
 function save_for_analysis(sol, semi, filename; nvisnodes=400, observables=nothing)
     final_time = sol.t[end]
     grids = compute_analysis_grids(sol.u[end], semi; nvisnodes=nvisnodes)
+    mesh, _, _, _ = Trixi.mesh_equations_solver_cache(semi)
     @info "Analysis: writing HDF5" file=filename
     analysis_write_hdf5(filename, grids.density, grids.a1, grids.b1, grids.jx, grids.jy,
                         grids.x, grids.y, grids.mask, final_time, grids.equations;
                         band_grids=grids.bands,
-                        observables=observables)
+                        observables=observables,
+                        mesh_metadata=ElectronKinetics.mesh_provenance_attributes(mesh.current_filename))
     @info "Analysis: write complete" file=filename
     return filename
 end
@@ -48,9 +50,11 @@ subdividing each DG element in reference space.
 function save_mesh_native_analysis(sol, semi, filename; refine=6, observables=nothing)
     final_time = sol.t[end]
     mesh_data = compute_mesh_native_analysis(sol.u[end], semi; refine=refine)
+    mesh, _, _, _ = Trixi.mesh_equations_solver_cache(semi)
     @info "Analysis: writing mesh-native HDF5" file=filename
     analysis_write_mesh_native_hdf5(filename, mesh_data, final_time, semi.equations;
-                                    observables=observables)
+                                    observables=observables,
+                                    mesh_metadata=ElectronKinetics.mesh_provenance_attributes(mesh.current_filename))
     @info "Analysis: mesh-native write complete" file=filename
     return filename
 end
@@ -487,7 +491,9 @@ function save_solution_custom(sol, semi, filename; variable_names=nothing)
         attributes(file)["n_vars"] = length(variable_indices)
         attributes(file)["n_elements"] = Trixi.nelements(solver, cache)
         attributes(file)["mesh_type"] = Trixi.get_name(mesh)
-        attributes(file)["mesh_file"] = splitdir(mesh.current_filename)[2]
+        for (key, value) in ElectronKinetics.mesh_provenance_attributes(mesh.current_filename)
+            attributes(file)[key] = value
+        end
         attributes(file)["time"] = Float64(final_time)
         attributes(file)["dt"] = 0.0
         attributes(file)["timestep"] = 0
@@ -696,7 +702,10 @@ function evaluate_analysis_observables(solution_vector, semi, x_target, y_target
 end
 
 function analysis_write_hdf5(filename, density_grid, a1_grid, b1_grid, jx_grid, jy_grid, x_uniform, y_uniform,
-                              in_domain_mask, t, equations; observables=nothing, band_grids=Dict{Symbol, Any}())
+                              in_domain_mask, t, equations;
+                              observables=nothing,
+                              band_grids=Dict{Symbol, Any}(),
+                              mesh_metadata=Dict{String, Any}())
     requested = normalize_analysis_observables(observables, equations)
     density_name = String(analysis_density_name(equations))
     h5open(filename, "w") do file
@@ -737,6 +746,9 @@ function analysis_write_hdf5(filename, density_grid, a1_grid, b1_grid, jx_grid, 
         file["y"] = collect(y_uniform)
         file["mask"] = collect(in_domain_mask)
 
+        for (key, value) in mesh_metadata
+            attributes(file)[key] = value
+        end
         attributes(file)["time"] = Float64(t)
         attributes(file)["nx"] = length(x_uniform)
         attributes(file)["ny"] = length(y_uniform)
@@ -761,7 +773,9 @@ function analysis_write_hdf5(filename, density_grid, a1_grid, b1_grid, jx_grid, 
     end
 end
 
-function analysis_write_mesh_native_hdf5(filename, mesh_data, t, equations; observables=nothing)
+function analysis_write_mesh_native_hdf5(filename, mesh_data, t, equations;
+                                         observables=nothing,
+                                         mesh_metadata=Dict{String, Any}())
     requested = normalize_analysis_observables(observables, equations)
     density_name = String(analysis_density_name(equations))
     h5open(filename, "w") do file
@@ -802,6 +816,9 @@ function analysis_write_mesh_native_hdf5(filename, mesh_data, t, equations; obse
             end
         end
 
+        for (key, value) in mesh_metadata
+            attributes(file)[key] = value
+        end
         attributes(file)["time"] = Float64(t)
         attributes(file)["grid_type"] = "mesh_native_triangles"
         attributes(file)["refine"] = mesh_data.refine

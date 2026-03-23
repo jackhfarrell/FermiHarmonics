@@ -2,36 +2,6 @@ using ElectronKinetics, Trixi
 using Plots
 using TOML
 
-function mesh_has_nodesets(mesh_path::AbstractString, names)
-    isfile(mesh_path) || return false
-    contents = read(mesh_path, String)
-    return all(occursin("*NSET,NSET=$(name)", contents) for name in names)
-end
-
-function ensure_straight_channel_mesh(geo_path::AbstractString, mesh_path::AbstractString)
-    required_nodesets = ("inlet", "outlet", "walls")
-    needs_rebuild = !isfile(mesh_path) ||
-                    mtime(mesh_path) < mtime(geo_path) ||
-                    !mesh_has_nodesets(mesh_path, required_nodesets)
-    needs_rebuild || return mesh_path
-
-    mkpath(dirname(mesh_path))
-    cmd = Cmd([
-        "gmsh",
-        "-2",
-        geo_path,
-        "-string",
-        "Mesh.SaveGroupsOfNodes=1;",
-        "-format",
-        "inp",
-        "-o",
-        mesh_path,
-    ])
-    @info "Building straight-channel mesh" geo_path mesh_path
-    run(cmd)
-    return mesh_path
-end
-
 function trapz(x_values, y_values)
     length(x_values) == length(y_values) || throw(ArgumentError("trapz inputs must have the same length"))
     length(x_values) >= 2 || return 0.0
@@ -113,10 +83,12 @@ end
 function main()
     project_root = normpath(joinpath(@__DIR__, ".."))
     geo_path = joinpath(project_root, "demo", "mesh", "straight_channel.geo")
-    mesh_path = joinpath(project_root, "demo", "mesh", "straight_channel.inp")
+    mesh_path = ElectronKinetics.generate_mesh_from_geo(
+        geo_path;
+        config=MeshBuildConfig(output_mode=:persistent),
+    )
     output_dir = joinpath(project_root, "demo", "data_straight_channel_low_drive_fit")
     mkpath(output_dir)
-    ensure_straight_channel_mesh(geo_path, mesh_path)
 
     reference = ElectronKinetics.blg_reference_setup()
     mu0 = reference.mu0

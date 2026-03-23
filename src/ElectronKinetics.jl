@@ -8,6 +8,7 @@ using StaticArrays
 include("core_api.jl")
 include("live_visualization_api.jl")
 include("reference_setup.jl")
+include("mesh_generation.jl")
 include("slurm_utils.jl")
 
 const SolveParams = SolverConfig
@@ -38,6 +39,7 @@ export AbstractFermiSurface2D,
        LiveProgressSnapshot,
        LiveFieldSnapshot,
        LiveVisualizationSnapshot,
+       MeshBuildConfig,
        TrixiProblem,
        MaxwellWallBC,
        OhmicContactBC,
@@ -57,12 +59,15 @@ export AbstractFermiSurface2D,
        solve,
        mode_rate,
        collision_sources!,
+       generate_mesh_from_geo,
        harmonic_state_nvars,
        band_momentum_weight,
        streaming_matrices,
        cosine_index,
        sine_index,
        residual_progress_fraction,
+       mesh_provenance_attributes,
+       resolve_mesh_path,
        submit_sweep!,
        write_sweep_metadata!,
        archive_mesh!,

@@ -1,6 +1,7 @@
 using Test
 using ElectronKinetics
 using StaticArrays
+using HDF5
 
 @testset "Core Package Loads Without Trixi" begin
     @test Base.get_extension(ElectronKinetics, :ElectronKineticsTrixiExt) === nothing
@@ -80,11 +81,64 @@ const TrixiExt = Base.get_extension(ElectronKinetics, :ElectronKineticsTrixiExt)
 const MakieExt = Base.get_extension(ElectronKinetics, :ElectronKineticsMakieExt)
 
 const TESLA_MESH = normpath(joinpath(@__DIR__, "..", "projects", "nonlinearities", "mesh", "tesla_valve.inp"))
+const STRAIGHT_CHANNEL_GEO = normpath(joinpath(@__DIR__, "..", "demo", "mesh", "straight_channel.geo"))
 const TESLA_BCS = Dict(
     :walls => MaxwellWallBC(1.0),
     :inlet => OhmicContactBC(0.05),
     :outlet => OhmicContactBC(-0.05),
 )
+const STRAIGHT_CHANNEL_BCS = Dict(
+    :walls => MaxwellWallBC(1.0),
+    :inlet => OhmicContactBC(0.05),
+    :outlet => OhmicContactBC(-0.05),
+)
+
+@testset "Gmsh Geo Mesh Generation" begin
+    mesh_path_1 = ElectronKinetics.generate_mesh_from_geo(STRAIGHT_CHANNEL_GEO)
+    mesh_path_2 = ElectronKinetics.generate_mesh_from_geo(STRAIGHT_CHANNEL_GEO)
+    mesh_contents = read(mesh_path_1, String)
+
+    @test isfile(mesh_path_1)
+    @test isfile(mesh_path_2)
+    @test mesh_path_1 != mesh_path_2
+    @test endswith(lowercase(mesh_path_1), ".inp")
+    @test occursin("type=CPS4", mesh_contents) || occursin("type=CPE4", mesh_contents)
+    @test occursin("*NSET,NSET=inlet", mesh_contents)
+    @test occursin("*NSET,NSET=outlet", mesh_contents)
+    @test occursin("*NSET,NSET=walls", mesh_contents)
+
+    @test_throws ArgumentError ElectronKinetics.generate_mesh_from_geo(joinpath(tempdir(), "missing.geo"))
+    @test_throws ArgumentError ElectronKinetics.resolve_mesh_path(
+        STRAIGHT_CHANNEL_GEO,
+        Dict(:missing_contact => MaxwellWallBC(1.0)),
+    )
+
+    mktempdir() do dir
+        tri_geo = joinpath(dir, "triangle_only.geo")
+        open(tri_geo, "w") do io
+            write(io, """
+SetFactory("OpenCASCADE");
+Point(1) = {0, 0, 0, 0.2};
+Point(2) = {1, 0, 0, 0.2};
+Point(3) = {1, 1, 0, 0.2};
+Point(4) = {0, 1, 0, 0.2};
+Line(1) = {1, 2};
+Line(2) = {2, 3};
+Line(3) = {3, 4};
+Line(4) = {4, 1};
+Curve Loop(1) = {1, 2, 3, 4};
+Plane Surface(1) = {1};
+Physical Surface("domain") = {1};
+Physical Curve("walls") = {1, 2, 3, 4};
+""")
+        end
+
+        @test_throws ArgumentError ElectronKinetics.generate_mesh_from_geo(
+            tri_geo;
+            config=MeshBuildConfig(recombine_all=false, algorithm=6, output_mode=:persistent, output_dir=dir),
+        )
+    end
+end
 
 @testset "Progress And Cadence Helpers" begin
     steady_progress = TrixiExt.build_progress_snapshot(20, 0.1, 1.0, 1.0e-4, 1.0e-3, 1.0)
@@ -175,6 +229,48 @@ end
     @test overridden_status.stop_reason === :window_closed
 end
 
+@testset "Geometry-Backed TrixiProblem Solve" begin
+    config = SolverConfig(;
+        polydeg=1,
+        tspan_end=0.005,
+        residual_tol=1e-3,
+        cfl=0.2,
+        log_every=10_000,
+        min_harmonic=2,
+        max_harmonic_auto=4,
+    )
+    model = KineticModel2D(
+        Isotropic2DFermiSurface(; vF=1.0, nu=1.0, mass=1.0, charge=-1.0),
+        HarmonicBasis(2),
+        IsotropicHarmonicStreaming(),
+        LinearBGKCollision(0.0, ConstantModeRateProfile(0.5)),
+    )
+    problem = TrixiProblem(; geometry_path=STRAIGHT_CHANNEL_GEO, boundary_conditions=STRAIGHT_CHANNEL_BCS)
+    sol, semi = solve(
+        problem,
+        model,
+        config;
+        name="test_linear_geometry_problem",
+        live_visualization=LiveVisualizationConfig(; geometry_mode=:cartesian, accepted_step_interval=5, min_update_seconds=0.0, show_window=false, nvisnodes=24),
+    )
+    status = solve_status(sol, semi, config)
+    mesh, _, _, _ = Trixi.mesh_equations_solver_cache(semi)
+    provenance_attrs = ElectronKinetics.mesh_provenance_attributes(mesh.current_filename)
+
+    @test status.successful
+    @test provenance_attrs["mesh_source_geometry"] == basename(STRAIGHT_CHANNEL_GEO)
+    @test provenance_attrs["mesh_build_output_mode"] == "temporary"
+
+    mktempdir() do dir
+        analysis_path = joinpath(dir, "straight_channel_analysis.h5")
+        save_for_analysis(sol, semi, analysis_path; nvisnodes=32)
+        h5open(analysis_path, "r") do file
+            @test read(HDF5.attributes(file)["mesh_source_geometry"]) == basename(STRAIGHT_CHANNEL_GEO)
+            @test read(HDF5.attributes(file)["mesh_build_output_mode"]) == "temporary"
+        end
+    end
+end
+
 @testset "Legacy SolveParams Wrapper" begin
     params = SolveParams(;
         polydeg=1,
@@ -200,6 +296,34 @@ end
     @test ElectronKinetics.SolveParams === ElectronKinetics.SolverConfig
     @test status.successful
     @test length(sol.u[end]) == length(Trixi.wrap_array(sol.u[end], semi))
+end
+
+@testset "Legacy Geo Solve Wrapper" begin
+    params = SolveParams(;
+        polydeg=1,
+        tspan_end=0.005,
+        residual_tol=1e-3,
+        cfl=0.2,
+        log_every=10_000,
+        min_harmonic=2,
+        max_harmonic_auto=4,
+    )
+    sol, semi = ElectronKinetics.solve(
+        STRAIGHT_CHANNEL_GEO,
+        STRAIGHT_CHANNEL_BCS,
+        params,
+        0.0,
+        0.5;
+        max_harmonic=2,
+        visualize=false,
+        name="test_legacy_geo_wrapper",
+    )
+    status = ElectronKinetics.solve_status(sol, semi, params)
+    mesh, _, _, _ = Trixi.mesh_equations_solver_cache(semi)
+
+    @test status.successful
+    @test ElectronKinetics.mesh_provenance_attributes(mesh.current_filename)["mesh_source_geometry"] ==
+        basename(STRAIGHT_CHANNEL_GEO)
 end
 
 @testset "Nonlinear Harmonic Solve And Export" begin

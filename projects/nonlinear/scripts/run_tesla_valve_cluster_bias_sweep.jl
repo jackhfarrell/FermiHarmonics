@@ -1,42 +1,5 @@
 using ElectronKinetics, Trixi
 
-function tesla_cluster_mesh_has_nodesets(mesh_path::AbstractString, names)
-    isfile(mesh_path) || return false
-    contents = read(mesh_path, String)
-    return all(occursin("*NSET,NSET=$(name)", contents) for name in names)
-end
-
-function tesla_cluster_mesh_has_quad_elements(mesh_path::AbstractString)
-    isfile(mesh_path) || return false
-    contents = read(mesh_path, String)
-    return occursin("type=CPS4", contents) || occursin("type=CPE4", contents)
-end
-
-function ensure_tesla_cluster_mesh(geo_path::AbstractString, mesh_path::AbstractString)
-    required_nodesets = ("inlet", "outlet", "walls")
-    needs_rebuild = !isfile(mesh_path) ||
-                    mtime(mesh_path) < mtime(geo_path) ||
-                    !tesla_cluster_mesh_has_nodesets(mesh_path, required_nodesets) ||
-                    !tesla_cluster_mesh_has_quad_elements(mesh_path)
-    needs_rebuild || return mesh_path
-
-    mkpath(dirname(mesh_path))
-    cmd = Cmd([
-        "gmsh",
-        "-2",
-        geo_path,
-        "-string",
-        "Mesh.SaveGroupsOfNodes=1; Mesh.RecombineAll=1; Mesh.Algorithm=8;",
-        "-format",
-        "inp",
-        "-o",
-        mesh_path,
-    ])
-    @info "Building Tesla valve mesh" geo_path mesh_path
-    run(cmd)
-    return mesh_path
-end
-
 function tesla_cluster_bias_values()
     return collect(range(0.01, 0.5, length=30))
 end
@@ -72,8 +35,10 @@ function run_tesla_valve_cluster_bias_sweep(; direction::AbstractString=get(ENV,
                                                                                       "tesla_valve_cluster_bias_sweep")))
     project_root = normpath(joinpath(@__DIR__, "..", "..", ".."))
     geo_path = joinpath(project_root, "projects", "nonlinearities", "mesh", "tesla_valve.geo")
-    mesh_path = joinpath(project_root, "projects", "nonlinearities", "mesh", "tesla_valve.inp")
-    ensure_tesla_cluster_mesh(geo_path, mesh_path)
+    mesh_path = ElectronKinetics.generate_mesh_from_geo(
+        geo_path;
+        config=MeshBuildConfig(output_mode=:persistent),
+    )
 
     reference = ElectronKinetics.blg_reference_setup()
     mu0 = reference.mu0

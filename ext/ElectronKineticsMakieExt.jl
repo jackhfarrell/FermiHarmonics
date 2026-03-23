@@ -21,6 +21,20 @@ mutable struct MakieLiveDashboard
     screen
 end
 
+function mesh_native_geometry(snapshot::LiveVisualizationSnapshot)
+    points = GLMakie.Point3f[
+        GLMakie.Point3f(Float32(x), Float32(y), 0.0f0) for (x, y) in zip(snapshot.field.x, snapshot.field.y)
+    ]
+    faces = GLMakie.GLTriangleFace[
+        GLMakie.GLTriangleFace((
+            UInt32(snapshot.field.triangles[index, 1] + 1),
+            UInt32(snapshot.field.triangles[index, 2] + 1),
+            UInt32(snapshot.field.triangles[index, 3] + 1),
+        )) for index in axes(snapshot.field.triangles, 1)
+    ]
+    return GLMakie.GeometryBasics.Mesh(points, faces)
+end
+
 function finite_colorrange(values)
     finite_values = filter(isfinite, vec(values))
     isempty(finite_values) && return (0.0, 1.0)
@@ -72,14 +86,13 @@ function create_live_dashboard(config::LiveVisualizationConfig, snapshot::LiveVi
             colorrange=colorrange,
         )
     else
-        scatter!(
+        mesh!(
             axis,
-            snapshot.field.x,
-            snapshot.field.y;
+            mesh_native_geometry(snapshot);
             color=field_values,
             colormap=:magma,
             colorrange=colorrange,
-            markersize=6,
+            shading=GLMakie.NoShading,
         )
     end
 

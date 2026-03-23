@@ -344,9 +344,54 @@ function validate(config::SolverConfig)
     return config
 end
 
-Base.@kwdef struct TrixiProblem
-    mesh_path::String
+Base.@kwdef struct MeshBuildConfig
+    recombine_all::Bool = true
+    algorithm::Int = 8
+    save_groups_of_nodes::Bool = true
+    output_mode::Symbol = :temporary
+    output_dir::Union{Nothing, String} = nothing
+    prefix::String = "ek_mesh_"
+    gmsh_options::Dict{String, Float64} = Dict{String, Float64}()
+end
+
+function validate(config::MeshBuildConfig)
+    config.output_mode in (:temporary, :persistent) ||
+        throw(ArgumentError("mesh_build.output_mode must be :temporary or :persistent"))
+    isempty(config.prefix) && throw(ArgumentError("mesh_build.prefix must not be empty"))
+    return config
+end
+
+struct TrixiProblem
+    mesh_path::Union{Nothing, String}
+    geometry_path::Union{Nothing, String}
     boundary_conditions::Dict{Symbol, Any}
+    mesh_build::MeshBuildConfig
+end
+
+function TrixiProblem(;
+                      mesh_path::Union{Nothing, AbstractString}=nothing,
+                      geometry_path::Union{Nothing, AbstractString}=nothing,
+                      boundary_conditions::AbstractDict{Symbol, <:Any},
+                      mesh_build::MeshBuildConfig=MeshBuildConfig())
+    normalized_mesh_path = isnothing(mesh_path) ? nothing : String(mesh_path)
+    normalized_geometry_path = isnothing(geometry_path) ? nothing : String(geometry_path)
+    normalized_boundary_conditions = Dict{Symbol, Any}(boundary_conditions)
+    problem = TrixiProblem(
+        normalized_mesh_path,
+        normalized_geometry_path,
+        normalized_boundary_conditions,
+        mesh_build,
+    )
+    return validate(problem)
+end
+
+function validate(problem::TrixiProblem)
+    has_mesh_path = !isnothing(problem.mesh_path)
+    has_geometry_path = !isnothing(problem.geometry_path)
+    xor(has_mesh_path, has_geometry_path) ||
+        throw(ArgumentError("TrixiProblem requires exactly one of mesh_path or geometry_path"))
+    validate(problem.mesh_build)
+    return problem
 end
 
 const AUTO_HARMONIC_GAMMA_HIGH = 300.0

@@ -4,8 +4,10 @@
 
 - `SolverConfig` stores numerical settings such as polynomial degree, CFL,
   final time, residual tolerance, and auto-harmonic bounds.
-- `TrixiProblem` stores the mesh path and boundary-condition map passed to the
-  Trixi backend.
+- `MeshBuildConfig` stores Julia-side Gmsh meshing settings for `.geo -> .inp`
+  generation.
+- `TrixiProblem` stores either a mesh path or a geometry path plus the
+  boundary-condition map passed to the Trixi backend.
 - `estimate_max_harmonic(gamma_mr, gamma_mc; min_harmonic, max_harmonic)` is
   the conservative helper used by `HarmonicBasis(:auto)`.
 - `solve(problem, model, config; kwargs...)` is provided by the Trixi extension.
@@ -32,7 +34,7 @@ model = KineticModel2D(
 )
 
 problem = TrixiProblem(;
-    mesh_path = "mesh.inp",
+    geometry_path = "mesh.geo",
     boundary_conditions = Dict(
         :walls => MaxwellWallBC(1.0),
         :source => OhmicContactBC(0.5),
@@ -72,7 +74,10 @@ sol, semi = solve(problem, model, config; name = "exact_bgk_case")
 ## Behavior Notes
 
 - `ElectronKinetics.solve` is provided by the Trixi extension, not by the core-only package load.
+- `TrixiProblem` accepts exactly one of `mesh_path` or `geometry_path`.
+- Legacy `solve("mesh.geo", boundary_conditions, ...)` is supported and generates a temporary unique `.inp` automatically.
 - `SolverConfig` controls discretization order, CFL, end time, residual target, logging cadence, and auto-harmonic bounds.
+- `MeshBuildConfig()` defaults to temporary unique output paths under `SLURM_TMPDIR` / `TMPDIR` / `tempdir()`.
 - `HarmonicBasis(:auto)` resolves its working harmonic count from `estimate_max_harmonic(gamma_mr, gamma_mc; ...)`.
 - Linear harmonic closures use `LinearBGKCollision(gamma_mr, profile)`.
 - Nonlinear harmonic closures use `QuadraticBGKCollision(gamma_mr, profile; mu0, mass, ...)`.

@@ -9,7 +9,7 @@ function solve(
     visualization_mode::Symbol=:mesh_native,
     name::AbstractString="run",
 )
-    isfile(problem.mesh_path) || error("Mesh file not found: $(problem.mesh_path)")
+    resolved_mesh_path = ElectronKinetics.resolve_mesh_path(problem)
     validate(config)
     if isnothing(live_visualization) && visualize
         interval = isnothing(visualize_every) ? config.log_every : Int(visualize_every)
@@ -25,7 +25,8 @@ function solve(
     boundary_symbols = sort(collect(keys(problem.boundary_conditions)))
     boundary_conditions = (; problem.boundary_conditions...)
     solver = Trixi.DGSEM(polydeg=config.polydeg, surface_flux=Trixi.flux_lax_friedrichs)
-    mesh = Trixi.P4estMesh{2}(problem.mesh_path; boundary_symbols=boundary_symbols)
+    mesh = Trixi.P4estMesh{2}(resolved_mesh_path; boundary_symbols=boundary_symbols)
+    mesh.current_filename = resolved_mesh_path
 
     if equations isa FermiHarmonics2D && transport_is_nonlinear(equations)
         semi = Trixi.SemidiscretizationHyperbolic(
@@ -53,8 +54,9 @@ function solve(
         )
     end
 
+    resolved_max_harmonic = hasproperty(equations, :max_harmonic) ? getproperty(equations, :max_harmonic) : nothing
     boundary_types = Dict(key => boundary_condition_name(value) for (key, value) in problem.boundary_conditions)
-    @info "Starting solve" name=name harmonic_mode=harmonic_mode polydeg=config.polydeg cfl=config.cfl residual_tol=config.residual_tol boundaries=boundary_types transport=transport_symbol(model) collision_model=collision_symbol(model.collision)
+    @info "Starting solve" name=name harmonic_mode=harmonic_mode resolved_max_harmonic=resolved_max_harmonic polydeg=config.polydeg cfl=config.cfl residual_tol=config.residual_tol boundaries=boundary_types transport=transport_symbol(model) collision_model=collision_symbol(model.collision)
     flush(stdout)
     flush(stderr)
 
