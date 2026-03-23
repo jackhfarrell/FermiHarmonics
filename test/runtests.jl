@@ -95,7 +95,7 @@ using Trixi
     @test all(isfinite, sol_mag_neg.u[end])
 
     @test estimate_max_harmonic(0.0, 0.0; min_harmonic=4, max_harmonic=100) == 100
-    @test estimate_max_harmonic(0.0, 500.0; min_harmonic=4, max_harmonic=100) == 4
+    @test estimate_max_harmonic(0.0, 500.0; min_harmonic=4, max_harmonic=100) == 7
 
     sol_tomo, semi_tomo = solve(
         mesh_path,

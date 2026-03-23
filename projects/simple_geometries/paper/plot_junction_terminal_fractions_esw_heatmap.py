@@ -92,7 +92,7 @@ if not files:
 print(f"Using sweep directory: {sweep_dir}")
 print(f"Found {len(files)} files")
 
-pattern = re.compile(r"gamma_mc=([0-9eE+\-.]+)_gamma_mr=([0-9eE+\-.]+)")
+pattern = re.compile(r"gamma_ee=([0-9eE+\-.]+)_gamma_mr=([0-9eE+\-.]+)")
 rows = []
 
 for fpath in files:
@@ -100,7 +100,7 @@ for fpath in files:
     if m is None:
         continue
 
-    gamma_mc = float(m.group(1))
+    gamma_ee = float(m.group(1))
     gamma_mr = float(m.group(2))
 
     with h5py.File(fpath, "r") as h5:
@@ -145,24 +145,24 @@ for fpath in files:
     else:
         in_over_ie = i_n / i_e
 
-    rows.append((gamma_mr, gamma_mc, i_e, i_n, i_w, ie_over_iw, in_over_ie))
+    rows.append((gamma_mr, gamma_ee, i_e, i_n, i_w, ie_over_iw, in_over_ie))
 
 if not rows:
     raise RuntimeError("No parseable files found (filename regex did not match).")
 
 rows = [r for r in rows if GAMMA_MR_MIN <= r[0] <= GAMMA_MR_MAX and GAMMA_MC_MIN <= r[1] <= GAMMA_MC_MAX]
 if not rows:
-    raise RuntimeError("No rows remain after gamma_mr/gamma_mc truncation.")
+    raise RuntimeError("No rows remain after gamma_mr/gamma_ee truncation.")
 
 gamma_mr_vals = np.array(sorted({r[0] for r in rows}))
-gamma_mc_vals = np.array(sorted({r[1] for r in rows}))
+gamma_ee_vals = np.array(sorted({r[1] for r in rows}))
 
-ie_over_iw_grid = np.full((len(gamma_mr_vals), len(gamma_mc_vals)), np.nan)
-in_over_ie_grid = np.full((len(gamma_mr_vals), len(gamma_mc_vals)), np.nan)
+ie_over_iw_grid = np.full((len(gamma_mr_vals), len(gamma_ee_vals)), np.nan)
+in_over_ie_grid = np.full((len(gamma_mr_vals), len(gamma_ee_vals)), np.nan)
 
-for gamma_mr, gamma_mc, _, _, _, ie_over_iw, in_over_ie in rows:
+for gamma_mr, gamma_ee, _, _, _, ie_over_iw, in_over_ie in rows:
     i = np.searchsorted(gamma_mr_vals, gamma_mr)
-    j = np.searchsorted(gamma_mc_vals, gamma_mc)
+    j = np.searchsorted(gamma_ee_vals, gamma_ee)
     ie_over_iw_grid[i, j] = ie_over_iw
     in_over_ie_grid[i, j] = in_over_ie
 
@@ -188,14 +188,14 @@ for ax, (grid, palette, num_style, den_style) in zip(axes, plots):
     cmap.set_bad("0.85")
     z = np.ma.masked_invalid(grid_smooth.T)
     fill_levels = np.linspace(vmin, vmax, 80)
-    y_min = float(np.nanmin(gamma_mc_vals))
-    y_max = float(np.nanmax(gamma_mc_vals))
+    y_min = float(np.nanmin(gamma_ee_vals))
+    y_max = float(np.nanmax(gamma_ee_vals))
     x_min = float(np.nanmin(gamma_mr_vals))
     x_max = float(np.nanmax(gamma_mr_vals))
     domain_aspect = (np.log10(y_max) - np.log10(y_min)) / (np.log10(x_max) - np.log10(x_min))
     pcm = ax.contourf(
         gamma_mr_vals,
-        gamma_mc_vals,
+        gamma_ee_vals,
         z,
         levels=fill_levels,
         cmap=cmap,

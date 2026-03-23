@@ -65,7 +65,7 @@ def finite_differences_log(grid: np.ndarray, logx: np.ndarray, logy: np.ndarray)
                 if np.isfinite(f0) and np.isfinite(f1):
                     dlogx[i, j] = (f1 - f0) / (logx[i] - logx[i - 1])
 
-            # d/dlogy (gamma_mc axis)
+            # d/dlogy (gamma_ee axis)
             if j > 0 and j < ny - 1:
                 f0, f1, f2 = grid[i, j - 1], grid[i, j], grid[i, j + 1]
                 if np.isfinite(f0) and np.isfinite(f1) and np.isfinite(f2):
@@ -95,7 +95,7 @@ if not files:
 print(f"Using sweep directory: {sweep_dir}")
 print(f"Found {len(files)} files")
 
-pattern = re.compile(r"gamma_mc=([0-9eE+\-.]+)_gamma_mr=([0-9eE+\-.]+)")
+pattern = re.compile(r"gamma_ee=([0-9eE+\-.]+)_gamma_mr=([0-9eE+\-.]+)")
 rows = []
 
 for fpath in files:
@@ -103,7 +103,7 @@ for fpath in files:
     if m is None:
         continue
 
-    gamma_mc = float(m.group(1))
+    gamma_ee = float(m.group(1))
     gamma_mr = float(m.group(2))
 
     with h5py.File(fpath, "r") as h5:
@@ -131,32 +131,32 @@ for fpath in files:
 
     ie_over_iw = np.nan if (not np.isfinite(i_e) or not np.isfinite(i_w) or np.isclose(i_w, 0.0)) else i_e / i_w
     in_over_ie = np.nan if (not np.isfinite(i_n) or not np.isfinite(i_e) or np.isclose(i_e, 0.0)) else i_n / i_e
-    rows.append((gamma_mr, gamma_mc, ie_over_iw, in_over_ie))
+    rows.append((gamma_mr, gamma_ee, ie_over_iw, in_over_ie))
 
 if not rows:
     raise RuntimeError("No parseable files found (filename regex did not match).")
 
 rows = [r for r in rows if GAMMA_MR_MIN <= r[0] <= GAMMA_MR_MAX and GAMMA_MC_MIN <= r[1] <= GAMMA_MC_MAX]
 if not rows:
-    raise RuntimeError("No rows remain after gamma_mr/gamma_mc truncation.")
+    raise RuntimeError("No rows remain after gamma_mr/gamma_ee truncation.")
 
 gamma_mr_vals = np.array(sorted({r[0] for r in rows}))
-gamma_mc_vals = np.array(sorted({r[1] for r in rows}))
+gamma_ee_vals = np.array(sorted({r[1] for r in rows}))
 log_gamma_mr = np.log10(gamma_mr_vals)
-log_gamma_mc = np.log10(gamma_mc_vals)
+log_gamma_ee = np.log10(gamma_ee_vals)
 
-ie_over_iw_grid = np.full((len(gamma_mr_vals), len(gamma_mc_vals)), np.nan)
-in_over_ie_grid = np.full((len(gamma_mr_vals), len(gamma_mc_vals)), np.nan)
-for gamma_mr, gamma_mc, ie_over_iw, in_over_ie in rows:
+ie_over_iw_grid = np.full((len(gamma_mr_vals), len(gamma_ee_vals)), np.nan)
+in_over_ie_grid = np.full((len(gamma_mr_vals), len(gamma_ee_vals)), np.nan)
+for gamma_mr, gamma_ee, ie_over_iw, in_over_ie in rows:
     i = np.searchsorted(gamma_mr_vals, gamma_mr)
-    j = np.searchsorted(gamma_mc_vals, gamma_mc)
+    j = np.searchsorted(gamma_ee_vals, gamma_ee)
     ie_over_iw_grid[i, j] = ie_over_iw
     in_over_ie_grid[i, j] = in_over_ie
 
-# J = [[d(IE/IW)/dlog(gamma_mr), d(IE/IW)/dlog(gamma_mc)],
-#      [d(IN/IE)/dlog(gamma_mr), d(IN/IE)/dlog(gamma_mc)]]
-d_ie_iw_dlog_mr, d_ie_iw_dlog_mc = finite_differences_log(ie_over_iw_grid, log_gamma_mr, log_gamma_mc)
-d_in_ie_dlog_mr, d_in_ie_dlog_mc = finite_differences_log(in_over_ie_grid, log_gamma_mr, log_gamma_mc)
+# J = [[d(IE/IW)/dlog(gamma_mr), d(IE/IW)/dlog(gamma_ee)],
+#      [d(IN/IE)/dlog(gamma_mr), d(IN/IE)/dlog(gamma_ee)]]
+d_ie_iw_dlog_mr, d_ie_iw_dlog_mc = finite_differences_log(ie_over_iw_grid, log_gamma_mr, log_gamma_ee)
+d_in_ie_dlog_mr, d_in_ie_dlog_mc = finite_differences_log(in_over_ie_grid, log_gamma_mr, log_gamma_ee)
 
 det_j = d_ie_iw_dlog_mr * d_in_ie_dlog_mc - d_ie_iw_dlog_mc * d_in_ie_dlog_mr
 
@@ -205,11 +205,11 @@ print(f"  p10={np.nanpercentile(finite_cond, 10):.6g}, p50={np.nanpercentile(fin
 
 # Save CSV summary for downstream use.
 with open(OUT_CSV, "w", encoding="utf-8") as f:
-    f.write("gamma_mr,gamma_mc,ie_over_iw,in_over_ie,d_ie_iw_dlog_mr,d_ie_iw_dlog_mc,d_in_ie_dlog_mr,d_in_ie_dlog_mc,det_j,abs_det_j,cond_j,good_invertibility,good_condition,good_both\n")
+    f.write("gamma_mr,gamma_ee,ie_over_iw,in_over_ie,d_ie_iw_dlog_mr,d_ie_iw_dlog_mc,d_in_ie_dlog_mr,d_in_ie_dlog_mc,det_j,abs_det_j,cond_j,good_invertibility,good_condition,good_both\n")
     for i, gamma_mr in enumerate(gamma_mr_vals):
-        for j, gamma_mc in enumerate(gamma_mc_vals):
+        for j, gamma_ee in enumerate(gamma_ee_vals):
             f.write(
-                f"{gamma_mr},{gamma_mc},{ie_over_iw_grid[i,j]},{in_over_ie_grid[i,j]},{d_ie_iw_dlog_mr[i,j]},"
+                f"{gamma_mr},{gamma_ee},{ie_over_iw_grid[i,j]},{in_over_ie_grid[i,j]},{d_ie_iw_dlog_mr[i,j]},"
                 f"{d_ie_iw_dlog_mc[i,j]},{d_in_ie_dlog_mr[i,j]},{d_in_ie_dlog_mc[i,j]},{det_j[i,j]},"
                 f"{abs_det[i,j]},{cond_j[i,j]},{int(good_invertibility[i,j])},{int(good_condition[i,j])},{int(good_both[i,j])}\n"
             )
@@ -222,7 +222,7 @@ cmap1 = sns.color_palette("mako", as_cmap=True).copy()
 cmap1.set_bad("0.85")
 v1 = z1[np.isfinite(z1)]
 vmin1, vmax1 = (np.nanpercentile(v1, 2), np.nanpercentile(v1, 98)) if v1.size else (-6, 0)
-pcm1 = axes[0].pcolormesh(gamma_mr_vals, gamma_mc_vals, z1.T, shading="auto", cmap=cmap1, vmin=vmin1, vmax=vmax1)
+pcm1 = axes[0].pcolormesh(gamma_mr_vals, gamma_ee_vals, z1.T, shading="auto", cmap=cmap1, vmin=vmin1, vmax=vmax1)
 axes[0].set_title(r"$\log_{10}| \det J |$")
 cb1 = fig.colorbar(pcm1, ax=axes[0])
 cb1.set_label(r"$\log_{10}| \det J |$")
@@ -232,7 +232,7 @@ cmap2 = sns.color_palette("rocket", as_cmap=True).copy()
 cmap2.set_bad("0.85")
 v2 = z2[np.isfinite(z2)]
 vmin2, vmax2 = (np.nanpercentile(v2, 2), np.nanpercentile(v2, 98)) if v2.size else (0, 4)
-pcm2 = axes[1].pcolormesh(gamma_mr_vals, gamma_mc_vals, z2.T, shading="auto", cmap=cmap2, vmin=vmin2, vmax=vmax2)
+pcm2 = axes[1].pcolormesh(gamma_mr_vals, gamma_ee_vals, z2.T, shading="auto", cmap=cmap2, vmin=vmin2, vmax=vmax2)
 axes[1].set_title(r"$\log_{10}\kappa(J)$")
 cb2 = fig.colorbar(pcm2, ax=axes[1])
 cb2.set_label(r"$\log_{10}\kappa(J)$")
@@ -240,7 +240,7 @@ cb2.set_label(r"$\log_{10}\kappa(J)$")
 mask_int = np.where(good_both, 1.0, np.where(finite_mask, 0.0, np.nan))
 cmap3 = ListedColormap(["#D9D9D9", "#1b9e77"])
 cmap3.set_bad("0.85")
-pcm3 = axes[2].pcolormesh(gamma_mr_vals, gamma_mc_vals, mask_int.T, shading="auto", cmap=cmap3, vmin=0.0, vmax=1.0)
+pcm3 = axes[2].pcolormesh(gamma_mr_vals, gamma_ee_vals, mask_int.T, shading="auto", cmap=cmap3, vmin=0.0, vmax=1.0)
 axes[2].set_title(r"Good Region ($|\det J|>10^{-6}$, $\kappa<10$)")
 cb3 = fig.colorbar(pcm3, ax=axes[2], ticks=[0, 1])
 cb3.ax.set_yticklabels(["no", "yes"])

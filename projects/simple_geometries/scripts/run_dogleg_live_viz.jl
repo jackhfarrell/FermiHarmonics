@@ -21,7 +21,7 @@ save_analysis = true
 bias = 1.0
 p_scatter = 1.0
 gamma_mr = 1e-2
-gamma_mc = 1.0
+gamma_ee = 1.0
 
 boundary_conditions = Dict(
     :walls => MaxwellWallBC(p_scatter),
@@ -67,7 +67,7 @@ sol, semi = FermiHarmonics.solve(
     boundary_conditions,
     params,
     gamma_mr,
-    gamma_mc;
+    gamma_ee;
     max_harmonic = :auto,
     visualize = visualize,
     name = name,
@@ -83,7 +83,7 @@ if save_analysis
         bias = bias,
         p_scatter = p_scatter,
         gamma_mr = gamma_mr,
-        gamma_mc = gamma_mc,
+        gamma_ee = gamma_ee,
     )
     small_filename = joinpath(output_dir, "observables_" * DrWatson.savename(file_params, "h5"))
     FermiHarmonics.save_for_analysis(sol, semi, small_filename)

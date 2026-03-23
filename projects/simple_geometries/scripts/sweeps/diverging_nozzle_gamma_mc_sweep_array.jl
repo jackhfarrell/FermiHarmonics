@@ -1,4 +1,4 @@
-# run a gamma_mc-only parameter sweep for the simple_geometries diverging nozzle problem at fixed gamma_mr using
+# run a gamma_ee-only parameter sweep for the simple_geometries diverging nozzle problem at fixed gamma_mr using
 # SLURM array jobs. this script handles both the initial submission (writing shared metadata and submitting the array
 # job) and the worker logic. the parameter grid is defined in the script, and each worker picks which cases to run
 # based on its SLURM_ARRAY_TASK_ID. results are saved in a shared directory with one file per case.
@@ -17,7 +17,7 @@ parse_env_float(name::AbstractString, default::Float64) =
 # ======================================================================================================================
 
 # sweep configuration
-name = "simple_geometries_diverging_nozzle_gamma_mc_sweep"
+name = "simple_geometries_diverging_nozzle_gamma_ee_sweep"
 project_root = normpath(joinpath(@__DIR__, "..", ".."))
 main_project = normpath(joinpath(project_root, "..", ".."))
 mesh_path = joinpath(project_root, "meshes", "diverging", "diverging.inp")
@@ -43,10 +43,10 @@ sbatch = Dict(
 )
 
 # grid of parameters
-n_gamma_mc = n_jobs * cases_per_job
-gamma_mc_vals = 10 .^ range(log10(1e-2), log10(1e2), length=n_gamma_mc)
+n_gamma_ee = n_jobs * cases_per_job
+gamma_ee_vals = 10 .^ range(log10(1e-2), log10(1e2), length=n_gamma_ee)
 gamma_mr_vals = [gamma_mr_fixed]
-total_cases = length(gamma_mr_vals) * length(gamma_mc_vals)
+total_cases = length(gamma_mr_vals) * length(gamma_ee_vals)
 @assert total_cases == n_jobs * cases_per_job
 
 boundary_conditions = Dict(
@@ -81,9 +81,9 @@ sweep_metadata = Dict(
     "bias" => bias,
     "p_scatter" => p_scatter,
     "gamma_mr_fixed" => gamma_mr_fixed,
-    "gamma_mc_min" => first(gamma_mc_vals),
-    "gamma_mc_max" => last(gamma_mc_vals),
-    "n_gamma_mc" => n_gamma_mc,
+    "gamma_ee_min" => first(gamma_ee_vals),
+    "gamma_ee_max" => last(gamma_ee_vals),
+    "n_gamma_ee" => n_gamma_ee,
 )
 
 
@@ -94,7 +94,7 @@ sweep_metadata = Dict(
 # if not running as part of SLURM array job (initial submission), write shared metadata and submit the job
 if !haskey(ENV, "SLURM_ARRAY_TASK_ID")
 
-    @info "Diverging nozzle gamma_mc sweep submission" name mesh=basename(mesh_path) bias p_scatter gamma_mr_fixed total_cases
+    @info "Diverging nozzle gamma_ee sweep submission" name mesh=basename(mesh_path) bias p_scatter gamma_mr_fixed total_cases
 
     timestamp = Dates.format(now(), "yyyy-mm-dd_HHMMSS")
     sweep_id = "$(name)_sweep_$(timestamp)"
@@ -123,7 +123,7 @@ if !haskey(ENV, "SLURM_ARRAY_TASK_ID")
     )
 
     # write metadata (always overwritten on submit) and archive mesh at sweep root
-    write_sweep_metadata!(sweep_dir, solve_params, sweep_metadata, slurm_metadata, gamma_mr_vals, gamma_mc_vals)
+    write_sweep_metadata!(sweep_dir, solve_params, sweep_metadata, slurm_metadata, gamma_mr_vals, gamma_ee_vals)
     archive_mesh!(mesh_path, sweep_dir)
 
     @info "Submitted" output_dir=sweep_dir
@@ -147,16 +147,16 @@ data_dir = joinpath(sweep_dir, "data")
 
 # pick which cases to run based on task ID and cases per task, and log the assignment
 case_positions, total_cases, n_cases_this_task, _ = select_cases(
-    gamma_mr_vals, gamma_mc_vals; cases_per_task=cases_per_job, env=ENV
+    gamma_mr_vals, gamma_ee_vals; cases_per_task=cases_per_job, env=ENV
 )
-ordered_global_indices = ordered_case_indices(gamma_mr_vals, gamma_mc_vals)
+ordered_global_indices = ordered_case_indices(gamma_mr_vals, gamma_ee_vals)
 assigned_global_indices = ordered_global_indices[collect(case_positions)]
 @info "Task assignment" task_id cases=n_cases_this_task position_range=(first(case_positions), last(case_positions))
 
 preview_n = min(5, length(assigned_global_indices))
 preview = map(assigned_global_indices[1:preview_n]) do idx
-    gamma_mr, gamma_mc = grid_lookup(gamma_mr_vals, gamma_mc_vals, idx)
-    (index = idx, gamma_mr = gamma_mr, gamma_mc = gamma_mc, gamma_total = gamma_mr + gamma_mc)
+    gamma_mr, gamma_ee = grid_lookup(gamma_mr_vals, gamma_ee_vals, idx)
+    (index = idx, gamma_mr = gamma_mr, gamma_ee = gamma_ee, gamma_total = gamma_mr + gamma_ee)
 end
 @info "Task ordered preview" task_id preview
 
@@ -169,18 +169,18 @@ let
     task_start = now()
 
     for (case_counter, index_global) in enumerate(assigned_global_indices)
-        gamma_mr, gamma_mc = grid_lookup(gamma_mr_vals, gamma_mc_vals, index_global)
-        gamma_total = gamma_mr + gamma_mc
+        gamma_mr, gamma_ee = grid_lookup(gamma_mr_vals, gamma_ee_vals, index_global)
+        gamma_total = gamma_mr + gamma_ee
 
         # determine cold or warm start
         restart = isnothing(u0_override) ? "cold" : "warm"
-        @info "Starting case" progress="$(case_counter)/$(n_cases_this_task)" index=index_global gamma_mr gamma_mc gamma_total restart
+        @info "Starting case" progress="$(case_counter)/$(n_cases_this_task)" index=index_global gamma_mr gamma_ee gamma_total restart
 
         case_start = now()
 
         # solve the case!
         sol, semi = FermiHarmonics.solve(
-            local_mesh_path, boundary_conditions, solve_params, gamma_mr, gamma_mc;
+            local_mesh_path, boundary_conditions, solve_params, gamma_mr, gamma_ee;
             max_harmonic=:auto,
             u0_override=u0_override,
             name="$(name)_g$(index_global)",
@@ -190,7 +190,7 @@ let
         )
 
         # save a0, a1, b1 for analysis
-        file_params = (bias = bias, p_scatter = p_scatter, gamma_mr = gamma_mr, gamma_mc = gamma_mc)
+        file_params = (bias = bias, p_scatter = p_scatter, gamma_mr = gamma_mr, gamma_ee = gamma_ee)
         small_path = joinpath(data_dir, DrWatson.savename(file_params; connector="_", sort=true) * ".h5")
         save_for_analysis(sol, semi, small_path)
         @info "Saved" path=basename(small_path) small_mb=round(filesize(small_path) / 1e6, digits=2)

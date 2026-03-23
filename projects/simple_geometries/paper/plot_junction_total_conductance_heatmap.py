@@ -51,7 +51,7 @@ if not files:
 print(f"Using sweep directory: {sweep_dir}")
 print(f"Found {len(files)} files")
 
-pattern = re.compile(r"gamma_mc=([0-9eE+\-.]+)_gamma_mr=([0-9eE+\-.]+)")
+pattern = re.compile(r"gamma_ee=([0-9eE+\-.]+)_gamma_mr=([0-9eE+\-.]+)")
 rows = []
 
 for fpath in files:
@@ -59,7 +59,7 @@ for fpath in files:
     if m is None:
         continue
 
-    gamma_mc = float(m.group(1))
+    gamma_ee = float(m.group(1))
     gamma_mr = float(m.group(2))
 
     with h5py.File(fpath, "r") as h5:
@@ -100,23 +100,23 @@ for fpath in files:
         i_total = i_w + i_e + i_n
         g_total = i_total / DELTA_V
 
-    rows.append((gamma_mr, gamma_mc, g_total))
+    rows.append((gamma_mr, gamma_ee, g_total))
 
 if not rows:
     raise RuntimeError("No parseable files found (filename regex did not match).")
 
 rows = [r for r in rows if GAMMA_MR_MIN <= r[0] <= GAMMA_MR_MAX and GAMMA_MC_MIN <= r[1] <= GAMMA_MC_MAX]
 if not rows:
-    raise RuntimeError("No rows remain after gamma_mr/gamma_mc truncation.")
+    raise RuntimeError("No rows remain after gamma_mr/gamma_ee truncation.")
 
 gamma_mr_vals = np.array(sorted({r[0] for r in rows}))
-gamma_mc_vals = np.array(sorted({r[1] for r in rows}))
+gamma_ee_vals = np.array(sorted({r[1] for r in rows}))
 
-g_total_grid = np.full((len(gamma_mr_vals), len(gamma_mc_vals)), np.nan)
+g_total_grid = np.full((len(gamma_mr_vals), len(gamma_ee_vals)), np.nan)
 
-for gamma_mr, gamma_mc, g_total in rows:
+for gamma_mr, gamma_ee, g_total in rows:
     i = np.searchsorted(gamma_mr_vals, gamma_mr)
-    j = np.searchsorted(gamma_mc_vals, gamma_mc)
+    j = np.searchsorted(gamma_ee_vals, gamma_ee)
     g_total_grid[i, j] = g_total
 
 fig, ax = plt.subplots(figsize=(8, 6), constrained_layout=True)
@@ -133,7 +133,7 @@ if finite_g.size == 0:
 
 cmap = sns.color_palette("crest", as_cmap=True).copy()
 cmap.set_bad("0.85")
-pcm = ax.pcolormesh(gamma_mr_vals, gamma_mc_vals, g_total_grid.T, shading="auto", cmap=cmap)
+pcm = ax.pcolormesh(gamma_mr_vals, gamma_ee_vals, g_total_grid.T, shading="auto", cmap=cmap)
 ax.set_xscale("log")
 ax.set_yscale("log")
 ax.set_xlim(GAMMA_MR_MIN, GAMMA_MR_MAX)

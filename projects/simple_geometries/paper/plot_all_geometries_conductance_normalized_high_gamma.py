@@ -5,27 +5,27 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 PAPER_DIR = Path(__file__).resolve().parent
-RECT_CSV = PAPER_DIR / "rectangle_sweep" / "rectangle_conductance_vs_gamma_mc.csv"
-DIV_CSV = PAPER_DIR / "diverging_sweep" / "diverging_conductance_vs_gamma_mc.csv"
-DOG_CSV = PAPER_DIR / "dogleg_sweep" / "dogleg_conductance_vs_gamma_mc.csv"
+RECT_CSV = PAPER_DIR / "rectangle_sweep" / "rectangle_conductance_vs_gamma_ee.csv"
+DIV_CSV = PAPER_DIR / "diverging_sweep" / "diverging_conductance_vs_gamma_ee.csv"
+DOG_CSV = PAPER_DIR / "dogleg_sweep" / "dogleg_conductance_vs_gamma_ee.csv"
 OUTFILE = PAPER_DIR / "all_geometries_conductance_normalized_high_gamma.png"
 
 
 def load_curve(csv_path: Path):
-    gamma_mc = []
+    gamma_ee = []
     conductance = []
     with csv_path.open("r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            gmc = float(row["gamma_mc"])
+            gmc = float(row["gamma_ee"])
             g = float(row["conductance"])
             if np.isfinite(g) and g > 0:
-                gamma_mc.append(gmc)
+                gamma_ee.append(gmc)
                 conductance.append(g)
-    gamma_mc = np.asarray(gamma_mc, dtype=float)
+    gamma_ee = np.asarray(gamma_ee, dtype=float)
     conductance = np.asarray(conductance, dtype=float)
-    order = np.argsort(gamma_mc)
-    return gamma_mc[order], conductance[order]
+    order = np.argsort(gamma_ee)
+    return gamma_ee[order], conductance[order]
 
 
 def main():
@@ -33,7 +33,7 @@ def main():
     gamma_div, g_div = load_curve(DIV_CSV)
     gamma_dog, g_dog = load_curve(DOG_CSV)
 
-    # Normalize by each geometry's highest-viscosity (max gamma_mc) value.
+    # Normalize by each geometry's highest-viscosity (max gamma_ee) value.
     g_rect_norm = g_rect / g_rect[-1]
     g_div_norm = g_div / g_div[-1]
     g_dog_norm = g_dog / g_dog[-1]

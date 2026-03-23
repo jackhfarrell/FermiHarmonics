@@ -345,7 +345,7 @@ for name, seg in contact_segments.items():
         f"{name}: {seg['orientation']} at {seg['coord']:.4g}, span=({seg['s_min']:.4g}, {seg['s_max']:.4g})"
     )
 
-pattern = re.compile(r"gamma_mc=([0-9eE+\-.]+)_gamma_mr=([0-9eE+\-.]+)")
+pattern = re.compile(r"gamma_ee=([0-9eE+\-.]+)_gamma_mr=([0-9eE+\-.]+)")
 rows = []
 
 for fpath in files:
@@ -353,7 +353,7 @@ for fpath in files:
     if m is None:
         continue
 
-    gamma_mc = float(m.group(1))
+    gamma_ee = float(m.group(1))
     gamma_mr = float(m.group(2))
 
     with h5py.File(fpath, "r") as h5:
@@ -376,25 +376,25 @@ for fpath in files:
         name: integrate_contact_current(seg, x, y, a1, b1, mask)
         for name, seg in contact_segments.items()
     }
-    rows.append((gamma_mr, gamma_mc, currents))
+    rows.append((gamma_mr, gamma_ee, currents))
 
 if not rows:
     raise RuntimeError("No parseable files found (filename regex did not match).")
 
 rows = [r for r in rows if GAMMA_MR_MIN <= r[0] <= GAMMA_MR_MAX and GAMMA_MC_MIN <= r[1] <= GAMMA_MC_MAX]
 if not rows:
-    raise RuntimeError("No rows remain after gamma_mr/gamma_mc truncation.")
+    raise RuntimeError("No rows remain after gamma_mr/gamma_ee truncation.")
 
 gamma_mr_vals = np.array(sorted({r[0] for r in rows}))
-gamma_mc_vals = np.array(sorted({r[1] for r in rows}))
+gamma_ee_vals = np.array(sorted({r[1] for r in rows}))
 
 ratio_grids = {}
 for num_name, den_name, _, _ in RATIO_DEFS:
-    ratio_grids[(num_name, den_name)] = np.full((len(gamma_mr_vals), len(gamma_mc_vals)), np.nan)
+    ratio_grids[(num_name, den_name)] = np.full((len(gamma_mr_vals), len(gamma_ee_vals)), np.nan)
 
-for gamma_mr, gamma_mc, currents in rows:
+for gamma_mr, gamma_ee, currents in rows:
     i = np.searchsorted(gamma_mr_vals, gamma_mr)
-    j = np.searchsorted(gamma_mc_vals, gamma_mc)
+    j = np.searchsorted(gamma_ee_vals, gamma_ee)
 
     for num_name, den_name, _, _ in RATIO_DEFS:
         ratio = safe_ratio(currents[num_name], currents[den_name])
@@ -422,7 +422,7 @@ for ax, (num_name, den_name, title, palette) in zip(axes, RATIO_DEFS):
     z = np.ma.masked_invalid(grid.T)
     pcm = ax.pcolormesh(
         gamma_mr_vals,
-        gamma_mc_vals,
+        gamma_ee_vals,
         z,
         cmap=cmap,
         vmin=vmin,

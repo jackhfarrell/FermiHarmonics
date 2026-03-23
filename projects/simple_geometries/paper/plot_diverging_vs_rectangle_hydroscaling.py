@@ -8,30 +8,30 @@ import numpy as np
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RESULTS_ROOT = PROJECT_ROOT / "results"
 
-RECT_SWEEP = RESULTS_ROOT / "simple_geometries_rectangle_gamma_mc_sweep_sweep_2026-02-25_142706"
-DIV_SWEEP = RESULTS_ROOT / "simple_geometries_diverging_nozzle_gamma_mc_sweep_sweep_2026-02-25_142715"
+RECT_SWEEP = RESULTS_ROOT / "simple_geometries_rectangle_gamma_ee_sweep_sweep_2026-02-25_142706"
+DIV_SWEEP = RESULTS_ROOT / "simple_geometries_diverging_nozzle_gamma_ee_sweep_sweep_2026-02-25_142715"
 
-RECT_CSV = Path(__file__).resolve().parent / "rectangle_sweep" / "rectangle_conductance_vs_gamma_mc.csv"
-DIV_CSV = Path(__file__).resolve().parent / "diverging_sweep" / "diverging_conductance_vs_gamma_mc.csv"
+RECT_CSV = Path(__file__).resolve().parent / "rectangle_sweep" / "rectangle_conductance_vs_gamma_ee.csv"
+DIV_CSV = Path(__file__).resolve().parent / "diverging_sweep" / "diverging_conductance_vs_gamma_ee.csv"
 
 OUT_PNG = Path(__file__).resolve().parent / "diverging_vs_rectangle_hydroscaling.png"
 
 
 def load_curve(csv_path: Path):
-    gamma_mc = []
+    gamma_ee = []
     conductance = []
     with csv_path.open("r", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            gmc = float(row["gamma_mc"])
+            gmc = float(row["gamma_ee"])
             g = float(row["conductance"])
             if np.isfinite(g):
-                gamma_mc.append(gmc)
+                gamma_ee.append(gmc)
                 conductance.append(g)
-    gamma_mc = np.asarray(gamma_mc, dtype=float)
+    gamma_ee = np.asarray(gamma_ee, dtype=float)
     conductance = np.asarray(conductance, dtype=float)
-    order = np.argsort(gamma_mc)
-    return gamma_mc[order], conductance[order]
+    order = np.argsort(gamma_ee)
+    return gamma_ee[order], conductance[order]
 
 
 def integrate_over_valid_segments(coord: np.ndarray, values: np.ndarray, valid: np.ndarray) -> float:

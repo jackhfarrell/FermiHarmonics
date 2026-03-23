@@ -14,7 +14,7 @@ visualize = true
 bias = 1.0
 p_scatter = 1.0
 gamma_mr = 0.01
-gamma_mc = 10.0
+gamma_ee = 10.0
 
 boundary_conditions = Dict(
     :walls => MaxwellWallBC(p_scatter),
@@ -39,7 +39,7 @@ FermiHarmonics.solve(
     boundary_conditions,
     params,
     gamma_mr,
-    gamma_mc;
+    gamma_ee;
     max_harmonic=:auto,
     visualize=visualize,
     name=name,

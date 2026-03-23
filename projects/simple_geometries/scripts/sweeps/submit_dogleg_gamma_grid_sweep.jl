@@ -1,4 +1,4 @@
-# submit the 2D dogleg gamma_mr x gamma_mc sweep with an optional wall-scattering override.
+# submit the 2D dogleg gamma_mr x gamma_ee sweep with an optional wall-scattering override.
 
 project_root = normpath(joinpath(@__DIR__, "..", ".."))
 main_project = normpath(joinpath(project_root, "..", ".."))

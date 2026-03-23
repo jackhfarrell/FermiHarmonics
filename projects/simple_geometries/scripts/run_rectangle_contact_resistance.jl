@@ -27,7 +27,7 @@ nvisnodes = 400
 bias = 1.0
 p_scatter = 1.0
 gamma_mr = 0.0
-gamma_mc = 1e3
+gamma_ee = 1e3
 
 params = SolveParams(;
     polydeg = 3,
@@ -261,7 +261,7 @@ mkpath(run_dir)
 summary_rows = NamedTuple[]
 
 for device in devices
-    @info "Running device" device=device.name mesh=basename(device.mesh_path) bias p_scatter gamma_mr gamma_mc
+    @info "Running device" device=device.name mesh=basename(device.mesh_path) bias p_scatter gamma_mr gamma_ee
     boundary_conditions = make_boundary_conditions(bias, p_scatter)
 
     sol, semi = FermiHarmonics.solve(
@@ -269,7 +269,7 @@ for device in devices
         boundary_conditions,
         params,
         gamma_mr,
-        gamma_mc;
+        gamma_ee;
         max_harmonic = max_harmonic,
         visualize = visualize,
         name = "simple_geometries_$(device.name)",
@@ -280,7 +280,7 @@ for device in devices
         bias = bias,
         p_scatter = p_scatter,
         gamma_mr = gamma_mr,
-        gamma_mc = gamma_mc,
+        gamma_ee = gamma_ee,
     )
     output_h5 = joinpath(run_dir, "observables_" * DrWatson.savename(file_params, "h5"))
     save_for_analysis(sol, semi, output_h5; nvisnodes = nvisnodes)
@@ -324,7 +324,7 @@ open(joinpath(run_dir, "run_info.txt"), "w") do io
     write(io, "bias=$(bias)\n")
     write(io, "p_scatter=$(p_scatter)\n")
     write(io, "gamma_mr=$(gamma_mr)\n")
-    write(io, "gamma_mc=$(gamma_mc)\n")
+    write(io, "gamma_ee=$(gamma_ee)\n")
     write(io, "nvisnodes=$(nvisnodes)\n")
 end
 

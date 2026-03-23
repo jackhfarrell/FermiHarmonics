@@ -11,16 +11,16 @@ RESULTS_ROOT = PAPER_DIR.parent / "results"
 
 GEOMS = {
     "rectangle": {
-        "csv": PAPER_DIR / "rectangle_sweep" / "rectangle_conductance_vs_gamma_mc.csv",
-        "sweep_dir": RESULTS_ROOT / "simple_geometries_rectangle_gamma_mc_sweep_sweep_2026-02-25_142706",
+        "csv": PAPER_DIR / "rectangle_sweep" / "rectangle_conductance_vs_gamma_ee.csv",
+        "sweep_dir": RESULTS_ROOT / "simple_geometries_rectangle_gamma_ee_sweep_sweep_2026-02-25_142706",
     },
     "diverging": {
-        "csv": PAPER_DIR / "diverging_sweep" / "diverging_conductance_vs_gamma_mc.csv",
-        "sweep_dir": RESULTS_ROOT / "simple_geometries_diverging_nozzle_gamma_mc_sweep_sweep_2026-02-25_142715",
+        "csv": PAPER_DIR / "diverging_sweep" / "diverging_conductance_vs_gamma_ee.csv",
+        "sweep_dir": RESULTS_ROOT / "simple_geometries_diverging_nozzle_gamma_ee_sweep_sweep_2026-02-25_142715",
     },
     "dogleg": {
-        "csv": PAPER_DIR / "dogleg_sweep" / "dogleg_conductance_vs_gamma_mc.csv",
-        "sweep_dir": RESULTS_ROOT / "simple_geometries_dogleg_gamma_mc_sweep_sweep_2026-02-25_145852",
+        "csv": PAPER_DIR / "dogleg_sweep" / "dogleg_conductance_vs_gamma_ee.csv",
+        "sweep_dir": RESULTS_ROOT / "simple_geometries_dogleg_gamma_ee_sweep_sweep_2026-02-25_145852",
     },
 }
 
@@ -32,7 +32,7 @@ def low_gamma_conductance(csv_path: Path):
     rows = []
     with csv_path.open("r", encoding="utf-8") as f:
         for row in csv.DictReader(f):
-            gmc = float(row["gamma_mc"])
+            gmc = float(row["gamma_ee"])
             g = float(row["conductance"])
             if np.isfinite(g) and g > 0:
                 rows.append((gmc, g))
@@ -46,8 +46,8 @@ def first_h5(sweep_dir: Path):
     files = sorted((sweep_dir / "data").glob("*.h5"))
     if not files:
         raise RuntimeError(f"No h5 files in {sweep_dir / 'data'}")
-    # prefer smallest gamma_mc file if available
-    pat = re.compile(r"gamma_mc=([0-9eE+\-.]+)")
+    # prefer smallest gamma_ee file if available
+    pat = re.compile(r"gamma_ee=([0-9eE+\-.]+)")
     tagged = []
     for f in files:
         m = pat.search(f.name)
@@ -86,11 +86,11 @@ def area_perimeter_from_mask(h5_path: Path):
 def main():
     rows = []
     for name, cfg in GEOMS.items():
-        gamma_mc_min, g0 = low_gamma_conductance(cfg["csv"])
+        gamma_ee_min, g0 = low_gamma_conductance(cfg["csv"])
         h5_path = first_h5(cfg["sweep_dir"])
         area, perim = area_perimeter_from_mask(h5_path)
         ap = area / perim if perim > 0 else np.nan
-        rows.append((name, gamma_mc_min, g0, area, perim, ap))
+        rows.append((name, gamma_ee_min, g0, area, perim, ap))
 
     rows.sort(key=lambda t: t[0])
 
@@ -105,7 +105,7 @@ def main():
     gpred_ref = g_pred[ref_idx]
 
     with OUT_CSV.open("w", encoding="utf-8") as f:
-        f.write("geometry,gamma_mc_min,G_low,A,P,A_over_P,G_pred,ratio_to_rect,pred_ratio_to_rect\n")
+        f.write("geometry,gamma_ee_min,G_low,A,P,A_over_P,G_pred,ratio_to_rect,pred_ratio_to_rect\n")
         for i, r in enumerate(rows):
             f.write(
                 f"{r[0]},{r[1]:.16g},{r[2]:.16g},{r[3]:.16g},{r[4]:.16g},{r[5]:.16g},"

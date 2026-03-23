@@ -32,7 +32,7 @@ if not files:
 print(f"Using sweep directory: {sweep_dir}")
 print(f"Found {len(files)} files")
 
-pattern = re.compile(r"gamma_mc=([0-9eE+\-.]+)_gamma_mr=([0-9eE+\-.]+)")
+pattern = re.compile(r"gamma_ee=([0-9eE+\-.]+)_gamma_mr=([0-9eE+\-.]+)")
 rows = []
 
 for fpath in files:
@@ -40,7 +40,7 @@ for fpath in files:
     if m is None:
         continue
 
-    gamma_mc = float(m.group(1))
+    gamma_ee = float(m.group(1))
     gamma_mr = float(m.group(2))
 
     with h5py.File(fpath, "r") as h5:
@@ -65,7 +65,7 @@ for fpath in files:
     else:
         delta_a0_mag = np.abs(delta_a0)
 
-    rows.append((gamma_mr, gamma_mc, delta_a0_mag))
+    rows.append((gamma_mr, gamma_ee, delta_a0_mag))
 
 if not rows:
     raise RuntimeError("No parseable files found (filename regex did not match).")
@@ -75,13 +75,13 @@ if not rows:
     raise RuntimeError("No rows remain after gamma_mr truncation.")
 
 gamma_mr_vals = np.array(sorted({r[0] for r in rows}))
-gamma_mc_vals = np.array(sorted({r[1] for r in rows}))
+gamma_ee_vals = np.array(sorted({r[1] for r in rows}))
 
-delta_a0_mag_grid = np.full((len(gamma_mr_vals), len(gamma_mc_vals)), np.nan)
+delta_a0_mag_grid = np.full((len(gamma_mr_vals), len(gamma_ee_vals)), np.nan)
 
-for gamma_mr, gamma_mc, delta_a0_mag in rows:
+for gamma_mr, gamma_ee, delta_a0_mag in rows:
     i = np.searchsorted(gamma_mr_vals, gamma_mr)
-    j = np.searchsorted(gamma_mc_vals, gamma_mc)
+    j = np.searchsorted(gamma_ee_vals, gamma_ee)
     delta_a0_mag_grid[i, j] = delta_a0_mag
 
 fig, ax = plt.subplots(figsize=(8, 6), constrained_layout=True)
@@ -100,7 +100,7 @@ cmap = sns.color_palette("rocket", as_cmap=True).copy()
 cmap.set_bad("0.85")
 pcm = ax.pcolormesh(
     gamma_mr_vals,
-    gamma_mc_vals,
+    gamma_ee_vals,
     delta_a0_mag_grid.T,
     shading="auto",
     cmap=cmap,

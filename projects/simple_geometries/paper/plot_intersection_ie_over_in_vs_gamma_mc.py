@@ -1,5 +1,5 @@
 """
-Plot |I_E| / |I_N| versus gamma_mc for selected gamma_mr curves
+Plot |I_E| / |I_N| versus gamma_ee for selected gamma_mr curves
 from an intersection full-sweep directory.
 
 Defaults to the most recent sweep under:
@@ -38,7 +38,7 @@ NORTH_COLOR = "#87D5F8"
 
 
 FILE_RE = re.compile(
-    r"bias=(?P<bias>[-+0-9.eE]+)_gamma_mc=(?P<gamma_mc>[-+0-9.eE]+)_gamma_mr=(?P<gamma_mr>[-+0-9.eE]+)_p_scatter=(?P<p>[-+0-9.eE]+)\.h5$"
+    r"bias=(?P<bias>[-+0-9.eE]+)_gamma_ee=(?P<gamma_ee>[-+0-9.eE]+)_gamma_mr=(?P<gamma_mr>[-+0-9.eE]+)_p_scatter=(?P<p>[-+0-9.eE]+)\.h5$"
 )
 
 
@@ -79,13 +79,13 @@ def parse_args() -> argparse.Namespace:
         "--output",
         type=Path,
         default=None,
-        help="Output PNG path (default: <sweep-dir>/ie_over_in_vs_gamma_mc.png)",
+        help="Output PNG path (default: <sweep-dir>/ie_over_in_vs_gamma_ee.png)",
     )
     parser.add_argument(
         "--csv",
         type=Path,
         default=None,
-        help="Output CSV path (default: <sweep-dir>/ie_over_in_vs_gamma_mc.csv)",
+        help="Output CSV path (default: <sweep-dir>/ie_over_in_vs_gamma_ee.csv)",
     )
     return parser.parse_args()
 
@@ -173,9 +173,9 @@ def main() -> None:
         m = FILE_RE.match(path.name)
         if not m:
             continue
-        gamma_mc = float(m.group("gamma_mc"))
+        gamma_ee = float(m.group("gamma_ee"))
         gamma_mr = float(m.group("gamma_mr"))
-        entries.append((path, gamma_mr, gamma_mc))
+        entries.append((path, gamma_mr, gamma_ee))
     if not entries:
         raise RuntimeError(f"No files matching expected naming pattern in {data_dir}")
 
@@ -213,7 +213,7 @@ def main() -> None:
     north_segment = (x >= north_x_min - 0.5 * dx) & (x <= north_x_max + 0.5 * dx)
 
     rows: list[tuple[float, float, float, float, float]] = []
-    for path, gamma_mr, gamma_mc in entries:
+    for path, gamma_mr, gamma_ee in entries:
         with h5py.File(path, "r") as h5:
             # Saved arrays are indexed as (y, x), i.e., first axis follows y-grid.
             a1_east = np.asarray(h5["a1"][:, ix_east])
@@ -230,10 +230,10 @@ def main() -> None:
         if np.isfinite(i_east) and np.isfinite(i_north) and i_north != 0:
             ratio = i_east / i_north
 
-        rows.append((gamma_mr, gamma_mc, i_east, i_north, ratio))
+        rows.append((gamma_mr, gamma_ee, i_east, i_north, ratio))
 
     gamma_mr_vals_all = np.array(sorted({r[0] for r in rows}))
-    gamma_mc_vals = np.array(sorted({r[1] for r in rows}))
+    gamma_ee_vals = np.array(sorted({r[1] for r in rows}))
     gamma_mr_vals = gamma_mr_vals_all[gamma_mr_vals_all <= args.gamma_mr_max]
     if gamma_mr_vals.size == 0:
         raise RuntimeError(f"No gamma_mr values <= {args.gamma_mr_max} available in sweep")
@@ -249,14 +249,14 @@ def main() -> None:
         idx = np.linspace(0, len(gamma_mr_vals) - 1, n).round().astype(int)
         selected_gamma_mr = gamma_mr_vals[np.unique(idx)]
 
-    out_png = args.output if args.output else sweep_dir / "ie_over_in_vs_gamma_mc.png"
-    out_csv = args.csv if args.csv else sweep_dir / "ie_over_in_vs_gamma_mc.csv"
+    out_png = args.output if args.output else sweep_dir / "ie_over_in_vs_gamma_ee.png"
+    out_csv = args.csv if args.csv else sweep_dir / "ie_over_in_vs_gamma_ee.csv"
 
     # Write CSV for all points.
     with out_csv.open("w", encoding="utf-8") as f:
-        f.write("gamma_mr,gamma_mc,i_east,i_north,ie_over_in\n")
-        for gamma_mr, gamma_mc, i_east, i_north, ratio in sorted(rows, key=lambda r: (r[0], r[1])):
-            f.write(f"{gamma_mr:.16g},{gamma_mc:.16g},{i_east:.16g},{i_north:.16g},{ratio:.16g}\n")
+        f.write("gamma_mr,gamma_ee,i_east,i_north,ie_over_in\n")
+        for gamma_mr, gamma_ee, i_east, i_north, ratio in sorted(rows, key=lambda r: (r[0], r[1])):
+            f.write(f"{gamma_mr:.16g},{gamma_ee:.16g},{i_east:.16g},{i_north:.16g},{ratio:.16g}\n")
 
     # Plot selected gamma_mr cuts.
     fig, ax = plt.subplots(figsize=(5.7, 3.6), constrained_layout=True)
@@ -311,7 +311,7 @@ def main() -> None:
         f"sampling: x_east={x[ix_east]:.6g} (boundary {x[ix_east_boundary]:.6g}), "
         f"y_north={y[iy_north]:.6g} (boundary {y[iy_north_boundary]:.6g}), depth={args.sample_depth}"
     )
-    print(f"gamma_mr_count_total: {len(gamma_mr_vals_all)}, gamma_mr_count_plotted: {len(gamma_mr_vals)}, gamma_mc_count: {len(gamma_mc_vals)}")
+    print(f"gamma_mr_count_total: {len(gamma_mr_vals_all)}, gamma_mr_count_plotted: {len(gamma_mr_vals)}, gamma_ee_count: {len(gamma_ee_vals)}")
     print(f"gamma_mr_max_plot: {args.gamma_mr_max}")
     print("selected_gamma_mr:", ", ".join(format_gamma(float(v)) for v in selected_gamma_mr))
     print(f"saved_csv: {out_csv}")

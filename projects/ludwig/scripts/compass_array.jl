@@ -1,32 +1,28 @@
-# run a 2D parameter sweep for the simple_geometries dogleg problem, sweeping over gamma_mr and gamma_ee using
-# SLURM array jobs. this script handles both the initial submission (writing shared metadata and submitting the array
-# job) and the worker logic. the parameter grid is defined in the script, and each worker picks which cases to run
-# based on its SLURM_ARRAY_TASK_ID. results are saved in a shared directory with one file per case.
+# run a large parameter sweep for the Ludwig compass problem, sweeping over gamma_mr and gamma_ee using
+# SLURM array jobs. this script mirrors the square_bells array pattern: 50x50 log-spaced rates, 250 jobs,
+# and 10 cases per job with warm starts within each task block.
 
 using Dates
 using DrWatson
 using FermiHarmonics
 using Sockets: gethostname
 
-parse_env_float(name::AbstractString, default::Float64) =
-    haskey(ENV, name) ? parse(Float64, ENV[name]) : default
-
-
 # ======================================================================================================================
 # Configuration and Setup
 # ======================================================================================================================
 
-name = "simple_geometries_dogleg_gamma_grid"
-project_root = normpath(joinpath(@__DIR__, "..", ".."))
+name = "ludwig_compass"
+project_root = normpath(joinpath(@__DIR__, ".."))
 main_project = normpath(joinpath(project_root, "..", ".."))
-mesh_path = joinpath(project_root, "meshes", "dogleg", "dogleg.inp")
+mesh_path = joinpath(project_root, "mesh", "compass.inp")
 results_root = joinpath(project_root, "results")
-n_jobs = 25
-cases_per_job = 20
+n_jobs = 250
+cases_per_job = 10
+nvisnodes = 500
 mkpath(results_root)
 
 bias = 1.0
-p_scatter = parse_env_float("FERMI_P_SCATTER", 1.0)
+p_scatter = 1.0
 
 sbatch = Dict(
     :job_name => "$(name)_sweep",
@@ -39,17 +35,21 @@ sbatch = Dict(
     :export => "ALL",
 )
 
-n_gamma_mr = 10
-n_gamma_ee = 50
-gamma_mr_vals = 10 .^ range(log10(1e-2), log10(1e1), length=n_gamma_mr)
-gamma_ee_vals = 10 .^ range(log10(1e-2), log10(1e2), length=n_gamma_ee)
+gamma_mr_vals = 10 .^ range(log10(1e-2), log10(1e2), length = 50)
+gamma_ee_vals = 10 .^ range(log10(1e-2), log10(1e2), length = 50)
 total_cases = length(gamma_mr_vals) * length(gamma_ee_vals)
 @assert total_cases == n_jobs * cases_per_job
 
 boundary_conditions = Dict(
     :walls => MaxwellWallBC(p_scatter),
-    :source => OhmicContactBC(bias / 2),
-    :drain => OhmicContactBC(-bias / 2),
+    :S => MaxwellWallBC(p_scatter),
+    :SE => MaxwellWallBC(p_scatter),
+    :E => MaxwellWallBC(p_scatter),
+    :NE => OhmicContactBC(-bias / 2),
+    :N => MaxwellWallBC(p_scatter),
+    :NW => OhmicContactBC(bias / 2),
+    :W => MaxwellWallBC(p_scatter),
+    :SW => MaxwellWallBC(p_scatter),
 )
 
 solve_params = SolveParams(;
@@ -57,8 +57,7 @@ solve_params = SolveParams(;
     max_harmonic_auto = 100,
     polydeg = 3,
     tspan_end = 100.0,
-    residual_tol = 1e-5,
-    residual_mode = :absolute_all,
+    residual_tol = 1e-4,
     cfl = 0.5,
     log_every = 500,
 )
@@ -77,22 +76,17 @@ slurm_metadata = Dict(
 sweep_metadata = Dict(
     "bias" => bias,
     "p_scatter" => p_scatter,
-    "gamma_mr_min" => first(gamma_mr_vals),
-    "gamma_mr_max" => last(gamma_mr_vals),
-    "n_gamma_mr" => n_gamma_mr,
-    "gamma_ee_min" => first(gamma_ee_vals),
-    "gamma_ee_max" => last(gamma_ee_vals),
-    "n_gamma_ee" => n_gamma_ee,
+    "nvisnodes" => nvisnodes,
+    "positive_contact" => "NW",
+    "negative_contact" => "NE",
 )
-
 
 # ======================================================================================================================
 # Submit mode
 # ======================================================================================================================
 
 if !haskey(ENV, "SLURM_ARRAY_TASK_ID")
-
-    @info "Dogleg gamma-grid sweep submission" name mesh=basename(mesh_path) bias p_scatter total_cases n_gamma_mr n_gamma_ee
+    @info "Compass sweep submission" name mesh=basename(mesh_path) bias p_scatter total_cases nvisnodes
 
     timestamp = Dates.format(now(), "yyyy-mm-dd_HHMMSS")
     sweep_id = "$(name)_sweep_$(timestamp)"
@@ -107,14 +101,11 @@ if !haskey(ENV, "SLURM_ARRAY_TASK_ID")
     sbatch_submit[:error] = joinpath(log_dir, "slurm-%A_%a.err")
 
     submit_sweep!(;
-        script=abspath(@__FILE__),
-        n_jobs=n_jobs,
-        project_dir=main_project,
-        env=Dict(
-            "FERMI_SWEEP_DIR" => sweep_dir,
-            "FERMI_P_SCATTER" => string(p_scatter),
-        ),
-        sbatch=sbatch_submit,
+        script = abspath(@__FILE__),
+        n_jobs = n_jobs,
+        project_dir = main_project,
+        env = Dict("FERMI_SWEEP_DIR" => sweep_dir),
+        sbatch = sbatch_submit,
     )
 
     write_sweep_metadata!(sweep_dir, solve_params, sweep_metadata, slurm_metadata, gamma_mr_vals, gamma_ee_vals)
@@ -125,7 +116,6 @@ if !haskey(ENV, "SLURM_ARRAY_TASK_ID")
     flush(stderr)
     exit(0)
 end
-
 
 # ======================================================================================================================
 # Worker mode
@@ -138,7 +128,7 @@ data_dir = joinpath(sweep_dir, "data")
 @info "Worker starting" job_id task_id hostname=gethostname() julia=VERSION threads=Threads.nthreads()
 
 case_positions, total_cases, n_cases_this_task, _ = select_cases(
-    gamma_mr_vals, gamma_ee_vals; cases_per_task=cases_per_job, env=ENV
+    gamma_mr_vals, gamma_ee_vals; cases_per_task = cases_per_job, env = ENV
 )
 ordered_global_indices = ordered_case_indices(gamma_mr_vals, gamma_ee_vals)
 assigned_global_indices = ordered_global_indices[collect(case_positions)]
@@ -168,18 +158,23 @@ let
 
         sol, semi = FermiHarmonics.solve(
             local_mesh_path, boundary_conditions, solve_params, gamma_mr, gamma_ee;
-            max_harmonic=:auto,
-            u0_override=u0_override,
-            name="$(name)_g$(index_global)",
+            max_harmonic = :auto,
+            u0_override = u0_override,
+            name = "$(name)_g$(index_global)",
         )
         @info "Case converged" iterations=sol.destats.naccept duration=Dates.canonicalize(
             Dates.CompoundPeriod(now() - case_start)
         )
 
-        file_params = (bias = bias, p_scatter = p_scatter, gamma_mr = gamma_mr, gamma_ee = gamma_ee)
-        small_path = joinpath(data_dir, DrWatson.savename(file_params; connector="_", sort=true) * ".h5")
-        save_for_analysis(sol, semi, small_path)
-        @info "Saved" path=basename(small_path) small_mb=round(filesize(small_path) / 1e6, digits=2)
+        file_params = (
+            bias = bias,
+            p_scatter = p_scatter,
+            gamma_mr = gamma_mr,
+            gamma_ee = gamma_ee,
+        )
+        small_path = joinpath(data_dir, DrWatson.savename(file_params; connector = "_", sort = true) * ".h5")
+        save_for_analysis(sol, semi, small_path; nvisnodes = nvisnodes)
+        @info "Saved" path=basename(small_path) small_mb=round(filesize(small_path) / 1e6, digits = 2)
 
         u0_override = copy(sol.u[end])
         GC.gc()

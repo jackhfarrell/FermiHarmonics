@@ -6,20 +6,20 @@ import numpy as np
 PAPER_DIR = Path(__file__).resolve().parent
 
 SOURCES = [
-    ("Diverging nozzle", PAPER_DIR / "diverging_sweep" / "diverging_conductance_vs_gamma_mc.csv"),
-    ("Rectangle", PAPER_DIR / "rectangle_sweep" / "rectangle_conductance_vs_gamma_mc.csv"),
-    ("Dog-leg", PAPER_DIR / "dogleg_sweep" / "dogleg_conductance_vs_gamma_mc.csv"),
+    ("Diverging nozzle", PAPER_DIR / "diverging_sweep" / "diverging_conductance_vs_gamma_ee.csv"),
+    ("Rectangle", PAPER_DIR / "rectangle_sweep" / "rectangle_conductance_vs_gamma_ee.csv"),
+    ("Dog-leg", PAPER_DIR / "dogleg_sweep" / "dogleg_conductance_vs_gamma_ee.csv"),
 ]
 
-OUTFILE = PAPER_DIR / "conductance_vs_gamma_mc_all_geometries.png"
+OUTFILE = PAPER_DIR / "conductance_vs_gamma_ee_all_geometries.png"
 
 
 def load_csv(path: Path):
     data = np.genfromtxt(path, delimiter=",", names=True)
-    gamma_mc = np.asarray(data["gamma_mc"], dtype=float)
+    gamma_ee = np.asarray(data["gamma_ee"], dtype=float)
     conductance = np.asarray(data["conductance"], dtype=float)
-    order = np.argsort(gamma_mc)
-    return gamma_mc[order], conductance[order]
+    order = np.argsort(gamma_ee)
+    return gamma_ee[order], conductance[order]
 
 
 def main():
@@ -28,8 +28,8 @@ def main():
     for label, csv_path in SOURCES:
         if not csv_path.is_file():
             raise RuntimeError(f"Missing CSV: {csv_path}")
-        gamma_mc, conductance = load_csv(csv_path)
-        ax.plot(gamma_mc, conductance, "-o", lw=1.8, ms=4.0, label=label)
+        gamma_ee, conductance = load_csv(csv_path)
+        ax.plot(gamma_ee, conductance, "-o", lw=1.8, ms=4.0, label=label)
 
     ax.set_xscale("log")
     ax.set_xlabel(r"$\gamma_{mc}$")

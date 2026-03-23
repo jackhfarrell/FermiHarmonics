@@ -29,7 +29,7 @@ end
 @testset "Symmetry and boundary-operator consistency" begin
     M = 8
     nvars = 1 + 2 * M
-    eq = FermiHarmonics2D(nvars; gamma_mr=0.0, gamma_mc=0.0, max_harmonic=M)
+    eq = FermiHarmonics2D(nvars; gamma_mr=0.0, gamma_ee=0.0, max_harmonic=M)
     Rx = reflection_x_matrix(M)
     Ry = reflection_y_matrix(M)
 

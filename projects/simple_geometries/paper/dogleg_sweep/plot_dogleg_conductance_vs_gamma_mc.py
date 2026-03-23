@@ -9,18 +9,18 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 RESULTS_ROOT = PROJECT_ROOT / "results"
 RESULTS_ROOT_SWEEPS = PROJECT_ROOT / "results" / "sweeps"
 SWEEP_GLOBS = [
-    "simple_geometries_dogleg_gamma_mc_sweep_sweep_*",
-    "simple_geometries_dogleg_gamma_mc_sweep_*",
+    "simple_geometries_dogleg_gamma_ee_sweep_sweep_*",
+    "simple_geometries_dogleg_gamma_ee_sweep_*",
     "simple_geometries_dogleg_sweep_*",
 ]
-HARDCODED_SWEEP_DIR = RESULTS_ROOT / "simple_geometries_dogleg_gamma_mc_sweep_sweep_2026-02-25_145852"
+HARDCODED_SWEEP_DIR = RESULTS_ROOT / "simple_geometries_dogleg_gamma_ee_sweep_sweep_2026-02-25_145852"
 
 GAMMA_MR_TARGET = 1e-2
 GAMMA_MR_TOL = 1e-12
 CONTACT_SAMPLE_DEPTH = 2
 
-OUT_CSV = Path(__file__).resolve().parent / "dogleg_conductance_vs_gamma_mc.csv"
-OUT_PNG = Path(__file__).resolve().parent / "dogleg_conductance_vs_gamma_mc.png"
+OUT_CSV = Path(__file__).resolve().parent / "dogleg_conductance_vs_gamma_ee.csv"
+OUT_PNG = Path(__file__).resolve().parent / "dogleg_conductance_vs_gamma_ee.png"
 
 
 def integrate_over_valid_segments(coord: np.ndarray, values: np.ndarray, valid: np.ndarray) -> float:
@@ -60,13 +60,13 @@ def pick_latest_sweep_dir():
 
 
 def parse_rows(files):
-    pat = re.compile(r"gamma_mc=([0-9eE+\-.]+)_gamma_mr=([0-9eE+\-.]+)")
+    pat = re.compile(r"gamma_ee=([0-9eE+\-.]+)_gamma_mr=([0-9eE+\-.]+)")
     rows = []
     for fpath in files:
         m = pat.search(fpath.name)
         if m is None:
             continue
-        gamma_mc = float(m.group(1))
+        gamma_ee = float(m.group(1))
         gamma_mr = float(m.group(2))
         if not np.isclose(gamma_mr, GAMMA_MR_TARGET, atol=GAMMA_MR_TOL, rtol=0.0):
             continue
@@ -123,14 +123,14 @@ def parse_rows(files):
         delta_a0 = np.abs(a0_source - a0_drain)
 
         conductance = i_norm / delta_a0 if np.isfinite(i_norm) and np.isfinite(delta_a0) and delta_a0 > 0 else np.nan
-        rows.append((gamma_mc, gamma_mr, i_total, i_norm, delta_a0, conductance))
+        rows.append((gamma_ee, gamma_mr, i_total, i_norm, delta_a0, conductance))
 
     return rows
 
 
 def write_csv(rows):
     with OUT_CSV.open("w", encoding="utf-8") as f:
-        f.write("gamma_mc,gamma_mr,i_total,i_norm,delta_a0_measured,conductance\n")
+        f.write("gamma_ee,gamma_mr,i_total,i_norm,delta_a0_measured,conductance\n")
         for r in rows:
             f.write(",".join(f"{v:.16g}" for v in r) + "\n")
 
@@ -146,11 +146,11 @@ def main():
     rows = sorted(rows, key=lambda t: t[0])
     write_csv(rows)
 
-    gamma_mc = np.array([r[0] for r in rows])
+    gamma_ee = np.array([r[0] for r in rows])
     conductance = np.array([r[5] for r in rows])
 
     fig, ax = plt.subplots(figsize=(7.2, 4.6), constrained_layout=True)
-    ax.plot(gamma_mc, conductance, "-o", lw=1.8, ms=4.5)
+    ax.plot(gamma_ee, conductance, "-o", lw=1.8, ms=4.5)
     ax.set_xscale("log")
     ax.set_xlabel(r"$\gamma_{mc}$")
     ax.set_ylabel(r"$G = I_{\mathrm{norm}}/|\Delta a_0|$")
