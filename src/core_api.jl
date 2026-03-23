@@ -951,3 +951,15 @@ end
 function evaluate_observables(args...; kwargs...)
     throw(ArgumentError("evaluate_observables is provided by backend extensions. Load Trixi to use the current backend implementation."))
 end
+
+function create_live_dashboard(args...; kwargs...)
+    throw(ArgumentError("Live visualization requires loading GLMakie to activate the Makie extension."))
+end
+
+function update_live_dashboard!(args...; kwargs...)
+    throw(ArgumentError("Live visualization requires loading GLMakie to activate the Makie extension."))
+end
+
+function finalize_live_dashboard!(args...; kwargs...)
+    return nothing
+end

@@ -309,14 +309,14 @@ function compute_mesh_native_analysis(solution_vector, semi; refine=6)
     )
 end
 
-function compute_analysis_grids(solution_vector, semi; nvisnodes=400)
+function compute_analysis_grids(solution_vector, semi; nvisnodes=400, log::Bool=true)
     nvisnodes = Int(nvisnodes)
     axes = analysis_grid_axes(solution_vector, semi, nvisnodes)
     equations = axes.equations
     x_uniform = axes.x
     y_uniform = axes.y
 
-    @info "Analysis: direct grid evaluation" nvisnodes
+    log && @info "Analysis: direct grid evaluation" nvisnodes
     num_x = length(x_uniform)
     num_y = length(y_uniform)
     density_grid = fill(NaN, num_x, num_y)
@@ -361,6 +361,7 @@ function compute_analysis_grids(solution_vector, semi; nvisnodes=400)
 
     return (
         density = density_grid,
+        n = density_grid,
         a0 = density_grid,
         a1 = a1_grid,
         b1 = b1_grid,

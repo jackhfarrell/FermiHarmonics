@@ -1,5 +1,6 @@
 using Test
 using FermiFlows
+using StaticArrays
 
 @testset "Core Package Loads Without Trixi" begin
     @test Base.get_extension(FermiFlows, :FermiFlowsTrixiExt) === nothing
@@ -19,6 +20,12 @@ using FermiFlows
     @test mode_rate(ConstantModeRateProfile(0.9), 8) ≈ 0.9
     @test mode_rate(CustomModeRateProfile(m -> 0.2m), 5) ≈ 1.0
     @test model.discretization.max_harmonic === :auto
+    @test residual_progress_fraction(10.0, 1.0e-3, 1.0e-2) == 1.0
+    @test 0.0 <= residual_progress_fraction(10.0, 1.0, 1.0e-2) < 1.0
+
+    live_config = LiveVisualizationConfig(; accepted_step_interval=25, min_update_seconds=0.0, show_window=false)
+    @test live_config.geometry_mode === :mesh_native
+    @test live_config.accepted_step_interval == 25
 end
 
 @testset "Core Multiband Bookkeeping" begin
@@ -63,12 +70,78 @@ using Trixi
     @test Base.get_extension(FermiFlows, :FermiFlowsTrixiExt) !== nothing
 end
 
+using GLMakie
+
+@testset "Makie Extension Loads" begin
+    @test Base.get_extension(FermiFlows, :FermiFlowsMakieExt) !== nothing
+end
+
+const TrixiExt = Base.get_extension(FermiFlows, :FermiFlowsTrixiExt)
+const MakieExt = Base.get_extension(FermiFlows, :FermiFlowsMakieExt)
+
 const TESLA_MESH = normpath(joinpath(@__DIR__, "..", "projects", "nonlinearities", "mesh", "tesla_valve.inp"))
 const TESLA_BCS = Dict(
     :walls => MaxwellWallBC(1.0),
     :inlet => OhmicContactBC(0.05),
     :outlet => OhmicContactBC(-0.05),
 )
+
+@testset "Progress And Cadence Helpers" begin
+    steady_progress = TrixiExt.build_progress_snapshot(20, 0.1, 1.0, 1.0e-4, 1.0e-3, 1.0)
+    time_progress = TrixiExt.build_progress_snapshot(20, 0.95, 1.0, 1.0, 1.0e-3, 10.0)
+
+    @test steady_progress.leading_stop_condition === :steady_state
+    @test time_progress.leading_stop_condition === :final_time
+
+    state = TrixiExt.SolveMonitorState(
+        LiveVisualizationConfig(; accepted_step_interval=5, min_update_seconds=0.2, show_window=false),
+        nothing,
+        1.0,
+        time() - 1.0,
+        0,
+    )
+    @test TrixiExt.should_update_live_visualization(state, 5)
+    state.last_update_time = time()
+    @test !TrixiExt.should_update_live_visualization(state, 5)
+    @test !TrixiExt.should_update_live_visualization(state, 4)
+end
+
+@testset "Makie Dashboard Updates In Place" begin
+    config = LiveVisualizationConfig(; geometry_mode=:cartesian, show_window=false)
+    snapshot0 = LiveVisualizationSnapshot(
+        LiveProgressSnapshot(0, 0.0, 1.0, 1.0, 1.0e-3, 0.0, 0.0, :steady_state, :running),
+        LiveFieldSnapshot(
+            :a0,
+            :cartesian,
+            "a0",
+            collect(range(-1.0, 1.0; length=8)),
+            collect(range(-1.0, 1.0; length=8)),
+            rand(8, 8),
+            trues(8, 8),
+            nothing,
+        ),
+    )
+    dashboard = FermiFlows.create_live_dashboard(config, snapshot0; name="dashboard_test")
+    original_plot = dashboard.field_plot
+
+    snapshot1 = LiveVisualizationSnapshot(
+        LiveProgressSnapshot(10, 0.5, 1.0, 1.0e-2, 1.0e-3, 0.5, 0.5, :steady_state, :running),
+        LiveFieldSnapshot(
+            :a0,
+            :cartesian,
+            "a0",
+            snapshot0.field.x,
+            snapshot0.field.y,
+            fill(2.0, 8, 8),
+            trues(8, 8),
+            nothing,
+        ),
+    )
+    FermiFlows.update_live_dashboard!(dashboard, snapshot1)
+
+    @test dashboard.field_plot === original_plot
+    @test all(dashboard.field_values[] .== 2.0)
+end
 
 @testset "Linear Harmonic Solve" begin
     config = SolverConfig(;
@@ -86,7 +159,13 @@ const TESLA_BCS = Dict(
         IsotropicHarmonicStreaming(),
         LinearBGKCollision(0.0, ConstantModeRateProfile(0.5)),
     )
-    sol, semi = solve(TrixiProblem(; mesh_path=TESLA_MESH, boundary_conditions=TESLA_BCS), model, config; name="test_linear")
+    sol, semi = solve(
+        TrixiProblem(; mesh_path=TESLA_MESH, boundary_conditions=TESLA_BCS),
+        model,
+        config;
+        name="test_linear",
+        live_visualization=LiveVisualizationConfig(; geometry_mode=:cartesian, accepted_step_interval=5, min_update_seconds=0.0, show_window=false, nvisnodes=24),
+    )
     status = solve_status(sol, semi, config)
 
     @test length(sol.u[end]) == length(Trixi.wrap_array(sol.u[end], semi))
@@ -109,7 +188,13 @@ end
         IsotropicHarmonicStreaming(),
         QuadraticBGKCollision(0.0, OddQuarticRateProfile(0.5); mu0=1.0, mass=2.0, electrostatic_coupling=0.0),
     )
-    sol, semi = solve(TrixiProblem(; mesh_path=TESLA_MESH, boundary_conditions=TESLA_BCS), model, config; name="test_quadratic")
+    sol, semi = solve(
+        TrixiProblem(; mesh_path=TESLA_MESH, boundary_conditions=TESLA_BCS),
+        model,
+        config;
+        name="test_quadratic",
+        live_visualization=LiveVisualizationConfig(; geometry_mode=:mesh_native, accepted_step_interval=5, min_update_seconds=0.0, show_window=false, refine=2),
+    )
     obs = evaluate_observables(sol, semi, 0.0, 0.0)
 
     @test hasproperty(obs, :in_domain)
@@ -138,6 +223,46 @@ end
         ExactAngleBGKCollision(; gamma_mr=0.0, gamma_mc=0.5, mu0=1.0, mass=2.0, electrostatic_coupling=0.0),
     )
     sol, semi = solve(TrixiProblem(; mesh_path=TESLA_MESH, boundary_conditions=TESLA_BCS), model, config; name="test_exact_angle")
+    snapshot = TrixiExt.build_live_field_snapshot(sol.u[end], semi, LiveVisualizationConfig(; geometry_mode=:mesh_native, show_window=false, refine=2))
 
     @test length(sol.u[end]) == length(Trixi.wrap_array(sol.u[end], semi))
+    @test snapshot.field === :current_magnitude
+end
+
+@testset "Multiband Snapshot Extraction" begin
+    config = SolverConfig(;
+        polydeg=1,
+        tspan_end=0.005,
+        residual_tol=1e-3,
+        cfl=0.2,
+        log_every=10_000,
+        min_harmonic=2,
+        max_harmonic_auto=4,
+    )
+    bands = [
+        BandSpec(name=:light, vF=1.0, nu=1.5, mass=1.0, charge=-1.0, gamma_mr=0.0, gamma_mc=0.2),
+        BandSpec(name=:heavy, vF=0.8, nu=2.0, mass=3.0, charge=1.0, gamma_mr=0.1, gamma_mc=0.4),
+    ]
+    model = KineticModel2D(
+        Isotropic2DFermiSurface(),
+        HarmonicBasis(2),
+        IsotropicHarmonicStreaming(),
+        LinearBGKCollision(0.0, TwoRateProfile(0.0));
+        bands=bands,
+        gamma_drag=0.7,
+    )
+    equations, _ = TrixiExt.build_equations(model, config)
+    boundary_symbols = sort(collect(keys(TESLA_BCS)))
+    boundary_conditions = (; TESLA_BCS...)
+    solver = Trixi.DGSEM(polydeg=config.polydeg, surface_flux=Trixi.flux_lax_friedrichs)
+    mesh = Trixi.P4estMesh{2}(TESLA_MESH; boundary_symbols=boundary_symbols)
+    semi = Trixi.SemidiscretizationHyperbolic(
+        mesh, equations, (x, t, eq) -> zeros(StaticArrays.SVector{Trixi.nvariables(equations), Float64}), solver;
+        boundary_conditions=boundary_conditions,
+        source_terms=TrixiExt.source_terms,
+    )
+    ode = Trixi.semidiscretize(semi, (0.0, config.tspan_end))
+    snapshot = TrixiExt.build_live_field_snapshot(ode.u0, semi, LiveVisualizationConfig(; geometry_mode=:mesh_native, show_window=false, refine=2))
+
+    @test snapshot.field === :n
 end

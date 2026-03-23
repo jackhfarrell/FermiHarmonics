@@ -3,13 +3,22 @@ function solve(
     model::KineticModel2D,
     config::SolverConfig;
     u0_override::Union{Nothing, AbstractVector}=nothing,
+    live_visualization::Union{Nothing, LiveVisualizationConfig}=nothing,
     visualize::Bool=false,
     visualize_every::Union{Nothing, Integer}=nothing,
-    visualization_mode::Symbol=:cartesian,
+    visualization_mode::Symbol=:mesh_native,
     name::AbstractString="run",
 )
     isfile(problem.mesh_path) || error("Mesh file not found: $(problem.mesh_path)")
     validate(config)
+    if isnothing(live_visualization) && visualize
+        interval = isnothing(visualize_every) ? config.log_every : Int(visualize_every)
+        live_visualization = LiveVisualizationConfig(;
+            accepted_step_interval=interval,
+            geometry_mode=visualization_mode,
+        )
+    end
+    !isnothing(live_visualization) && validate(live_visualization)
 
     equations, harmonic_mode = build_equations(model, config)
     nvars = Trixi.nvariables(equations)
@@ -68,16 +77,14 @@ function solve(
         ode = SciMLBase.remake(ode; u0=warm.u0)
     end
 
+    monitor_state = create_monitor_state(ode, semi, live_visualization)
+    initialize_live_dashboard!(monitor_state, ode.u0, semi, config, name)
+
     stepsize_callback = Trixi.StepsizeCallback(cfl=config.cfl)
     steady_state_callback = Trixi.SteadyStateCallback(abstol=config.residual_tol, reltol=0.0)
-    monitor = monitor_callback(config, semi)
+    monitor = solve_monitor_callback(config, semi, monitor_state)
 
     callbacks = Any[stepsize_callback, steady_state_callback, monitor]
-    if visualize
-        interval = isnothing(visualize_every) ? config.log_every : Int(visualize_every)
-        interval > 0 || throw(ArgumentError("visualize_every must be positive"))
-        push!(callbacks, visualization_callback(config, semi, name; interval=interval, mode=visualization_mode))
-    end
 
     sol = Trixi.solve(
         ode,
@@ -91,28 +98,12 @@ function solve(
     )
 
     status = solve_status(sol, semi, config)
+    finalize_live_dashboard!(monitor_state, sol.u[end], semi, status, config)
     @info "Solve complete" name=name stop_reason=status.stop_reason final_time=status.final_time target_final_time=status.target_final_time final_residual=status.final_residual tolerance=config.residual_tol converged=status.converged retcode=status.retcode successful=status.successful
     flush(stdout)
     flush(stderr)
 
     return sol, semi
-end
-
-function monitor_callback(config, semi)
-    return SciMLBase.DiscreteCallback(
-        (u, t, integrator) -> integrator.stats.naccept % config.log_every == 0,
-        integrator -> begin
-            du_ode = Trixi.get_du(integrator)
-            integrator.f(du_ode, integrator.u, integrator.p, integrator.t)
-            du = Trixi.wrap_array(du_ode, semi)
-            residual = Trixi.residual_steady_state(du, semi.equations)
-            @info "Progress" iter=integrator.stats.naccept t=round(integrator.t, digits=4) dt=round(integrator.dt, digits=6) residual=round(residual, sigdigits=3) tolerance=config.residual_tol
-            flush(stdout)
-            flush(stderr)
-            nothing
-        end;
-        save_positions=(false, false),
-    )
 end
 
 function solve_status(sol, semi, config::SolverConfig; time_atol::Real=1e-10)
@@ -134,65 +125,5 @@ function solve_status(sol, semi, config::SolverConfig; time_atol::Real=1e-10)
         target_final_time=config.tspan_end,
         successful=successful,
         retcode=retcode,
-    )
-end
-
-function visualization_callback(config, semi, name::AbstractString; interval::Int=config.log_every, mode::Symbol=:cartesian)
-    if transport_is_nonlinear(semi.equations)
-        return nonlinear_visualization_callback(config, semi, name; interval=interval, mode=mode)
-    end
-
-    variable_names = semi.equations isa MultiBandFermiHarmonics2D ?
-        collect(Trixi.varnames(Trixi.cons2cons, semi.equations)) :
-        ["a0", "a1", "b1"]
-    return Trixi.VisualizationCallback(
-        semi;
-        interval=interval,
-        variable_names=variable_names,
-        filename="live_viz_$(name)",
-        overwrite=true,
-        seriescolor=:magma,
-    )
-end
-
-function nonlinear_visualization_callback(config, semi, name::AbstractString; interval::Int=config.log_every, mode::Symbol=:cartesian)
-    output_path = "live_viz_$(name).png"
-    analysis_path = mode === :mesh_native ? "live_viz_$(name)_mesh_native.h5" : "live_viz_$(name).h5"
-    project_root = normpath(joinpath(@__DIR__, ".."))
-    plot_script = mode === :mesh_native ?
-        joinpath(project_root, "demo", "plot_mesh_native_streamlines.py") :
-        joinpath(project_root, "demo", "plot_nonlinear_streamlines.py")
-    nvisnodes = 120
-
-    return SciMLBase.DiscreteCallback(
-        (u, t, integrator) -> integrator.stats.naccept % interval == 0,
-        integrator -> begin
-            if mode === :mesh_native
-                mesh_data = compute_mesh_native_analysis(integrator.u, semi; refine=6)
-                analysis_write_mesh_native_hdf5(analysis_path, mesh_data, integrator.t, semi.equations)
-            elseif mode === :cartesian
-                grids = compute_analysis_grids(integrator.u, semi; nvisnodes=nvisnodes)
-                analysis_write_hdf5(
-                    analysis_path,
-                    grids.density,
-                    grids.a1,
-                    grids.b1,
-                    grids.jx,
-                    grids.jy,
-                    grids.x,
-                    grids.y,
-                    grids.mask,
-                    integrator.t,
-                    grids.equations,
-                    band_grids=grids.bands,
-                )
-            else
-                throw(ArgumentError("unsupported visualization_mode=$(mode); use :cartesian or :mesh_native"))
-            end
-            run(`python3 $plot_script $analysis_path --output $output_path`)
-            @info "Updated nonlinear live visualization" path=output_path t=round(integrator.t, digits=4)
-            nothing
-        end;
-        save_positions=(false, false),
     )
 end

@@ -9,7 +9,6 @@ using StaticArrays
 using HDF5
 using FFTW
 using NLsolve
-using Plots
 
 const FermiHarmonics = @__MODULE__
 
@@ -20,6 +19,9 @@ import FermiFlows: solve,
                    save_mesh_native_analysis,
                    evaluate_solution,
                    evaluate_observables,
+                   create_live_dashboard,
+                   finalize_live_dashboard!,
+                   update_live_dashboard!,
                    collision_sources!,
                    BandSpec,
                    BCProjectorCache,
@@ -27,6 +29,10 @@ import FermiFlows: solve,
                    ExactAngleBGKCollision,
                    HarmonicBasis,
                    KineticModel2D,
+                   LiveFieldSnapshot,
+                   LiveProgressSnapshot,
+                   LiveVisualizationConfig,
+                   LiveVisualizationSnapshot,
                    LinearBGKCollision,
                    MaxwellWallBC,
                    NonlinearBoundaryFaceData,
@@ -59,6 +65,7 @@ import FermiFlows: solve,
                    nonlinear_timing_enabled,
                    profile_reference_rate,
                    record_nonlinear_timing!,
+                   residual_progress_fraction,
                    resolve_max_harmonic,
                    resize_multiband_warm_start,
                    resize_warm_start,
@@ -75,6 +82,7 @@ include("../src/source_terms.jl")
 include("../src/boundary_conditions.jl")
 include("../src/trixi_interface.jl")
 include("../src/io_utils.jl")
+include("../src/live_visualization_trixi.jl")
 include("../src/trixi_runner.jl")
 
 end

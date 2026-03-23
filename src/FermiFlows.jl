@@ -6,6 +6,7 @@ using SparseArrays
 using StaticArrays
 
 include("core_api.jl")
+include("live_visualization_api.jl")
 include("reference_setup.jl")
 
 export AbstractFermiSurface2D,
@@ -29,6 +30,10 @@ export AbstractFermiSurface2D,
        TwoRateAngleBGKCollision,
        KineticModel2D,
        SolverConfig,
+       LiveVisualizationConfig,
+       LiveProgressSnapshot,
+       LiveFieldSnapshot,
+       LiveVisualizationSnapshot,
        TrixiProblem,
        MaxwellWallBC,
        OhmicContactBC,
@@ -52,6 +57,7 @@ export AbstractFermiSurface2D,
        band_momentum_weight,
        streaming_matrices,
        cosine_index,
-       sine_index
+       sine_index,
+       residual_progress_fraction
 
 end
