@@ -35,8 +35,151 @@ end
 const NONLINEAR_GRADIENT_CACHE = IdDict{UInt, NonlinearGradientCacheEntry}()
 const NONLINEAR_MEAN_GRADIENT_CACHE = IdDict{UInt, NonlinearGradientCacheEntry}()
 
+mutable struct NonlinearTimingThreadStats
+    flux_ns::UInt64
+    flux_calls::UInt64
+    bgk_ns::UInt64
+    bgk_calls::UInt64
+    boundary_ns::UInt64
+    boundary_calls::UInt64
+    diffuse_ns::UInt64
+    diffuse_calls::UInt64
+    speed_ns::UInt64
+    speed_calls::UInt64
+    gradient_ns::UInt64
+    gradient_calls::UInt64
+end
+
+NonlinearTimingThreadStats() = NonlinearTimingThreadStats(
+    0, 0,
+    0, 0,
+    0, 0,
+    0, 0,
+    0, 0,
+    0, 0,
+)
+
+const NONLINEAR_TIMING_ENABLED = Ref(false)
+const NONLINEAR_TIMING_STATS = Ref(Vector{NonlinearTimingThreadStats}())
+
+@inline function nonlinear_timing_stats()
+    stats = NONLINEAR_TIMING_STATS[]
+    nthreads = Threads.nthreads()
+    if length(stats) != nthreads
+        stats = [NonlinearTimingThreadStats() for _ in 1:nthreads]
+        NONLINEAR_TIMING_STATS[] = stats
+    end
+    return stats
+end
+
+@inline nonlinear_timing_enabled() = NONLINEAR_TIMING_ENABLED[]
+
+function enable_nonlinear_timing!()
+    nonlinear_timing_stats()
+    NONLINEAR_TIMING_ENABLED[] = true
+    return nothing
+end
+
+function disable_nonlinear_timing!()
+    NONLINEAR_TIMING_ENABLED[] = false
+    return nothing
+end
+
+function reset_nonlinear_timing!()
+    stats = nonlinear_timing_stats()
+    for stat in stats
+        stat.flux_ns = 0
+        stat.flux_calls = 0
+        stat.bgk_ns = 0
+        stat.bgk_calls = 0
+        stat.boundary_ns = 0
+        stat.boundary_calls = 0
+        stat.diffuse_ns = 0
+        stat.diffuse_calls = 0
+        stat.speed_ns = 0
+        stat.speed_calls = 0
+        stat.gradient_ns = 0
+        stat.gradient_calls = 0
+    end
+    return nothing
+end
+
+@inline function record_nonlinear_timing!(category::Symbol, elapsed_ns::UInt64)
+    stat = nonlinear_timing_stats()[Threads.threadid()]
+    if category === :flux
+        stat.flux_ns += elapsed_ns
+        stat.flux_calls += 1
+    elseif category === :bgk
+        stat.bgk_ns += elapsed_ns
+        stat.bgk_calls += 1
+    elseif category === :boundary
+        stat.boundary_ns += elapsed_ns
+        stat.boundary_calls += 1
+    elseif category === :diffuse
+        stat.diffuse_ns += elapsed_ns
+        stat.diffuse_calls += 1
+    elseif category === :speed
+        stat.speed_ns += elapsed_ns
+        stat.speed_calls += 1
+    elseif category === :gradient
+        stat.gradient_ns += elapsed_ns
+        stat.gradient_calls += 1
+    else
+        error("unknown nonlinear timing category: $category")
+    end
+    return nothing
+end
+
+function nonlinear_timing_snapshot()
+    totals = Dict(
+        :flux => (ns=UInt64(0), calls=UInt64(0)),
+        :bgk => (ns=UInt64(0), calls=UInt64(0)),
+        :boundary => (ns=UInt64(0), calls=UInt64(0)),
+        :diffuse => (ns=UInt64(0), calls=UInt64(0)),
+        :speed => (ns=UInt64(0), calls=UInt64(0)),
+        :gradient => (ns=UInt64(0), calls=UInt64(0)),
+    )
+    for stat in nonlinear_timing_stats()
+        totals[:flux] = (ns=totals[:flux].ns + stat.flux_ns, calls=totals[:flux].calls + stat.flux_calls)
+        totals[:bgk] = (ns=totals[:bgk].ns + stat.bgk_ns, calls=totals[:bgk].calls + stat.bgk_calls)
+        totals[:boundary] = (ns=totals[:boundary].ns + stat.boundary_ns, calls=totals[:boundary].calls + stat.boundary_calls)
+        totals[:diffuse] = (ns=totals[:diffuse].ns + stat.diffuse_ns, calls=totals[:diffuse].calls + stat.diffuse_calls)
+        totals[:speed] = (ns=totals[:speed].ns + stat.speed_ns, calls=totals[:speed].calls + stat.speed_calls)
+        totals[:gradient] = (ns=totals[:gradient].ns + stat.gradient_ns, calls=totals[:gradient].calls + stat.gradient_calls)
+    end
+    total_ns = UInt64(0)
+    for key in (:flux, :bgk, :boundary, :diffuse, :speed, :gradient)
+        total_ns += totals[key].ns
+    end
+    return (categories=totals, total_ns=total_ns)
+end
+
+function print_nonlinear_timing_summary(io::IO=stdout)
+    snapshot = nonlinear_timing_snapshot()
+    total_ns = snapshot.total_ns
+    println(io, "Nonlinear timing summary")
+    println(io, "category            calls       total_s    avg_ms     share")
+    for key in (:flux, :bgk, :boundary, :diffuse, :speed, :gradient)
+        entry = snapshot.categories[key]
+        total_s = Float64(entry.ns) * 1.0e-9
+        avg_ms = entry.calls > 0 ? (Float64(entry.ns) * 1.0e-6 / Float64(entry.calls)) : 0.0
+        share = total_ns > 0 ? 100.0 * Float64(entry.ns) / Float64(total_ns) : 0.0
+        println(
+            io,
+            rpad(String(key), 18),
+            lpad(string(entry.calls), 10), "  ",
+            lpad(string(round(total_s; digits=4)), 10), "  ",
+            lpad(string(round(avg_ms; digits=4)), 8), "  ",
+            lpad(string(round(share; digits=1)) * "%", 7),
+        )
+    end
+    println(io, "total instrumented time: ", round(Float64(total_ns) * 1.0e-9; digits=4), " s")
+    return nothing
+end
+
 @inline transport_is_nonlinear(equations::FermiHarmonics2D) = equations.transport === :parabolic_nonlinear
 @inline transport_is_nonlinear(::FermiAngles2D) = true
+@inline transport_is_nonlinear(::MultiBandFermiHarmonics2D) = false
 @inline nonlinear_data(equations::FermiHarmonics2D) = something(equations.nonlinear_data)
 @inline nonlinear_data(equations::FermiAngles2D) = equations.nonlinear_data
 @inline nonlinear_collision_is_exact_bgk(equations::FermiHarmonics2D) =
@@ -52,9 +195,77 @@ const NONLINEAR_MEAN_GRADIENT_CACHE = IdDict{UInt, NonlinearGradientCacheEntry}(
     transport_is_nonlinear(equations) && equations.electrostatic_coupling != 0.0
 @inline nonlinear_has_electrostatic_force(equations::FermiAngles2D) =
     equations.electrostatic_coupling != 0.0
+@inline nonlinear_has_electrostatic_force(::MultiBandFermiHarmonics2D) = false
 @inline nonlinear_uses_gradient_sources(equations::FermiHarmonics2D) =
     transport_is_nonlinear(equations) && nonlinear_has_electrostatic_force(equations)
 @inline nonlinear_uses_gradient_sources(::FermiAngles2D) = false
+@inline nonlinear_uses_gradient_sources(::MultiBandFermiHarmonics2D) = false
+
+@inline function multiband_band_state_view(
+    state::AbstractVector,
+    equations::MultiBandFermiHarmonics2D,
+    band_index::Integer,
+)
+    offset = band_offset(equations, band_index)
+    local_nvars = band_nvars(equations)
+    return @view state[(offset + 1):(offset + local_nvars)]
+end
+
+@inline function multiband_band_density(
+    state::AbstractVector{<:Real},
+    equations::MultiBandFermiHarmonics2D,
+    band_index::Integer,
+)
+    band = equations.bands[Int(band_index)]
+    return band.nu * Float64(multiband_band_state_view(state, equations, band_index)[1])
+end
+
+@inline function multiband_band_current(
+    state::AbstractVector{<:Real},
+    equations::MultiBandFermiHarmonics2D,
+    band_index::Integer,
+)
+    band = equations.bands[Int(band_index)]
+    block = multiband_band_state_view(state, equations, band_index)
+    a1 = length(block) >= 2 ? Float64(block[2]) : 0.0
+    b1 = length(block) >= 3 ? Float64(block[3]) : 0.0
+    prefactor = band.charge * band.nu * band.vF
+    return (prefactor * a1, prefactor * b1)
+end
+
+function multiband_observables(
+    state::AbstractVector{<:Real},
+    equations::MultiBandFermiHarmonics2D,
+)
+    density = 0.0
+    jx = 0.0
+    jy = 0.0
+    band_entries = Pair{Symbol, NamedTuple}[]
+
+    for band_index in 1:band_count(equations)
+        band_density = multiband_band_density(state, equations, band_index)
+        band_jx, band_jy = multiband_band_current(state, equations, band_index)
+        density += band_density
+        jx += band_jx
+        jy += band_jy
+        push!(band_entries, equations.bands[band_index].name => (
+            n = band_density,
+            a0 = band_density,
+            jx = band_jx,
+            jy = band_jy,
+        ))
+    end
+
+    return (
+        n = density,
+        a0 = density,
+        a1 = jx,
+        b1 = jy,
+        jx = jx,
+        jy = jy,
+        bands = (; band_entries...),
+    )
+end
 
 function validate_transport_mode(
     transport::Symbol,
@@ -376,6 +587,7 @@ function nonlinear_flux!(
     normal::SVector{2, Float64},
     equations::FermiHarmonics2D,
 )
+    t0 = nonlinear_timing_enabled() ? time_ns() : UInt64(0)
     cache = get_nonlinear_cache(equations)
     vF = equations.max_speed
     inv_quadratic_scale = 1.0 / (2.0 * equations.mass * vF)
@@ -386,6 +598,9 @@ function nonlinear_flux!(
     multiply_by_first_harmonic!(cache.real_scratch, normal_x, normal_y, cache.real_work)
     @inbounds for i in eachindex(out)
         out[i] += inv_quadratic_scale * cache.real_scratch[i]
+    end
+    if nonlinear_timing_enabled()
+        record_nonlinear_timing!(:flux, time_ns() - t0)
     end
     return out
 end
@@ -412,16 +627,25 @@ function nonlinear_max_abs_speed(
     normal::SVector{2, Float64},
     equations::FermiHarmonics2D,
 )
+    t0 = nonlinear_timing_enabled() ? time_ns() : UInt64(0)
     phi_bound = harmonic_sup_norm_bound(state)
     directional_bound = hypot(normal[1], normal[2])
-    return directional_bound * quadratic_speed_bound(phi_bound, equations)
+    speed = directional_bound * quadratic_speed_bound(phi_bound, equations)
+    if nonlinear_timing_enabled()
+        record_nonlinear_timing!(:speed, time_ns() - t0)
+    end
+    return speed
 end
 
 function nonlinear_max_abs_speeds(
     state::AbstractVector{<:Real},
     equations::FermiHarmonics2D,
 )
+    t0 = nonlinear_timing_enabled() ? time_ns() : UInt64(0)
     vmax = quadratic_speed_bound(harmonic_sup_norm_bound(state), equations)
+    if nonlinear_timing_enabled()
+        record_nonlinear_timing!(:speed, time_ns() - t0)
+    end
     return (vmax, vmax)
 end
 
@@ -1013,7 +1237,12 @@ function electrostatic_force_sources!(
     gradients,
     equations::FermiHarmonics2D,
 )
-    return electrostatic_force_sources_sparse!(out, state, gradients, equations)
+    t0 = nonlinear_timing_enabled() ? time_ns() : UInt64(0)
+    result = electrostatic_force_sources_sparse!(out, state, gradients, equations)
+    if nonlinear_timing_enabled()
+        record_nonlinear_timing!(:gradient, time_ns() - t0)
+    end
+    return result
 end
 
 function get_nonlinear_gradient_cache!(
@@ -1244,6 +1473,11 @@ end
     return SVector(u[1], a1, b1)
 end
 
+@inline function analysis_variables(u, equations::MultiBandFermiHarmonics2D)
+    obs = multiband_observables(u, equations)
+    return SVector(obs.n, obs.jx, obs.jy)
+end
+
 function derived_harmonics(
     state::AbstractVector{<:Real},
     equations::FermiHarmonics2D,
@@ -1252,6 +1486,14 @@ function derived_harmonics(
     a1 = length(state) >= 2 ? Float64(state[2]) : 0.0
     b1 = length(state) >= 3 ? Float64(state[3]) : 0.0
     return (a0, a1, b1)
+end
+
+function derived_harmonics(
+    state::AbstractVector{<:Real},
+    equations::MultiBandFermiHarmonics2D,
+)
+    obs = multiband_observables(state, equations)
+    return (obs.n, obs.a1, obs.b1)
 end
 
 @inline function get_nonlinear_cache(equations::FermiAngles2D)

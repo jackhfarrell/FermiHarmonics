@@ -33,6 +33,7 @@ function save_for_analysis(sol, semi, filename; nvisnodes=400, observables=nothi
     @info "Analysis: writing HDF5" file=filename
     analysis_write_hdf5(filename, grids.density, grids.a1, grids.b1, grids.jx, grids.jy,
                         grids.x, grids.y, grids.mask, final_time, grids.equations;
+                        band_grids=grids.bands,
                         observables=observables)
     @info "Analysis: write complete" file=filename
     return filename
@@ -69,15 +70,22 @@ function normalize_analysis_observables(observables, equations)
 
     normalized = Symbol[]
     seen = Set{Symbol}()
-    density_name = transport_is_nonlinear(equations) ? :n : :a0
-    allowed = transport_is_nonlinear(equations) ?
-        Set((:n, :a1, :b1, :jx, :jy)) :
-        Set((:a0, :a1, :b1, :jx, :jy))
+    density_name = analysis_density_name(equations)
+    allowed = Set(analysis_default_observables(equations))
+    if equations isa MultiBandFermiHarmonics2D
+        for band in equations.bands
+            push!(allowed, Symbol("$(band.name)_n"))
+            push!(allowed, Symbol("$(band.name)_jx"))
+            push!(allowed, Symbol("$(band.name)_jy"))
+        end
+    end
 
     for observable in observables
         name = Symbol(observable)
-        if !transport_is_nonlinear(equations) && name === :n
+        if !transport_is_nonlinear(equations) && !(equations isa MultiBandFermiHarmonics2D) && name === :n
             name = :a0
+        elseif equations isa MultiBandFermiHarmonics2D && name === :a0
+            name = :n
         end
         name in allowed || throw(ArgumentError("unsupported analysis observable $(repr(name))"))
         if !(name in seen)
@@ -88,6 +96,16 @@ function normalize_analysis_observables(observables, equations)
 
     density_name in seen || throw(ArgumentError("analysis output must include $(density_name)"))
     return normalized
+end
+
+@inline analysis_density_name(equations) =
+    transport_is_nonlinear(equations) || equations isa MultiBandFermiHarmonics2D ? :n : :a0
+
+@inline function analysis_default_observables(equations)
+    if transport_is_nonlinear(equations) || equations isa MultiBandFermiHarmonics2D
+        return (:n, :a1, :b1, :jx, :jy)
+    end
+    return (:a0, :a1, :b1, :jx, :jy)
 end
 
 function analysis_grid_axes(solution_vector, semi, nvisnodes::Int)
@@ -180,6 +198,17 @@ function compute_mesh_native_analysis(solution_vector, semi; refine=6)
     b1_points = Vector{Float64}(undef, num_points)
     jx_points = Vector{Float64}(undef, num_points)
     jy_points = Vector{Float64}(undef, num_points)
+    band_points = if equations isa MultiBandFermiHarmonics2D
+        Dict(
+            band.name => (
+                n = Vector{Float64}(undef, num_points),
+                jx = Vector{Float64}(undef, num_points),
+                jy = Vector{Float64}(undef, num_points),
+            ) for band in equations.bands
+        )
+    else
+        Dict{Symbol, Any}()
+    end
     triangles = Matrix{Int32}(undef, num_triangles, 3)
 
     basis_cache = [lagrange_basis(basis_nodes, xi) for xi in visual_nodes]
@@ -213,16 +242,29 @@ function compute_mesh_native_analysis(solution_vector, semi; refine=6)
             )
             interpolate_element_state!(state_buffer, basis_xi, basis_eta, element_u_values)
 
-            density_value = transport_is_nonlinear(equations) ?
-                nonlinear_density(state_buffer, equations) : state_buffer[1]
             if transport_is_nonlinear(equations)
+                density_value = nonlinear_density(state_buffer, equations)
                 _, a1_value, b1_value = derived_harmonics(state_buffer, equations)
                 jx_value, jy_value = nonlinear_current(state_buffer, equations)
                 a1_points[point_index] = a1_value
                 b1_points[point_index] = b1_value
                 jx_points[point_index] = jx_value
                 jy_points[point_index] = jy_value
+            elseif equations isa MultiBandFermiHarmonics2D
+                obs = multiband_observables(state_buffer, equations)
+                density_value = obs.n
+                a1_points[point_index] = obs.a1
+                b1_points[point_index] = obs.b1
+                jx_points[point_index] = obs.jx
+                jy_points[point_index] = obs.jy
+                for band in equations.bands
+                    band_obs = getproperty(obs.bands, band.name)
+                    band_points[band.name].n[point_index] = band_obs.n
+                    band_points[band.name].jx[point_index] = band_obs.jx
+                    band_points[band.name].jy[point_index] = band_obs.jy
+                end
             else
+                density_value = state_buffer[1]
                 a1_value = length(state_buffer) >= 2 ? state_buffer[2] : 0.0
                 b1_value = length(state_buffer) >= 3 ? state_buffer[3] : 0.0
                 a1_points[point_index] = a1_value
@@ -261,6 +303,7 @@ function compute_mesh_native_analysis(solution_vector, semi; refine=6)
         b1 = b1_points,
         jx = jx_points,
         jy = jy_points,
+        bands = band_points,
         triangles = triangles,
         refine = refine_int,
     )
@@ -279,22 +322,38 @@ function compute_analysis_grids(solution_vector, semi; nvisnodes=400)
     density_grid = fill(NaN, num_x, num_y)
     a1_grid = fill(NaN, num_x, num_y)
     b1_grid = fill(NaN, num_x, num_y)
-    nonlinear_currents = transport_is_nonlinear(equations)
-    jx_grid = nonlinear_currents ? fill(NaN, num_x, num_y) : nothing
-    jy_grid = nonlinear_currents ? fill(NaN, num_x, num_y) : nothing
+    jx_grid = fill(NaN, num_x, num_y)
+    jy_grid = fill(NaN, num_x, num_y)
+    band_grids = if equations isa MultiBandFermiHarmonics2D
+        Dict(
+            band.name => (
+                n = fill(NaN, num_x, num_y),
+                jx = fill(NaN, num_x, num_y),
+                jy = fill(NaN, num_x, num_y),
+            ) for band in equations.bands
+        )
+    else
+        Dict{Symbol, Any}()
+    end
     in_domain_mask = fill(false, num_x, num_y)
     @inbounds for y_index in 1:num_y
         for x_index in 1:num_x
             x_target = x_uniform[x_index]
             y_target = y_uniform[y_index]
-            density_value, a1_value, b1_value, jx_value, jy_value, in_domain =
+            density_value, a1_value, b1_value, jx_value, jy_value, band_values, in_domain =
                 evaluate_analysis_observables(solution_vector, semi, x_target, y_target)
             density_grid[x_index, y_index] = density_value
             a1_grid[x_index, y_index] = a1_value
             b1_grid[x_index, y_index] = b1_value
-            if nonlinear_currents
-                jx_grid[x_index, y_index] = jx_value
-                jy_grid[x_index, y_index] = jy_value
+            jx_grid[x_index, y_index] = jx_value
+            jy_grid[x_index, y_index] = jy_value
+            if equations isa MultiBandFermiHarmonics2D
+                for band in equations.bands
+                    band_obs = getproperty(band_values, band.name)
+                    band_grids[band.name].n[x_index, y_index] = band_obs.n
+                    band_grids[band.name].jx[x_index, y_index] = band_obs.jx
+                    band_grids[band.name].jy[x_index, y_index] = band_obs.jy
+                end
             end
             in_domain_mask[x_index, y_index] = in_domain
         end
@@ -307,6 +366,7 @@ function compute_analysis_grids(solution_vector, semi; nvisnodes=400)
         b1 = b1_grid,
         jx = jx_grid,
         jy = jy_grid,
+        bands = band_grids,
         x = x_uniform,
         y = y_uniform,
         mask = in_domain_mask,
@@ -568,7 +628,7 @@ function evaluate_solution(sol, semi, x_target, y_target; max_newton::Int=10, to
     if !in_domain
         return NaN, NaN, NaN, false
     end
-    if transport_is_nonlinear(semi.equations)
+    if transport_is_nonlinear(semi.equations) || semi.equations isa MultiBandFermiHarmonics2D
         a0_value, a1_value, b1_value = derived_harmonics(state_value, semi.equations)
         return a0_value, a1_value, b1_value, true
     end
@@ -594,7 +654,7 @@ Returns a named tuple with:
 For linear transport, `jx == a1` and `jy == b1`.
 """
 function evaluate_observables(sol, semi, x_target, y_target; max_newton::Int=10, tol::Float64=1e-12)
-    density_value, a1_value, b1_value, jx_value, jy_value, in_domain = evaluate_analysis_observables(
+    density_value, a1_value, b1_value, jx_value, jy_value, band_values, in_domain = evaluate_analysis_observables(
         sol.u[end], semi, x_target, y_target; max_newton=max_newton, tol=tol,
     )
     return (
@@ -604,6 +664,7 @@ function evaluate_observables(sol, semi, x_target, y_target; max_newton::Int=10,
         b1 = b1_value,
         jx = jx_value,
         jy = jy_value,
+        bands = band_values,
         in_domain = in_domain,
     )
 end
@@ -613,27 +674,30 @@ function evaluate_analysis_observables(solution_vector, semi, x_target, y_target
         solution_vector, semi, x_target, y_target; max_newton=max_newton, tol=tol,
     )
     if !in_domain
-        return NaN, NaN, NaN, NaN, NaN, false
+        return NaN, NaN, NaN, NaN, NaN, (;), false
     end
 
     equations = semi.equations
-    density_value = transport_is_nonlinear(equations) ?
-        nonlinear_density(state_value, equations) : state_value[1]
     if transport_is_nonlinear(equations)
+        density_value = nonlinear_density(state_value, equations)
         a0_value, a1_value, b1_value = derived_harmonics(state_value, equations)
         jx_value, jy_value = nonlinear_current(state_value, equations)
-        return density_value, a1_value, b1_value, jx_value, jy_value, true
+        return density_value, a1_value, b1_value, jx_value, jy_value, (;), true
+    elseif equations isa MultiBandFermiHarmonics2D
+        obs = multiband_observables(state_value, equations)
+        return obs.n, obs.a1, obs.b1, obs.jx, obs.jy, obs.bands, true
     end
 
+    density_value = state_value[1]
     a1_value = length(state_value) >= 2 ? state_value[2] : 0.0
     b1_value = length(state_value) >= 3 ? state_value[3] : 0.0
-    return density_value, a1_value, b1_value, a1_value, b1_value, true
+    return density_value, a1_value, b1_value, a1_value, b1_value, (;), true
 end
 
 function analysis_write_hdf5(filename, density_grid, a1_grid, b1_grid, jx_grid, jy_grid, x_uniform, y_uniform,
-                              in_domain_mask, t, equations; observables=nothing)
+                              in_domain_mask, t, equations; observables=nothing, band_grids=Dict{Symbol, Any}())
     requested = normalize_analysis_observables(observables, equations)
-    density_name = transport_is_nonlinear(equations) ? "n" : "a0"
+    density_name = String(analysis_density_name(equations))
     h5open(filename, "w") do file
         if isnothing(requested) || Symbol(density_name) in requested
             file[density_name] = density_grid
@@ -650,6 +714,24 @@ function analysis_write_hdf5(filename, density_grid, a1_grid, b1_grid, jx_grid, 
         if !isnothing(jy_grid) && (isnothing(requested) || :jy in requested)
             file["jy"] = jy_grid
         end
+        if equations isa MultiBandFermiHarmonics2D
+            for band in equations.bands
+                band_name = band.name
+                band_n_name = Symbol("$(band_name)_n")
+                band_jx_name = Symbol("$(band_name)_jx")
+                band_jy_name = Symbol("$(band_name)_jy")
+                band_data = band_grids[band_name]
+                if isnothing(requested) || band_n_name in requested
+                    file[string(band_n_name)] = band_data.n
+                end
+                if isnothing(requested) || band_jx_name in requested
+                    file[string(band_jx_name)] = band_data.jx
+                end
+                if isnothing(requested) || band_jy_name in requested
+                    file[string(band_jy_name)] = band_data.jy
+                end
+            end
+        end
         file["x"] = collect(x_uniform)
         file["y"] = collect(y_uniform)
         file["mask"] = collect(in_domain_mask)
@@ -660,12 +742,16 @@ function analysis_write_hdf5(filename, density_grid, a1_grid, b1_grid, jx_grid, 
         attributes(file)["grid_type"] = "uniform_cartesian"
         attributes(file)["mask_method"] = "direct"
         attributes(file)["saved_observables"] = isnothing(requested) ?
-            join(transport_is_nonlinear(equations) ? ("n", "a1", "b1", "jx", "jy") : ("a0", "a1", "b1", "jx", "jy"), ",") :
+            join(string.(analysis_default_observables(equations)), ",") :
             join(string.(requested), ",")
         if transport_is_nonlinear(equations)
             attributes(file)["description"] = isnothing(requested) ?
                 "Nonlinear observables: density n, currents jx and jy, plus harmonic reference fields a1 and b1" :
                 "Selected nonlinear observables on a uniform Cartesian grid"
+        elseif equations isa MultiBandFermiHarmonics2D
+            attributes(file)["description"] = isnothing(requested) ?
+                "Linear multiband observables: total density n, total currents jx and jy, plus total current-like reference fields a1 and b1" :
+                "Selected linear multiband observables on a uniform Cartesian grid"
         else
             attributes(file)["description"] = isnothing(requested) ?
                 "Observable harmonics: a0 (density), a1 (x-current), b1 (y-current)" :
@@ -676,7 +762,7 @@ end
 
 function analysis_write_mesh_native_hdf5(filename, mesh_data, t, equations; observables=nothing)
     requested = normalize_analysis_observables(observables, equations)
-    density_name = transport_is_nonlinear(equations) ? "n" : "a0"
+    density_name = String(analysis_density_name(equations))
     h5open(filename, "w") do file
         file["x"] = mesh_data.x
         file["y"] = mesh_data.y
@@ -696,18 +782,40 @@ function analysis_write_mesh_native_hdf5(filename, mesh_data, t, equations; obse
         if isnothing(requested) || :jy in requested
             file["jy"] = mesh_data.jy
         end
+        if equations isa MultiBandFermiHarmonics2D
+            for band in equations.bands
+                band_name = band.name
+                band_n_name = Symbol("$(band_name)_n")
+                band_jx_name = Symbol("$(band_name)_jx")
+                band_jy_name = Symbol("$(band_name)_jy")
+                band_data = mesh_data.bands[band_name]
+                if isnothing(requested) || band_n_name in requested
+                    file[string(band_n_name)] = band_data.n
+                end
+                if isnothing(requested) || band_jx_name in requested
+                    file[string(band_jx_name)] = band_data.jx
+                end
+                if isnothing(requested) || band_jy_name in requested
+                    file[string(band_jy_name)] = band_data.jy
+                end
+            end
+        end
 
         attributes(file)["time"] = Float64(t)
         attributes(file)["grid_type"] = "mesh_native_triangles"
         attributes(file)["refine"] = mesh_data.refine
         attributes(file)["connectivity_index_base"] = 0
         attributes(file)["saved_observables"] = isnothing(requested) ?
-            join(transport_is_nonlinear(equations) ? ("n", "a1", "b1", "jx", "jy") : ("a0", "a1", "b1", "jx", "jy"), ",") :
+            join(string.(analysis_default_observables(equations)), ",") :
             join(string.(requested), ",")
         attributes(file)["description"] = transport_is_nonlinear(equations) ?
             (isnothing(requested) ?
              "Mesh-native nonlinear observables on a refined unstructured visualization grid" :
              "Selected mesh-native nonlinear observables on a refined unstructured visualization grid") :
+            equations isa MultiBandFermiHarmonics2D ?
+            (isnothing(requested) ?
+             "Mesh-native linear multiband observables on a refined unstructured visualization grid" :
+             "Selected mesh-native linear multiband observables on a refined unstructured visualization grid") :
             (isnothing(requested) ?
              "Mesh-native linear observables on a refined unstructured visualization grid" :
              "Selected mesh-native linear observables on a refined unstructured visualization grid")

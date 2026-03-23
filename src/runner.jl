@@ -205,6 +205,62 @@ function validate_nonlinear_warm_start(
     )
 end
 
+function resize_multiband_warm_start(
+    u0_override::AbstractVector,
+    target_u0::AbstractVector,
+    equations::MultiBandFermiHarmonics2D,
+)
+    target_nvars = band_count(equations) * band_nvars(equations)
+    target_len = length(target_u0)
+    target_len % target_nvars == 0 ||
+        throw(ArgumentError("Target state length $target_len is incompatible with nvars=$target_nvars"))
+    target_block = target_len ÷ target_nvars
+    source_len = length(u0_override)
+
+    if source_len == target_len
+        return (
+            u0 = collect(Float64, u0_override),
+            mode = :same,
+            source_nvars = target_nvars,
+            target_nvars = target_nvars,
+        )
+    end
+
+    source_len % target_block == 0 || throw(ArgumentError(
+        "warm start length $source_len is incompatible with target discretization for multiband resize",
+    ))
+    source_nvars = source_len ÷ target_block
+    source_nbands = band_count(equations)
+    source_nvars % source_nbands == 0 || throw(ArgumentError(
+        "warm start nvars=$source_nvars is incompatible with source_nbands=$source_nbands; single-band to multiband warm starts are not supported",
+    ))
+
+    source_band_nvars = source_nvars ÷ source_nbands
+    target_band_nvars = band_nvars(equations)
+    isodd(source_band_nvars) || throw(ArgumentError(
+        "source band state size $source_band_nvars is invalid for harmonic resizing",
+    ))
+
+    source_state = reshape(collect(Float64, u0_override), source_nvars, target_block)
+    target_state = zeros(Float64, target_nvars, target_block)
+
+    @inbounds for block_index in 1:target_block, band_index in 1:source_nbands
+        source_offset = (band_index - 1) * source_band_nvars
+        target_offset = band_offset(equations, band_index)
+        ncopy = min(source_band_nvars, target_band_nvars)
+        target_state[(target_offset + 1):(target_offset + ncopy), block_index] .=
+            source_state[(source_offset + 1):(source_offset + ncopy), block_index]
+    end
+
+    mode = source_band_nvars < target_band_nvars ? :padded_multiband : :truncated_multiband
+    return (
+        u0 = vec(target_state),
+        mode = mode,
+        source_nvars = source_nvars,
+        target_nvars = target_nvars,
+    )
+end
+
 # ======================================================================================================================
 # Solve Entry Point
 # ======================================================================================================================
@@ -393,6 +449,123 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
     return sol, semi
 end
 
+function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any},
+               params::SolveParams, bands::AbstractVector;
+               max_harmonic::Union{Integer, Symbol, Nothing}=:auto,
+               n_angles::Union{Nothing, Integer}=nothing,
+               transport::Symbol=:linear,
+               collision_model::Union{Nothing, Symbol}=nothing,
+               gamma_drag::Real=0.0,
+               gamma3::Union{Nothing, Real}=nothing,
+               mu0::Union{Nothing, Real}=nothing,
+               mass::Union{Nothing, Real}=nothing,
+               chi::Real=0.0,
+               u0_override::Union{Nothing, AbstractVector}=nothing,
+               visualize::Bool=false,
+               visualize_every::Union{Nothing, Integer}=nothing,
+               visualization_mode::Symbol=:cartesian,
+               name::AbstractString="run")
+
+    isfile(mesh_path) || error("Mesh file not found: $mesh_path")
+    validate(params)
+    transport === :linear || throw(ArgumentError("multiband solve currently supports only transport=:linear"))
+    isnothing(n_angles) || throw(ArgumentError("n_angles is not supported for multiband linear solves"))
+    isnothing(gamma3) || throw(ArgumentError("gamma3 is not supported for multiband linear solves"))
+    isnothing(mu0) || throw(ArgumentError("mu0 is not supported for multiband linear solves"))
+    isnothing(mass) || throw(ArgumentError("mass is not supported for multiband linear solves"))
+    chi == 0.0 || throw(ArgumentError("chi is not supported for multiband linear solves"))
+    collision_model_value = validate_collision_model(transport, collision_model)
+
+    band_specs = BandSpec[]
+    for band in bands
+        push!(band_specs, coerce_band_spec(band))
+    end
+    isempty(band_specs) && throw(ArgumentError("multiband solve requires at least one band"))
+
+    if max_harmonic isa Integer
+        max_harmonic_resolved = Int(max_harmonic)
+        max_harmonic_resolved >= 1 || throw(ArgumentError("max_harmonic must be >= 1"))
+        harmonic_mode = :manual
+    elseif max_harmonic === :auto || isnothing(max_harmonic)
+        max_harmonic_resolved = maximum(
+            estimate_max_harmonic(
+                band.gamma_mr,
+                band.gamma_mc;
+                min_harmonic=params.min_harmonic,
+                max_harmonic=params.max_harmonic_auto,
+            ) for band in band_specs
+        )
+        harmonic_mode = :auto
+    else
+        throw(ArgumentError("max_harmonic must be an Integer, :auto, or nothing"))
+    end
+
+    equations = MultiBandFermiHarmonics2D(
+        max_harmonic_resolved;
+        bands=band_specs,
+        gamma_drag=gamma_drag,
+        transport=transport,
+        collision_model=collision_model_value,
+    )
+    nvars = Trixi.nvariables(equations)
+
+    boundary_symbols = sort(collect(keys(boundary_conditions)))
+    solver = Trixi.DGSEM(polydeg=params.polydeg, surface_flux=Trixi.flux_lax_friedrichs)
+    mesh = Trixi.P4estMesh{2}(mesh_path; boundary_symbols=boundary_symbols)
+    semi = Trixi.SemidiscretizationHyperbolic(
+        mesh, equations, (x, t, eq) -> zeros(SVector{nvars, Float64}), solver;
+        boundary_conditions=boundary_conditions,
+        source_terms=FermiHarmonics.source_terms,
+    )
+
+    boundary_types = Dict(key => boundary_condition_name(value) for (key, value) in boundary_conditions)
+    @info "Starting multiband solve" name=name max_harmonic=max_harmonic_resolved harmonic_mode=harmonic_mode gamma_drag=gamma_drag polydeg=params.polydeg cfl=params.cfl residual_tol=params.residual_tol boundaries=boundary_types transport=transport collision_model=collision_model_value bands=map(band -> (name=band.name, vF=band.vF, nu=band.nu, mass=band.mass, charge=band.charge, gamma_mr=band.gamma_mr, gamma_mc=band.gamma_mc), band_specs)
+    flush(stdout)
+    flush(stderr)
+
+    tspan = (0.0, params.tspan_end)
+    ode = Trixi.semidiscretize(semi, tspan)
+
+    if !isnothing(u0_override)
+        warm = resize_multiband_warm_start(u0_override, ode.u0, equations)
+        if warm.mode != :same
+            @info "Adjusted warm start for multiband harmonic mismatch" mode=warm.mode source_nvars=warm.source_nvars target_nvars=warm.target_nvars source_length=length(u0_override) target_length=length(warm.u0)
+            flush(stdout)
+            flush(stderr)
+        end
+        ode = SciMLBase.remake(ode; u0=warm.u0)
+    end
+
+    stepsize_callback = Trixi.StepsizeCallback(cfl=params.cfl)
+    steady_state_callback = Trixi.SteadyStateCallback(abstol=params.residual_tol, reltol=0.0)
+    monitor = monitor_callback(params, semi)
+    callbacks = Any[stepsize_callback, steady_state_callback, monitor]
+
+    if visualize
+        interval = isnothing(visualize_every) ? params.log_every : Int(visualize_every)
+        interval > 0 || throw(ArgumentError("visualize_every must be positive"))
+        push!(callbacks, visualization_callback(params, semi, name; interval=interval, mode=visualization_mode))
+    end
+
+    sol = Trixi.solve(
+        ode,
+        Trixi.CarpenterKennedy2N54();
+        dt=stepsize_callback(ode),
+        callback=Trixi.CallbackSet(callbacks...),
+        adaptive=false,
+        save_everystep=false,
+        save_start=false,
+        save_end=true,
+    )
+
+    status = solve_status(sol, semi, params)
+    @info "Multiband solve complete" name=name stop_reason=status.stop_reason final_time=status.final_time target_final_time=status.target_final_time final_residual=status.final_residual tolerance=params.residual_tol converged=status.converged retcode=status.retcode successful=status.successful
+    flush(stdout)
+    flush(stderr)
+
+    return sol, semi
+end
+
 
 # ======================================================================================================================
 # Callbacks
@@ -441,9 +614,8 @@ function solve_status(sol, semi, params::SolveParams; time_atol::Real=1e-10)
     converged = final_residual <= params.residual_tol
     hit_final_time = isapprox(sol.t[end], params.tspan_end; atol=time_atol, rtol=0.0)
     stop_reason = converged ? :steady_state : (hit_final_time ? :final_time : :other)
-    successful = hasfield(typeof(sol), :retcode) ?
-        SciMLBase.successful_retcode(getfield(sol, :retcode)) :
-        true
+    retcode = hasproperty(sol, :retcode) ? getproperty(sol, :retcode) : nothing
+    successful = isnothing(retcode) ? true : SciMLBase.successful_retcode(retcode)
     return (
         stop_reason=stop_reason,
         final_residual=final_residual,
@@ -452,7 +624,7 @@ function solve_status(sol, semi, params::SolveParams; time_atol::Real=1e-10)
         final_time=sol.t[end],
         target_final_time=params.tspan_end,
         successful=successful,
-        retcode=sol.retcode,
+        retcode=retcode,
     )
 end
 
@@ -470,7 +642,9 @@ function visualization_callback(params, semi, name::AbstractString; interval::In
         return nonlinear_visualization_callback(params, semi, name; interval=interval, mode=mode)
     end
 
-    variable_names = ["a0", "a1", "b1"]
+    variable_names = semi.equations isa MultiBandFermiHarmonics2D ?
+        collect(Trixi.varnames(Trixi.cons2cons, semi.equations)) :
+        ["a0", "a1", "b1"]
     return Trixi.VisualizationCallback(
         semi;
         interval=interval,
@@ -510,6 +684,7 @@ function nonlinear_visualization_callback(params, semi, name::AbstractString; in
                     grids.mask,
                     integrator.t,
                     grids.equations,
+                    band_grids=grids.bands,
                 )
             else
                 throw(ArgumentError("unsupported visualization_mode=$(mode); use :cartesian or :mesh_native"))

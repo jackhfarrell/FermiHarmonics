@@ -77,6 +77,61 @@ Source terms from a BGK-type approximation to the collision integral.  We do not
     return SVector(out)
 end
 
+@inline function physical_sources(u, x, t, equations::MultiBandFermiHarmonics2D)::SVector
+    n = length(u)
+    out = MVector{n, Float64}(undef)
+    fill!(out, 0.0)
+
+    local_nvars = band_nvars(equations)
+    M = equations.max_harmonic
+    @inbounds for (band_index, band) in enumerate(equations.bands)
+        offset = band_offset(equations, band_index)
+        out[offset + 1] = 0.0
+
+        if local_nvars >= 3
+            out[offset + cosine_index(1)] = -band.gamma_mr * Float64(u[offset + cosine_index(1)])
+            out[offset + sine_index(1)] = -band.gamma_mr * Float64(u[offset + sine_index(1)])
+        end
+
+        if M >= 2
+            gamma_hi = band.gamma_mr + band.gamma_mc
+            for m in 2:M
+                out[offset + cosine_index(m)] = -gamma_hi * Float64(u[offset + cosine_index(m)])
+                out[offset + sine_index(m)] = -gamma_hi * Float64(u[offset + sine_index(m)])
+            end
+        end
+    end
+
+    if equations.gamma_drag > 0.0 && band_count(equations) == 2 && local_nvars >= 3
+        band1 = equations.bands[1]
+        band2 = equations.bands[2]
+        w1 = band_momentum_weight(band1)
+        w2 = band_momentum_weight(band2)
+        norm_sq = w1^2 + w2^2
+        if norm_sq > 0.0
+            drag_scale = equations.gamma_drag / norm_sq
+
+            a1_1 = Float64(u[band_global_cosine_index(equations, 1, 1)])
+            a1_2 = Float64(u[band_global_cosine_index(equations, 2, 1)])
+            relative_a1 = w2 * a1_1 - w1 * a1_2
+            drag_a1_1 = -drag_scale * w2 * relative_a1
+            drag_a1_2 = drag_scale * w1 * relative_a1
+            out[band_global_cosine_index(equations, 1, 1)] += drag_a1_1
+            out[band_global_cosine_index(equations, 2, 1)] += drag_a1_2
+
+            b1_1 = Float64(u[band_global_sine_index(equations, 1, 1)])
+            b1_2 = Float64(u[band_global_sine_index(equations, 2, 1)])
+            relative_b1 = w2 * b1_1 - w1 * b1_2
+            drag_b1_1 = -drag_scale * w2 * relative_b1
+            drag_b1_2 = drag_scale * w1 * relative_b1
+            out[band_global_sine_index(equations, 1, 1)] += drag_b1_1
+            out[band_global_sine_index(equations, 2, 1)] += drag_b1_2
+        end
+    end
+
+    return SVector(out)
+end
+
 @inline function nonlinear_bgk_sources(u, equations::AbstractFermiTransportEquations2D)::SVector
     return nonlinear_bgk_sources(u, Val(:dispatch), equations)
 end
@@ -106,6 +161,7 @@ end
     iseven(m) ? equations.gamma_mc : min(equations.gamma_mc, equations.gamma3 * m^4)
 
 @inline function nonlinear_bgk_sources(u, ::Val{:dispatch}, equations::FermiHarmonics2D)::SVector
+    t0 = nonlinear_timing_enabled() ? time_ns() : UInt64(0)
     n = length(u)
     out = MVector{n, Float64}(undef)
     mu, velocity = recover_mu_u(u, equations)
@@ -135,6 +191,9 @@ end
             out[ci] = -(gamma_mr + gamma_mode) * Float64(u[ci])
             out[si] = -(gamma_mr + gamma_mode) * Float64(u[si])
         end
+    end
+    if nonlinear_timing_enabled()
+        record_nonlinear_timing!(:bgk, time_ns() - t0)
     end
     return SVector(out)
 end

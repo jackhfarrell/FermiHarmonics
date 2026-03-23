@@ -13,6 +13,57 @@
 abstract type AbstractFermiTransportEquations2D{NVARS} <: Trixi.AbstractEquations{2, NVARS} end
 
 """
+    BandSpec
+
+Parameters for one linear circular-Fermi-surface carrier species.
+"""
+struct BandSpec
+    name::Symbol
+    vF::Float64
+    nu::Float64
+    mass::Float64
+    charge::Float64
+    gamma_mr::Float64
+    gamma_mc::Float64
+end
+
+@inline coerce_band_spec(band::BandSpec) = band
+@inline coerce_band_spec(band::NamedTuple) = BandSpec(; band...)
+
+function BandSpec(;
+    name,
+    vF::Real,
+    nu::Real,
+    mass::Real,
+    charge::Real,
+    gamma_mr::Real,
+    gamma_mc::Real,
+)
+    vF_value = Float64(vF)
+    nu_value = Float64(nu)
+    mass_value = Float64(mass)
+    charge_value = Float64(charge)
+    gamma_mr_value = Float64(gamma_mr)
+    gamma_mc_value = Float64(gamma_mc)
+
+    vF_value > 0.0 || throw(ArgumentError("band vF must be > 0"))
+    nu_value > 0.0 || throw(ArgumentError("band nu must be > 0"))
+    mass_value > 0.0 || throw(ArgumentError("band mass must be > 0"))
+    gamma_mr_value >= 0.0 || throw(ArgumentError("band gamma_mr must be >= 0"))
+    gamma_mc_value >= 0.0 || throw(ArgumentError("band gamma_mc must be >= 0"))
+
+    return BandSpec(
+        Symbol(name),
+        vF_value,
+        nu_value,
+        mass_value,
+        charge_value,
+        gamma_mr_value,
+        gamma_mc_value,
+    )
+end
+
+"""
     FermiHarmonics2D{NVARS} <: AbstractFermiTransportEquations2D{NVARS}
 
 Linearized 2D Boltzmann system in harmonic form:
@@ -35,6 +86,23 @@ struct FermiHarmonics2D{NVARS, TNonlinear} <: AbstractFermiTransportEquations2D{
     electrostatic_coupling::Float64
     theta_oversample::Int
     nonlinear_data::TNonlinear
+end
+
+"""
+    MultiBandFermiHarmonics2D{NVARS} <: AbstractFermiTransportEquations2D{NVARS}
+
+Linear multiband harmonic Boltzmann system with one harmonic block per band.
+"""
+struct MultiBandFermiHarmonics2D{NVARS} <: AbstractFermiTransportEquations2D{NVARS}
+    bands::Vector{BandSpec}
+    gamma_drag::Float64
+    max_harmonic::Int
+    max_speed::Float64
+    timestep_speed::Float64
+    Ax::Matrix{Float64}
+    Ay::Matrix{Float64}
+    transport::Symbol
+    collision_model::Symbol
 end
 
 mutable struct AngleThreadCache{PF, PI}
@@ -73,6 +141,16 @@ struct FermiAngles2D{NVARS, TData} <: AbstractFermiTransportEquations2D{NVARS}
 end
 
 @inline nonlinear_timestep_speed(vF::Real, chi::Real) = Float64(vF) * (1.0 + abs(Float64(chi)))
+@inline band_state_nvars(max_harmonic::Integer) = 1 + 2 * Int(max_harmonic)
+@inline band_count(equations::MultiBandFermiHarmonics2D) = length(equations.bands)
+@inline band_nvars(equations::MultiBandFermiHarmonics2D) = band_state_nvars(equations.max_harmonic)
+@inline band_offset(equations::MultiBandFermiHarmonics2D, band_index::Integer) =
+    (Int(band_index) - 1) * band_nvars(equations)
+@inline band_global_cosine_index(equations::MultiBandFermiHarmonics2D, band_index::Integer, m::Int) =
+    band_offset(equations, band_index) + cosine_index(m)
+@inline band_global_sine_index(equations::MultiBandFermiHarmonics2D, band_index::Integer, m::Int) =
+    band_offset(equations, band_index) + sine_index(m)
+@inline band_momentum_weight(band::BandSpec) = band.nu * band.mass * band.vF
 
 """
     FermiHarmonics2D(nvars; gamma_mr, gamma_mc, gamma3=nothing, max_harmonic=0, transport=:linear,
@@ -155,6 +233,69 @@ function FermiHarmonics2D(
         Float64(chi),
         Int(theta_oversample),
         nonlinear_transport_data,
+    )
+end
+
+function block_streaming_matrices(bands::AbstractVector{BandSpec}, max_harmonic::Int)
+    band_size = band_state_nvars(max_harmonic)
+    total_nvars = length(bands) * band_size
+    Ax = zeros(Float64, total_nvars, total_nvars)
+    Ay = zeros(Float64, total_nvars, total_nvars)
+
+    @inbounds for (band_index, band) in enumerate(bands)
+        local_Ax, local_Ay = streaming_matrices(max_harmonic, band.vF)
+        offset = (band_index - 1) * band_size
+        Ax[(offset + 1):(offset + band_size), (offset + 1):(offset + band_size)] .= local_Ax
+        Ay[(offset + 1):(offset + band_size), (offset + 1):(offset + band_size)] .= local_Ay
+    end
+
+    return Ax, Ay
+end
+
+"""
+    MultiBandFermiHarmonics2D(max_harmonic; bands, gamma_drag=0.0)
+
+Construct a linear multiband harmonic transport model.
+"""
+function MultiBandFermiHarmonics2D(
+    max_harmonic::Integer;
+    bands,
+    gamma_drag::Real = 0.0,
+    transport::Symbol = :linear,
+    collision_model::Union{Nothing, Symbol} = nothing,
+)
+    max_harmonic_int = Int(max_harmonic)
+    max_harmonic_int >= 1 || throw(ArgumentError("max_harmonic must be >= 1"))
+    transport === :linear || throw(ArgumentError("MultiBandFermiHarmonics2D supports only transport=:linear"))
+    collision_model_value = validate_collision_model(transport, collision_model)
+    gamma_drag_value = Float64(gamma_drag)
+    gamma_drag_value >= 0.0 || throw(ArgumentError("gamma_drag must be >= 0"))
+
+    band_specs = BandSpec[]
+    for band in bands
+        push!(band_specs, coerce_band_spec(band))
+    end
+    length(band_specs) == 2 ||
+        throw(ArgumentError("v1 multiband support requires exactly 2 bands"))
+
+    names = map(band -> band.name, band_specs)
+    length(unique(names)) == length(names) ||
+        throw(ArgumentError("band names must be unique"))
+
+    Ax, Ay = block_streaming_matrices(band_specs, max_harmonic_int)
+    total_nvars = length(band_specs) * band_state_nvars(max_harmonic_int)
+    max_speed = maximum(band.vF for band in band_specs)
+
+    return MultiBandFermiHarmonics2D{total_nvars}(
+        band_specs,
+        gamma_drag_value,
+        max_harmonic_int,
+        max_speed,
+        max_speed,
+        Ax,
+        Ay,
+        transport,
+        collision_model_value,
     )
 end
 
@@ -344,6 +485,16 @@ function Base.show(io::IO, equations::FermiHarmonics2D{NVARS}) where {NVARS}
     print(io, ")")
 end
 
+function Base.show(io::IO, equations::MultiBandFermiHarmonics2D{NVARS}) where {NVARS}
+    print(io, "MultiBandFermiHarmonics2D{$NVARS}(")
+    print(io, "bands=$(map(band -> String(band.name), equations.bands)), ")
+    print(io, "max_harmonic=$(equations.max_harmonic), ")
+    print(io, "gamma_drag=$(equations.gamma_drag), ")
+    print(io, "transport=$(equations.transport), ")
+    print(io, "collision_model=$(equations.collision_model)")
+    print(io, ")")
+end
+
 function Base.show(io::IO, equations::FermiAngles2D{NVARS}) where {NVARS}
     print(io, "FermiAngles2D{$NVARS}(")
     print(io, "n_angles=$NVARS, ")
@@ -375,6 +526,21 @@ function Base.show(io::IO, ::MIME"text/plain", equations::FermiHarmonics2D{NVARS
             Trixi.summary_line(io, "linearized vF", equations.max_speed)
             Trixi.summary_line(io, "CFL timestep speed", equations.timestep_speed)
         end
+        Trixi.summary_footer(io)
+    end
+end
+
+function Base.show(io::IO, ::MIME"text/plain", equations::MultiBandFermiHarmonics2D{NVARS}) where {NVARS}
+    if get(io, :compact, false)
+        show(io, equations)
+    else
+        Trixi.summary_header(io, "MultiBandFermiHarmonics2D{$NVARS}")
+        Trixi.summary_line(io, "bands", join(string.(getfield.(equations.bands, :name)), ", "))
+        Trixi.summary_line(io, "max harmonic", equations.max_harmonic)
+        Trixi.summary_line(io, "gamma_drag", equations.gamma_drag)
+        Trixi.summary_line(io, "transport", equations.transport)
+        Trixi.summary_line(io, "collision model", equations.collision_model)
+        Trixi.summary_line(io, "max speed", equations.max_speed)
         Trixi.summary_footer(io)
     end
 end

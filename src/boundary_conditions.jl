@@ -152,7 +152,28 @@ function maxwell_wall!(
     unit_normal::SVector{2, Float64},
     P_in::AbstractSparseMatrix,
     p::Real,
-    target::AbstractVector{Float64}
+    target::AbstractVector{Float64},
+    equations::Union{FermiHarmonics2D, MultiBandFermiHarmonics2D},
+)
+    diffuse_target!(target, state, unit_normal, equations)
+    specular_target!(out, state, unit_normal, equations)
+    p_scatter = Float64(p)
+    one_minus = 1.0 - p_scatter
+    N = length(state)
+    @inbounds for i in 1:N
+        target[i] = p_scatter * target[i] + one_minus * out[i]
+    end
+    apply_projector!(out, state, target, P_in)
+    return out
+end
+
+function maxwell_wall!(
+    out::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    unit_normal::SVector{2, Float64},
+    P_in::AbstractSparseMatrix,
+    p::Real,
+    target::AbstractVector{Float64},
 )
     diffuse_target!(target, state, unit_normal)
     specular_target!(out, state, unit_normal)
@@ -177,6 +198,27 @@ function ohmic_contact!(out::AbstractVector{Float64},
                         P_in::AbstractSparseMatrix,
                         p_ohmic_absorb::Real,
                         bias::Real,
+                        target::AbstractVector{Float64},
+                        equations::Union{FermiHarmonics2D, MultiBandFermiHarmonics2D})
+    diffuse_target!(target, state, unit_normal, equations)
+    contact_bias_target!(target, Float64(bias), equations)
+    specular_target!(out, state, unit_normal, equations)
+    p_absorb = Float64(p_ohmic_absorb)
+    one_minus = 1.0 - p_absorb
+    N = length(state)
+    @inbounds for i in 1:N
+        target[i] = p_absorb * target[i] + one_minus * out[i]
+    end
+    apply_projector!(out, state, target, P_in)
+    return out
+end
+
+function ohmic_contact!(out::AbstractVector{Float64},
+                        state::AbstractVector{Float64},
+                        unit_normal::SVector{2, Float64},
+                        P_in::AbstractSparseMatrix,
+                        p_ohmic_absorb::Real,
+                        bias::Real,
                         target::AbstractVector{Float64})
     diffuse_target!(target, state, unit_normal)
     @inbounds target[1] = Float64(bias)
@@ -189,6 +231,80 @@ function ohmic_contact!(out::AbstractVector{Float64},
     end
     apply_projector!(out, state, target, P_in)
     return out
+end
+
+@inline function diffuse_target!(
+    target::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    unit_normal::SVector{2, Float64},
+    ::FermiHarmonics2D,
+)::AbstractVector{Float64}
+    return diffuse_target!(target, state, unit_normal)
+end
+
+@inline function diffuse_target!(
+    target::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    unit_normal::SVector{2, Float64},
+    equations::MultiBandFermiHarmonics2D,
+)::AbstractVector{Float64}
+    local_nvars = band_nvars(equations)
+    @inbounds for band_index in 1:band_count(equations)
+        offset = band_offset(equations, band_index)
+        diffuse_target!(
+            @view(target[(offset + 1):(offset + local_nvars)]),
+            @view(state[(offset + 1):(offset + local_nvars)]),
+            unit_normal,
+        )
+    end
+    return target
+end
+
+@inline function specular_target!(
+    target::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    unit_normal::SVector{2, Float64},
+    ::FermiHarmonics2D,
+)::AbstractVector{Float64}
+    return specular_target!(target, state, unit_normal)
+end
+
+@inline function specular_target!(
+    target::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    unit_normal::SVector{2, Float64},
+    equations::MultiBandFermiHarmonics2D,
+)::AbstractVector{Float64}
+    local_nvars = band_nvars(equations)
+    @inbounds for band_index in 1:band_count(equations)
+        offset = band_offset(equations, band_index)
+        specular_target!(
+            @view(target[(offset + 1):(offset + local_nvars)]),
+            @view(state[(offset + 1):(offset + local_nvars)]),
+            unit_normal,
+        )
+    end
+    return target
+end
+
+@inline function contact_bias_target!(
+    target::AbstractVector{Float64},
+    bias::Float64,
+    ::FermiHarmonics2D,
+)
+    target[1] = bias
+    return target
+end
+
+@inline function contact_bias_target!(
+    target::AbstractVector{Float64},
+    bias::Float64,
+    equations::MultiBandFermiHarmonics2D,
+)
+    @inbounds for band_index in 1:band_count(equations)
+        target[band_offset(equations, band_index) + 1] = bias
+    end
+    return target
 end
 
 function nonlinear_diffuse_incoming_value(
@@ -224,6 +340,7 @@ function nonlinear_diffuse_incoming_value(
     equations::FermiHarmonics2D,
     tol::Float64,
 )
+    t0 = nonlinear_timing_enabled() ? time_ns() : UInt64(0)
     outgoing_flux = 0.0
     @inbounds for j in eachindex(state_samples)
         projection = face_data.projections[j]
@@ -234,7 +351,11 @@ function nonlinear_diffuse_incoming_value(
 
     face_data.incoming_weight > 0.0 || return 0.0
     outgoing_flux *= 2.0 * pi / nonlinear_data(equations).theta_count
-    return quadratic_shifted_flux_inverse(outgoing_flux / face_data.incoming_weight, equations)
+    incoming_value = quadratic_shifted_flux_inverse(outgoing_flux / face_data.incoming_weight, equations)
+    if nonlinear_timing_enabled()
+        record_nonlinear_timing!(:diffuse, time_ns() - t0)
+    end
+    return incoming_value
 end
 
 function nonlinear_boundary_samples!(
@@ -305,11 +426,12 @@ function nonlinear_maxwell_wall!(
     tol::Float64,
     face_data::Union{Nothing, NonlinearBoundaryFaceData} = nothing,
 )
+    t0 = nonlinear_timing_enabled() ? time_ns() : UInt64(0)
     cache = get_nonlinear_cache(equations)
     harmonic_state_to_samples!(cache.samples, state, equations)
     local_face_data = isnothing(face_data) ? build_nonlinear_face_data(equations, unit_normal, tol) : face_data
     diffuse_value = nonlinear_diffuse_incoming_value(cache.samples, local_face_data, equations, tol)
-    return nonlinear_boundary_samples!(
+    result = nonlinear_boundary_samples!(
         out,
         state,
         cache.samples,
@@ -318,6 +440,10 @@ function nonlinear_maxwell_wall!(
         1.0 - Float64(p_scatter),
         equations,
     )
+    if nonlinear_timing_enabled()
+        record_nonlinear_timing!(:boundary, time_ns() - t0)
+    end
+    return result
 end
 
 function nonlinear_maxwell_wall_flux!(
@@ -416,6 +542,7 @@ function nonlinear_ohmic_contact!(
     tol::Float64,
     face_data::Union{Nothing, NonlinearBoundaryFaceData} = nothing,
 )
+    t0 = nonlinear_timing_enabled() ? time_ns() : UInt64(0)
     cache = get_nonlinear_cache(equations)
     harmonic_state_to_samples!(cache.samples, state, equations)
     local_face_data = isnothing(face_data) ? build_nonlinear_face_data(equations, unit_normal, tol) : face_data
@@ -426,7 +553,7 @@ function nonlinear_ohmic_contact!(
         bias,
         equations,
     )
-    return nonlinear_boundary_samples!(
+    result = nonlinear_boundary_samples!(
         out,
         state,
         cache.samples,
@@ -435,6 +562,10 @@ function nonlinear_ohmic_contact!(
         1.0 - Float64(p_ohmic_absorb),
         equations,
     )
+    if nonlinear_timing_enabled()
+        record_nonlinear_timing!(:boundary, time_ns() - t0)
+    end
+    return result
 end
 
 function nonlinear_ohmic_contact_flux!(
@@ -957,13 +1088,16 @@ function incoming_projector(
     Ay::AbstractMatrix,
     unit_normal::SVector{2, Float64},
     ;tol::Float64=0.0,
+    monopole_indices::AbstractVector{<:Integer}=Int[1],
 )::SparseMatrixCSC{Float64, Int}
     A = unit_normal[1] .* Ax .+ unit_normal[2] .* Ay
     n = size(A, 1)
     D = ones(Float64, n)
-    D[1] = sqrt(2.0)
     Dinv = ones(Float64, n)
-    Dinv[1] = 1 / sqrt(2.0)
+    @inbounds for index in monopole_indices
+        D[Int(index)] = sqrt(2.0)
+        Dinv[Int(index)] = 1 / sqrt(2.0)
+    end
 
     Dx = Diagonal(D)
     Dxinv = Diagonal(Dinv)
@@ -988,7 +1122,16 @@ function incoming_projector(
     unit_normal::SVector{2, Float64};
     tol::Float64 = 0.0,
 )::SparseMatrixCSC{Float64, Int}
-    return incoming_projector(equations.Ax, equations.Ay, unit_normal; tol=tol)
+    return incoming_projector(equations.Ax, equations.Ay, unit_normal; tol=tol, monopole_indices=[1])
+end
+
+function incoming_projector(
+    equations::MultiBandFermiHarmonics2D,
+    unit_normal::SVector{2, Float64};
+    tol::Float64 = 0.0,
+)::SparseMatrixCSC{Float64, Int}
+    monopole_indices = [band_offset(equations, band_index) + 1 for band_index in 1:band_count(equations)]
+    return incoming_projector(equations.Ax, equations.Ay, unit_normal; tol=tol, monopole_indices=monopole_indices)
 end
 
 """
@@ -1056,6 +1199,40 @@ function build_projectors(
             i_index = (direction == 1) ? 1 : n_nodes
             j_index = 1
         else  # direction == 3 || direction == 4
+            i_index = 1
+            j_index = (direction == 3) ? 1 : n_nodes
+        end
+        normal_direction = Trixi.get_normal_direction(
+            direction, contravariant_vectors, i_index, j_index, element
+        )
+        unit_n = unit_normal(
+            SVector(Float64(normal_direction[1]), Float64(normal_direction[2]))
+        )
+        projectors[global_idx] = incoming_projector(equations, unit_n; tol = tol)
+    end
+    return projectors
+end
+
+function build_projectors(
+    equations::MultiBandFermiHarmonics2D,
+    tol::Float64,
+    mesh::Trixi.P4estMesh{2},
+    solver,
+    cache,
+    boundary_indexing::Vector{Int},
+)::Dict{Int, SparseMatrixCSC{Float64, Int}}
+    n_nodes = Trixi.nnodes(solver)
+    contravariant_vectors = cache.elements.contravariant_vectors
+    boundaries = cache.boundaries
+    projectors = Dict{Int, SparseMatrixCSC{Float64, Int}}()
+    for global_idx in boundary_indexing
+        element = boundaries.neighbor_ids[global_idx]
+        node_indices = boundaries.node_indices[global_idx]
+        direction = Trixi.indices2direction(node_indices)
+        if direction == 1 || direction == 2
+            i_index = (direction == 1) ? 1 : n_nodes
+            j_index = 1
+        else
             i_index = 1
             j_index = (direction == 3) ? 1 : n_nodes
         end
