@@ -1,5 +1,6 @@
 using Plots
-using FermiHarmonics
+using FermiFlows
+using Trixi
 
 function main()
     project_root = normpath(joinpath(@__DIR__, ".."))
@@ -7,7 +8,7 @@ function main()
     output_dir = joinpath(@__DIR__, "data_nonlinear")
     mkpath(output_dir)
 
-    reference = FermiHarmonics.blg_reference_setup()
+    reference = blg_reference_setup()
     mu0 = reference.mu0
     mass = reference.mass
     bias = 0.2
@@ -19,7 +20,7 @@ function main()
         :contact_bottom => OhmicContactBC(bias / 2),
     )
 
-    params = SolveParams(;
+    config = SolverConfig(;
         polydeg = 1,
         tspan_end = 5.0,
         residual_tol = 1e-4,
@@ -35,22 +36,24 @@ function main()
 
     @info "Running nonlinear live demo" mu0 mass bias gamma_mr gamma_mc
 
-    sol, semi = FermiHarmonics.solve(
-        mesh_path,
-        boundary_conditions,
-        params,
-        gamma_mr,
-        gamma_mc;
-        transport = :parabolic_nonlinear,
-        max_harmonic = :auto,
-        mu0 = mu0,
-        mass = mass,
+    model = KineticModel2D(
+        Isotropic2DFermiSurface(; vF=1.0, nu=1.0, mass=mass, charge=-1.0),
+        HarmonicBasis(:auto),
+        IsotropicHarmonicStreaming(),
+        QuadraticBGKCollision(gamma_mr, OddQuarticRateProfile(gamma_mc); mu0=mu0, mass=mass),
+        reference = reference,
+    )
+
+    sol, semi = solve(
+        TrixiProblem(; mesh_path=mesh_path, boundary_conditions=boundary_conditions),
+        model,
+        config;
         visualize = true,
         name = run_name,
     )
 
     save_path = joinpath(output_dir, "$(run_name).h5")
-    FermiHarmonics.save_for_analysis(sol, semi, save_path)
+    save_for_analysis(sol, semi, save_path)
     @info "Saved nonlinear analysis output" path = save_path
 
     return nothing

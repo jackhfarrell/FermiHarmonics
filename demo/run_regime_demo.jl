@@ -7,7 +7,8 @@
 # min_harmonic=4 and max_harmonic_auto=100.
 
 using Plots
-using FermiHarmonics
+using FermiFlows
+using Trixi
 
 # ======================================================================================================================
 # Configuration
@@ -28,7 +29,7 @@ function main()
         :contact_bottom => OhmicContactBC(bias / 2),
     )
 
-    params = SolveParams(;
+    config = SolverConfig(;
         min_harmonic = 4,
         max_harmonic_auto = 100,
         polydeg = 3,
@@ -66,20 +67,24 @@ function main()
     for regime in regimes
         @info "Running regime" name=regime.name gamma_mr=regime.gamma_mr gamma_ee=regime.gamma_ee
 
-        sol, semi = FermiHarmonics.solve(
-            mesh_path,
-            boundary_conditions,
-            params,
-            regime.gamma_mr,
-            regime.gamma_ee;
-            max_harmonic=:auto,
+        model = KineticModel2D(
+            Isotropic2DFermiSurface(; vF=1.0, nu=1.0, mass=1.0, charge=-1.0),
+            HarmonicBasis(:auto),
+            IsotropicHarmonicStreaming(),
+            LinearBGKCollision(regime.gamma_mr, TwoRateProfile(regime.gamma_ee)),
+        )
+
+        sol, semi = solve(
+            TrixiProblem(; mesh_path=mesh_path, boundary_conditions=boundary_conditions),
+            model,
+            config;
             u0_override=u0,
             visualize=true,
             name=regime.name,
         )
 
         save_path = joinpath(output_dir, "$(regime.name).h5")
-        FermiHarmonics.save_for_analysis(sol, semi, save_path)
+        save_for_analysis(sol, semi, save_path)
         @info "Saved analysis output" path=save_path
 
         u0 = copy(sol.u[end])

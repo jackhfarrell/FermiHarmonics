@@ -1,14 +1,15 @@
 using Documenter
-using FermiHarmonics
+using FermiFlows
+using Trixi
 
 # Build documentation
 makedocs(;
-    modules = [FermiHarmonics],
-    sitename = "FermiHarmonics.jl",
+    modules = [FermiFlows],
+    sitename = "FermiFlows.jl",
     remotes = nothing,  # Disable remote source links
     format = Documenter.HTML(;
         prettyurls = get(ENV, "CI", "false") == "true",
-        canonical = "https://fermiharmonics.jackhfarrell.com",
+        canonical = "https://fermiflows.jackhfarrell.com",
         assets = String[],
         mathengine = Documenter.MathJax3(),  # LaTeX rendering via MathJax3
     ),
@@ -27,8 +28,10 @@ makedocs(;
     checkdocs = :none,
 )
 
-deploydocs(;
-    repo = "github.com/jackhfarrell/FermiHarmonics.git",
-    devbranch = "main",
-    cname = "fermiharmonics.jackhfarrell.com",
-)
+if get(ENV, "CI", "false") == "true"
+    deploydocs(;
+        repo = "github.com/jackhfarrell/FermiHarmonics.git",
+        devbranch = "main",
+        cname = "fermiflows.jackhfarrell.com",
+    )
+end

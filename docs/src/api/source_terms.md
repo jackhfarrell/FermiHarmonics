@@ -1,17 +1,15 @@
 # Source Terms
 
-## Combined Source Terms
+The collision side of the kinetic equation is now routed through the typed
+`collision_sources!` interface. Trixi backend equations provide specialized
+implementations for the current isotropic fast paths.
 
-```@docs
-FermiHarmonics.source_terms
-```
+The key public hooks are:
 
-## Physical Source Terms
+- `collision_sources!`
+- `mode_rate`
 
-```@docs
-FermiHarmonics.physical_sources
-```
-
-For `transport = :parabolic_nonlinear`, `physical_sources` uses the nonlinear BGK analogue of the
-two-rate model: a momentum-relaxing piece toward isotropic equilibrium and a momentum-conserving piece
-toward exact drifting local equilibrium.
+For `transport = :parabolic_nonlinear`, the built-in harmonic closure uses the
+nonlinear BGK analogue of the two-rate model: a momentum-relaxing piece toward
+isotropic equilibrium and a momentum-conserving piece toward drifting local
+equilibrium.

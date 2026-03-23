@@ -1,16 +1,22 @@
-# Solve: main entry point
+# Solve
 
-```@docs
-FermiHarmonics.SolveParams
-FermiHarmonics.estimate_max_harmonic
-FermiHarmonics.solve
-```
+## Public Entry Points
 
-## Script-Style Usage
+- `SolverConfig` stores numerical settings such as polynomial degree, CFL,
+  final time, residual tolerance, and auto-harmonic bounds.
+- `TrixiProblem` stores the mesh path and boundary-condition map passed to the
+  Trixi backend.
+- `estimate_max_harmonic(gamma_mr, gamma_mc; min_harmonic, max_harmonic)` is
+  the conservative helper used by `HarmonicBasis(:auto)`.
+- `solve(problem, model, config; kwargs...)` is provided by the Trixi extension.
+
+## Trixi-Backed Usage
 
 ```julia
-params = SolveParams(;
-    max_harmonic = 60,   # optional fixed cap if you call solve(...; max_harmonic=params.max_harmonic)
+using FermiFlows
+using Trixi
+
+config = SolverConfig(;
     polydeg = 3,
     cfl = 0.2,
     tspan_end = 50.0,
@@ -18,73 +24,64 @@ params = SolveParams(;
     log_every = 50,
 )
 
-boundary_conditions = Dict(
-    :walls => MaxwellWallBC(1.0),
-    :source => OhmicContactBC(0.5),
-    :drain => OhmicContactBC(-0.5),
+model = KineticModel2D(
+    Isotropic2DFermiSurface(; vF=1.0, nu=1.0, mass=1.0, charge=-1.0),
+    HarmonicBasis(:auto),
+    IsotropicHarmonicStreaming(),
+    LinearBGKCollision(0.05, TwoRateProfile(0.40)),
 )
 
-sol, semi = solve(
-    "mesh.inp",
-    boundary_conditions,
-    params,
-    0.05,  # gamma_mr
-    0.40;  # gamma_mc
-    max_harmonic = :auto,
-    visualize = false,
-    name = "case_001",
+problem = TrixiProblem(;
+    mesh_path = "mesh.inp",
+    boundary_conditions = Dict(
+        :walls => MaxwellWallBC(1.0),
+        :source => OhmicContactBC(0.5),
+        :drain => OhmicContactBC(-0.5),
+    ),
 )
+
+sol, semi = solve(problem, model, config; visualize = false, name = "case_001")
 ```
 
-For nonlinear runs, the default path stays in harmonics:
+For nonlinear harmonic runs:
 
 ```julia
-sol, semi = solve(
-    "mesh.inp",
-    boundary_conditions,
-    params,
-    0.05,
-    0.40;
-    transport = :parabolic_nonlinear,
-    max_harmonic = :auto,
-    mu0 = 1.0,
-    mass = 2.0,
+model = KineticModel2D(
+    Isotropic2DFermiSurface(; vF=1.0, nu=1.0, mass=2.0, charge=-1.0),
+    HarmonicBasis(:auto),
+    IsotropicHarmonicStreaming(),
+    QuadraticBGKCollision(0.05, OddQuarticRateProfile(0.40); mu0=1.0, mass=2.0),
 )
+
+sol, semi = solve(problem, model, config; name = "quadratic_bgk_case")
 ```
 
-The exact angle-state reference solver is still available explicitly:
+The explicit angle-grid reference solver stays available too:
 
 ```julia
-sol, semi = solve(
-    "mesh.inp",
-    boundary_conditions,
-    params,
-    0.05,
-    0.40;
-    transport = :parabolic_nonlinear,
-    collision_model = :exact_bgk,
-    n_angles = 128,
-    mu0 = 1.0,
-    mass = 2.0,
+model = KineticModel2D(
+    Isotropic2DFermiSurface(; vF=1.0, nu=1.0, mass=2.0, charge=-1.0),
+    AngleGrid(128),
+    IsotropicAngleStreaming(),
+    ExactAngleBGKCollision(; gamma_mr=0.05, gamma_mc=0.40, mu0=1.0, mass=2.0),
 )
+
+sol, semi = solve(problem, model, config; name = "exact_bgk_case")
 ```
 
 ## Behavior Notes
 
-- `solve` requires a `SolveParams` instance for solver settings.
-- Linear runs use harmonic states with `max_harmonic`.
-- Default nonlinear runs use harmonic states with `max_harmonic` and `collision_model=:quadratic_bgk`.
-- Exact nonlinear reference runs use angle states with `collision_model=:exact_bgk` and `n_angles`.
-- Auto mode uses `estimate_max_harmonic(gamma_mr, gamma_mc)` with `gamma_total = gamma_mr + gamma_mc`.
-- Default logarithmic map is `gamma_total=0 -> M=150` and `gamma_total>=1000 -> M=4`.
-- Optional tuning keys in `SolveParams` are `min_harmonic`, `max_harmonic_auto`, and `auto_harmonic_decay_power`.
-- Linear warm starts via `u0_override` support harmonic-count changes by truncating or zero-padding higher modes.
-- Quadratic nonlinear warm starts follow the same harmonic resize behavior as linear runs.
-- Exact nonlinear warm starts must already match the chosen `n_angles`.
+- `FermiFlows.solve` is provided by the Trixi extension, not by the core-only package load.
+- `SolverConfig` controls discretization order, CFL, end time, residual target, logging cadence, and auto-harmonic bounds.
+- `HarmonicBasis(:auto)` resolves its working harmonic count from `estimate_max_harmonic(gamma_mr, gamma_mc; ...)`.
+- Linear harmonic closures use `LinearBGKCollision(gamma_mr, profile)`.
+- Nonlinear harmonic closures use `QuadraticBGKCollision(gamma_mr, profile; mu0, mass, ...)`.
+- Angle-grid reference runs use `ExactAngleBGKCollision` or `TwoRateAngleBGKCollision`.
+- Warm starts remain available through `u0_override` on the extension solve entry point.
 
 ## Auto Harmonic Selector
 
-When `solve(...; max_harmonic=:auto)` is used, the code computes
+When a model uses `HarmonicBasis(:auto)`, the extension computes
 
 ```math
 \gamma_{\mathrm{tot}} = \gamma_{\mathrm{mr}} + \gamma_{\mathrm{mc}},
@@ -93,19 +90,14 @@ When `solve(...; max_harmonic=:auto)` is used, the code computes
 then selects `M` using a conservative logarithmic rule:
 
 - `\gamma_tot <= 1`: `M = max_harmonic_auto`
-- `\gamma_tot >= 1000`: `M = min_harmonic`
-- otherwise: shifted powered-log interpolation
-  `s = (log1p(gamma_tot)-log1p(1))/(log1p(1000)-log1p(1))`,
-  then `M ~ M_min + (M_max-M_min) * (1-s)^p`,
-  rounded up to an integer
+- `\gamma_tot >= 300`: `M = min_harmonic`
+- otherwise: logarithmic interpolation between the configured bounds
 
-So with default settings (`min_harmonic=4`, `max_harmonic_auto=150`):
+So with the default v1 settings:
 
-- `(\gamma_mr, \gamma_mc) = (0, 0)` gives `M = 150`
-- `(\gamma_mr, \gamma_mc) = (0, 100)` gives `M = 34`
-- `(\gamma_mr, \gamma_mc) = (0, 200)` gives `M = 21`
-- `(\gamma_mr, \gamma_mc) = (0, 1000)` gives `M = 4`
+- `(\gamma_mr, \gamma_mc) = (0, 0)` gives `M = 100`
+- `(\gamma_mr, \gamma_mc) = (0, 50)` selects an intermediate `M`
+- `(\gamma_mr, \gamma_mc) = (0, 300)` gives `M = 4`
 
-You can tune the range/shape through
-`SolveParams(min_harmonic=..., max_harmonic_auto=..., auto_harmonic_decay_power=...)`
-without changing the solve workflow.
+You can tune the auto selector through `SolverConfig(; min_harmonic=..., max_harmonic_auto=...)`
+without changing the model structure.

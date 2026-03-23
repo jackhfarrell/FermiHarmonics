@@ -72,7 +72,7 @@ end
     out::AbstractVector{Float64},
     state::AbstractVector,
     normal::SVector{2, Float64},
-    equations::MultiBandFermiHarmonics2D,
+    equations::Union{FermiHarmonics2D, MultiBandFermiHarmonics2D},
 )
     normal_x, normal_y = normal
     mul!(out, equations.Ax, state)
@@ -91,7 +91,7 @@ end
     out = MVector{NVARS, Float64}(undef)
     if transport_is_nonlinear(equations)
         nonlinear_flux!(out, u, normal, equations)
-    elseif equations isa MultiBandFermiHarmonics2D
+    elseif equations isa Union{FermiHarmonics2D, MultiBandFermiHarmonics2D}
         linear_flux!(out, u, normal, equations)
     else
         harmonics_flux!(out, u, normal)
@@ -104,7 +104,7 @@ end
     out = MVector{NVARS, Float64}(undef)
     if transport_is_nonlinear(equations)
         nonlinear_flux!(out, u, normal, equations)
-    elseif equations isa MultiBandFermiHarmonics2D
+    elseif equations isa Union{FermiHarmonics2D, MultiBandFermiHarmonics2D}
         linear_flux!(out, u, normal, equations)
     else
         harmonics_flux!(out, u, normal)

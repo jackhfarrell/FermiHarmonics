@@ -1,49 +1,5 @@
 # custom boundary conditions for 2D FermiHarmonics equations
 
-# ======================================================================================================================
-# Cache for BC Projectors
-# ======================================================================================================================
-
-# In our harmonic basis, boundary conditions require projecting the solution into incoming
-# and outgoing characteristic modes (as defined by positive and negative eigenvalues of the
-# flux Jacobians Ax and Ay). This is expensive, so it is important to precompute them.
-
-"""
-    BCProjectorCache
-
-Precompute and store the projection matrices for all boundary faces/nodes. These are meant
-to be thread-local to avoid repeated allocations
-"""
-mutable struct BCProjectorCache
-    state_buffers::Vector{Vector{Float64}}
-    target_buffers::Vector{Vector{Float64}}
-    out_buffers::Vector{Vector{Float64}}
-    projectors::Dict{Int, SparseMatrixCSC{Float64, Int}}
-    nonlinear_faces::Dict{Int, Any}
-    initialized::Bool
-    nvars::Int
-    signature::Tuple{Symbol, Int, Int}
-end
-BCProjectorCache() = BCProjectorCache(
-    [Float64[] for _ in 1:Threads.nthreads()],
-    [Float64[] for _ in 1:Threads.nthreads()],
-    [Float64[] for _ in 1:Threads.nthreads()],
-    Dict{Int, SparseMatrixCSC{Float64, Int}}(),
-    Dict{Int, Any}(),
-    false,
-    0,
-    (:unset, 0, 0))
-
-struct NonlinearBoundaryFaceData
-    unit_normal::SVector{2, Float64}
-    incoming_mask::BitVector
-    stencil_indices::Matrix{Int}
-    stencil_weights::Matrix{Float64}
-    projections::Vector{Float64}
-    incoming_weight::Float64
-    sample_to_harmonics::Union{Nothing, Matrix{Float64}}
-end
-
 @inline function get_bc_thread_buffer!(buffers::Vector{Vector{Float64}}, nvars::Int)
     tid = Threads.threadid()
     @inbounds buf = buffers[tid]
@@ -63,70 +19,6 @@ end
     end
     return buf
 end
-
-
-# ======================================================================================================================
-# Custom Boundary Condition Types
-# ======================================================================================================================
-
-"""
-    MaxwellWallBC(p_scatter; tol=0.0)
-
-Wall boundary condition with diffuse/specular mixing. It blends between them with parameter p_scatter. The
-physics of the diffuse case is that particles scatter from the wall at a random angle with an isotropic distribution,
-while the specular case is that particles reflect with the same angle they arrived at. The blended target state is then projected onto the incoming characteristics to get the final BC state.
-
-Parameters:
-- `p_scatter`: diffuse fraction (`1.0` fully diffuse, `0.0` fully specular)
-- `tol`: eigenvalue tolerance for incoming-mode projector construction
-
-Returns:
-- `MaxwellWallBC`.
-"""
-mutable struct MaxwellWallBC
-    p_scatter::Float64 # 1 is diffuse, 0 is specular
-    tol::Float64
-    cache::BCProjectorCache
-end
-MaxwellWallBC(p_scatter::Real; tol::Real = 0.0) =
-    MaxwellWallBC(Float64(p_scatter), Float64(tol), BCProjectorCache())
-
-
-"""
-    OhmicContactBC(bias; p_ohmic_absorb=1.0, tol=0.0)
-
-This one is meant to model connection to an ohmic contact with fixed potential (or fixed a0, in our case.)
-Ohmic contact boundary condition with fixed monopole value (`a0 = bias`).  The physics of the absorbing case is that particles are absorbed at the contact and re-emitted with a distribution corresponding to the imposed bias (fixed value
-of only a0, with higher harmonics determined by diffuse scattering). The specular case is that particles reflect with
-the same angle they arrived at, with no bias. The blended target state is then projected onto the incoming modes to
-get the final BC state.  Note that this means in the case p_ohmic_absorb = 0, we no longer have any particles being
-injected.
-
-Parameters:
-- `bias`: imposed contact drive. For linear transport it is the raw monopole value. For
-  nonlinear transport it is interpreted as a normalized electrochemical bias, where
-  `bias = 1` corresponds to an electrochemical scale of approximately `(1 + chi) * mu0`,
-  i.e. the isotropic admissibility limit of the parabolic model.
-- `p_ohmic_absorb`: absorption fraction (`1.0` fully absorbing, `0.0` fully specular)
-- `tol`: eigenvalue tolerance for incoming-mode projector construction
-
-Returns:
-- `OhmicContactBC`.
-"""
-mutable struct OhmicContactBC
-    p_ohmic_absorb::Float64
-    bias::Float64
-    tol::Float64
-    cache::BCProjectorCache
-end
-OhmicContactBC(bias::Real; p_ohmic_absorb::Real = 1.0, tol::Real = 0.0) =
-    OhmicContactBC(Float64(p_ohmic_absorb), Float64(bias), Float64(tol), BCProjectorCache())
-
-
-# helper functions to get a symbol name for the BC type for logging purposes
-boundary_condition_name(bc) = nameof(typeof(bc))
-boundary_condition_name(::MaxwellWallBC) = :maxwell_wall
-boundary_condition_name(::OhmicContactBC) = :ohmic_contact
 
 @inline nonlinear_bias_scale(equations::AbstractFermiTransportEquations2D) =
     equations.mu0 * (1.0 + abs(equations.electrostatic_coupling))

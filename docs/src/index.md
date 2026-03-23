@@ -1,5 +1,8 @@
-# FermiHarmonics
-This is a Julia code for simulating a toy model of Fermi liquid transport with momentum relaxing and momentum conserving collisions.  I use `Trixi.jl` which is a library for high-accuracy PDE solutions.
+# FermiFlows
+FermiFlows is a Julia framework for simulating space-resolved electron flow in
+2D kinetic theory. The package now exposes a backend-agnostic physics core and
+loads the current `Trixi.jl` solver integration through a Julia package
+extension.
 
 ## Model Details
 We solve a linearized Boltzmann equation:
@@ -11,7 +14,9 @@ The right hand side is the collision integral, featuring physical terms designed
 ```math
 \phi(x,y,\theta,t)=\frac{a_0}{2}+\sum_{m=1}^{M}\left[a_m\cos(m\theta)+b_m\sin(m\theta)\right].
 ```
-By default, we adaptively pick `M` based on how strong the damping is from collisions. The minimum `M` is `4` and the maximum `M` is `150`. This way, simulations in high damping regimes use fewer harmonics, while weakly damped cases keep higher angular resolution.
+For harmonic discretizations, the solver can adaptively pick `M` based on the
+strength of the collision rates. High-damping regimes use fewer harmonics while
+weakly damped regimes retain higher angular resolution.
 
 For linear transport we adopt a relaxation-time-like (BGK) approximation for the collision integral, so that the Boltzmann equation in harmonic basis reads, for $m=0$
 ```math
@@ -30,7 +35,8 @@ and for $m \ge 1$
  + \frac{v_F}{2}\partial_y(a_{m-1} - a_{m+1})
  = -\gamma_m b_m.
 ```
-For the scattering rates, we adopt a two-time (linearized BGK) model to capture the ballistic-hydrodynamic-diffusive crossover, 
+For the scattering rates, the default linear model is a two-time BGK closure,
+ 
 ```math
 \gamma_0 = 0
 ```
@@ -41,7 +47,10 @@ For the scattering rates, we adopt a two-time (linearized BGK) model to capture 
 \gamma_n = \gamma_{\mathrm{mr}} + \gamma_{\mathrm{mc}}, (n \ge 2).
 ```
 
-In this code release, source terms are purely physical; we do not apply additional numerical tail damping.
+In v1 the collision closure is factored through typed collision models and
+mode-rate profiles. Built-in profiles include a two-rate BGK model, an
+odd-quartic nonlinear damping profile, a constant `gamma(m)`, and typed custom
+closures.
 
 For `transport = :parabolic_nonlinear`, the streaming term is evaluated from the exact parabolic-band flux
 and the collision term relaxes toward local equilibrium on the drifting Fermi-disk manifold. The nonlinear
@@ -59,7 +68,7 @@ case is:
 - `gamma_mc = 0`
 - total channel length `L = 1`
 
-This convention is exposed through `FermiHarmonics.blg_reference_setup()`.
+This convention is exposed through `FermiFlows.blg_reference_setup()`.
 Because the nonlinear parabolic-band transport uses
 `vF = sqrt(2 * mu0 / mass)`, setting `mu0 = 1` and `vF = 1` fixes the solver
 mass to `2`.
@@ -72,24 +81,27 @@ transport, which requires `mu0 > 0`.
 
 ## Solve Entry Point
 
-The main solve interface is documented in:
+The main public interfaces are documented in:
 
 - [Solve API](api/solve.md)
+- [Model API](api/equations.md)
 - [Mesh Guide](mesh.md)
 
 ## Quick Start
 
 ```julia
-using FermiHarmonics
-using Trixi  # for boundary condition constructors
+using FermiFlows
+using Trixi
 
-boundary_conditions = Dict(
-    :walls => MaxwellWallBC(1.0),
-    :contact_top => OhmicContactBC(-0.5),
-    :contact_bottom => OhmicContactBC(0.5),
+surface = Isotropic2DFermiSurface(; vF=1.0, nu=1.0, mass=1.0, charge=-1.0)
+model = KineticModel2D(
+    surface,
+    HarmonicBasis(:auto),
+    IsotropicHarmonicStreaming(),
+    LinearBGKCollision(0.0, TwoRateProfile(50.0)),
 )
 
-params = SolveParams(;
+config = SolverConfig(;
     polydeg = 3,
     cfl = 0.8,
     tspan_end = 50.0,
@@ -99,16 +111,16 @@ params = SolveParams(;
     max_harmonic_auto = 150,
 )
 
-sol, semi = solve(
-    "projects/square_bells_ucsb/mesh/square_bells.inp",
-    boundary_conditions,
-    params,
-    0.0,   # gamma_mr
-    50.0;  # gamma_mc
-    max_harmonic = :auto,
-    visualize = false,
-    name = "quick_start",
+problem = TrixiProblem(;
+    mesh_path = "projects/square_bells_ucsb/mesh/square_bells.inp",
+    boundary_conditions = Dict(
+        :walls => MaxwellWallBC(1.0),
+        :contact_top => OhmicContactBC(-0.5),
+        :contact_bottom => OhmicContactBC(0.5),
+    ),
 )
+
+sol, semi = solve(problem, model, config; visualize = false, name = "quick_start")
 ```
 
 
@@ -121,7 +133,6 @@ Pages = [
     "api/source_terms.md",
     "api/io_utils.md",
     "api/solve.md",
-    "api/slurm_utils.md",
 ]
 Depth = 2
 ```

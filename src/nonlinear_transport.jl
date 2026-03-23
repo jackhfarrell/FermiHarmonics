@@ -2,28 +2,6 @@
 Utilities for the opt-in nonlinear parabolic-band transport mode.
 """
 
-mutable struct NonlinearThreadCache{PF, PI}
-    spectrum::Vector{ComplexF64}
-    samples::Vector{ComplexF64}
-    scratch_samples::Vector{ComplexF64}
-    work_samples::Vector{ComplexF64}
-    gradx_samples::Vector{ComplexF64}
-    grady_samples::Vector{ComplexF64}
-    theta_derivative_samples::Vector{ComplexF64}
-    real_work::Vector{Float64}
-    real_scratch::Vector{Float64}
-    fft_plan::PF
-    ifft_plan::PI
-end
-
-struct NonlinearTransportData{TC<:NonlinearThreadCache}
-    theta_count::Int
-    theta::Vector{Float64}
-    cos_theta::Vector{Float64}
-    sin_theta::Vector{Float64}
-    thread_caches::Vector{TC}
-end
-
 mutable struct NonlinearGradientCacheEntry
     cache_parabolic
     nvars::Int
@@ -34,148 +12,6 @@ end
 
 const NONLINEAR_GRADIENT_CACHE = IdDict{UInt, NonlinearGradientCacheEntry}()
 const NONLINEAR_MEAN_GRADIENT_CACHE = IdDict{UInt, NonlinearGradientCacheEntry}()
-
-mutable struct NonlinearTimingThreadStats
-    flux_ns::UInt64
-    flux_calls::UInt64
-    bgk_ns::UInt64
-    bgk_calls::UInt64
-    boundary_ns::UInt64
-    boundary_calls::UInt64
-    diffuse_ns::UInt64
-    diffuse_calls::UInt64
-    speed_ns::UInt64
-    speed_calls::UInt64
-    gradient_ns::UInt64
-    gradient_calls::UInt64
-end
-
-NonlinearTimingThreadStats() = NonlinearTimingThreadStats(
-    0, 0,
-    0, 0,
-    0, 0,
-    0, 0,
-    0, 0,
-    0, 0,
-)
-
-const NONLINEAR_TIMING_ENABLED = Ref(false)
-const NONLINEAR_TIMING_STATS = Ref(Vector{NonlinearTimingThreadStats}())
-
-@inline function nonlinear_timing_stats()
-    stats = NONLINEAR_TIMING_STATS[]
-    nthreads = Threads.nthreads()
-    if length(stats) != nthreads
-        stats = [NonlinearTimingThreadStats() for _ in 1:nthreads]
-        NONLINEAR_TIMING_STATS[] = stats
-    end
-    return stats
-end
-
-@inline nonlinear_timing_enabled() = NONLINEAR_TIMING_ENABLED[]
-
-function enable_nonlinear_timing!()
-    nonlinear_timing_stats()
-    NONLINEAR_TIMING_ENABLED[] = true
-    return nothing
-end
-
-function disable_nonlinear_timing!()
-    NONLINEAR_TIMING_ENABLED[] = false
-    return nothing
-end
-
-function reset_nonlinear_timing!()
-    stats = nonlinear_timing_stats()
-    for stat in stats
-        stat.flux_ns = 0
-        stat.flux_calls = 0
-        stat.bgk_ns = 0
-        stat.bgk_calls = 0
-        stat.boundary_ns = 0
-        stat.boundary_calls = 0
-        stat.diffuse_ns = 0
-        stat.diffuse_calls = 0
-        stat.speed_ns = 0
-        stat.speed_calls = 0
-        stat.gradient_ns = 0
-        stat.gradient_calls = 0
-    end
-    return nothing
-end
-
-@inline function record_nonlinear_timing!(category::Symbol, elapsed_ns::UInt64)
-    stat = nonlinear_timing_stats()[Threads.threadid()]
-    if category === :flux
-        stat.flux_ns += elapsed_ns
-        stat.flux_calls += 1
-    elseif category === :bgk
-        stat.bgk_ns += elapsed_ns
-        stat.bgk_calls += 1
-    elseif category === :boundary
-        stat.boundary_ns += elapsed_ns
-        stat.boundary_calls += 1
-    elseif category === :diffuse
-        stat.diffuse_ns += elapsed_ns
-        stat.diffuse_calls += 1
-    elseif category === :speed
-        stat.speed_ns += elapsed_ns
-        stat.speed_calls += 1
-    elseif category === :gradient
-        stat.gradient_ns += elapsed_ns
-        stat.gradient_calls += 1
-    else
-        error("unknown nonlinear timing category: $category")
-    end
-    return nothing
-end
-
-function nonlinear_timing_snapshot()
-    totals = Dict(
-        :flux => (ns=UInt64(0), calls=UInt64(0)),
-        :bgk => (ns=UInt64(0), calls=UInt64(0)),
-        :boundary => (ns=UInt64(0), calls=UInt64(0)),
-        :diffuse => (ns=UInt64(0), calls=UInt64(0)),
-        :speed => (ns=UInt64(0), calls=UInt64(0)),
-        :gradient => (ns=UInt64(0), calls=UInt64(0)),
-    )
-    for stat in nonlinear_timing_stats()
-        totals[:flux] = (ns=totals[:flux].ns + stat.flux_ns, calls=totals[:flux].calls + stat.flux_calls)
-        totals[:bgk] = (ns=totals[:bgk].ns + stat.bgk_ns, calls=totals[:bgk].calls + stat.bgk_calls)
-        totals[:boundary] = (ns=totals[:boundary].ns + stat.boundary_ns, calls=totals[:boundary].calls + stat.boundary_calls)
-        totals[:diffuse] = (ns=totals[:diffuse].ns + stat.diffuse_ns, calls=totals[:diffuse].calls + stat.diffuse_calls)
-        totals[:speed] = (ns=totals[:speed].ns + stat.speed_ns, calls=totals[:speed].calls + stat.speed_calls)
-        totals[:gradient] = (ns=totals[:gradient].ns + stat.gradient_ns, calls=totals[:gradient].calls + stat.gradient_calls)
-    end
-    total_ns = UInt64(0)
-    for key in (:flux, :bgk, :boundary, :diffuse, :speed, :gradient)
-        total_ns += totals[key].ns
-    end
-    return (categories=totals, total_ns=total_ns)
-end
-
-function print_nonlinear_timing_summary(io::IO=stdout)
-    snapshot = nonlinear_timing_snapshot()
-    total_ns = snapshot.total_ns
-    println(io, "Nonlinear timing summary")
-    println(io, "category            calls       total_s    avg_ms     share")
-    for key in (:flux, :bgk, :boundary, :diffuse, :speed, :gradient)
-        entry = snapshot.categories[key]
-        total_s = Float64(entry.ns) * 1.0e-9
-        avg_ms = entry.calls > 0 ? (Float64(entry.ns) * 1.0e-6 / Float64(entry.calls)) : 0.0
-        share = total_ns > 0 ? 100.0 * Float64(entry.ns) / Float64(total_ns) : 0.0
-        println(
-            io,
-            rpad(String(key), 18),
-            lpad(string(entry.calls), 10), "  ",
-            lpad(string(round(total_s; digits=4)), 10), "  ",
-            lpad(string(round(avg_ms; digits=4)), 8), "  ",
-            lpad(string(round(share; digits=1)) * "%", 7),
-        )
-    end
-    println(io, "total instrumented time: ", round(Float64(total_ns) * 1.0e-9; digits=4), " s")
-    return nothing
-end
 
 @inline transport_is_nonlinear(equations::FermiHarmonics2D) = equations.transport === :parabolic_nonlinear
 @inline transport_is_nonlinear(::FermiAngles2D) = true
@@ -300,75 +136,6 @@ function validate_collision_model(transport::Symbol, collision_model::Union{Noth
     model in (:quadratic_bgk, :exact_bgk, :two_rate_bgk) ||
         throw(ArgumentError("collision_model must be :quadratic_bgk, :exact_bgk, or :two_rate_bgk for :parabolic_nonlinear transport"))
     return model
-end
-
-@inline function zero_state_speed(mu0::Real, mass::Real)
-    return sqrt(2.0 * Float64(mu0) / Float64(mass))
-end
-
-@inline function nonlinear_theta_count(max_harmonic::Int, theta_oversample::Int)
-    base_count = 2 * max_harmonic + 1
-    dealiased_count = ceil(Int, 3 * base_count / 2)
-    return nextpow(2, max(theta_oversample * base_count, dealiased_count))
-end
-
-function create_nonlinear_transport_data(max_harmonic::Int, theta_oversample::Int)
-    ntheta = nonlinear_theta_count(max_harmonic, theta_oversample)
-    theta = collect(range(0.0, 2.0 * pi, length=ntheta + 1))[1:end-1]
-    cos_theta = cos.(theta)
-    sin_theta = sin.(theta)
-    spectrum = Vector{ComplexF64}(undef, ntheta)
-    samples = Vector{ComplexF64}(undef, ntheta)
-    scratch_samples = Vector{ComplexF64}(undef, ntheta)
-    work_samples = Vector{ComplexF64}(undef, ntheta)
-    gradx_samples = Vector{ComplexF64}(undef, ntheta)
-    grady_samples = Vector{ComplexF64}(undef, ntheta)
-    theta_derivative_samples = Vector{ComplexF64}(undef, ntheta)
-    real_work = zeros(Float64, 1 + 2 * max_harmonic)
-    real_scratch = zeros(Float64, 1 + 2 * max_harmonic)
-    fft_plan = FFTW.plan_fft!(scratch_samples; flags=FFTW.ESTIMATE)
-    ifft_plan = FFTW.plan_ifft!(samples; flags=FFTW.ESTIMATE)
-    cache_template = NonlinearThreadCache(
-        spectrum,
-        samples,
-        scratch_samples,
-        work_samples,
-        gradx_samples,
-        grady_samples,
-        theta_derivative_samples,
-        real_work,
-        real_scratch,
-        fft_plan,
-        ifft_plan,
-    )
-    TC = typeof(cache_template)
-    thread_caches = Vector{TC}(undef, Threads.nthreads())
-    thread_caches[1] = cache_template
-    for tid in 2:length(thread_caches)
-        spectrum_tid = Vector{ComplexF64}(undef, ntheta)
-        samples_tid = Vector{ComplexF64}(undef, ntheta)
-        scratch_samples_tid = Vector{ComplexF64}(undef, ntheta)
-        work_samples_tid = Vector{ComplexF64}(undef, ntheta)
-        gradx_samples_tid = Vector{ComplexF64}(undef, ntheta)
-        grady_samples_tid = Vector{ComplexF64}(undef, ntheta)
-        theta_derivative_samples_tid = Vector{ComplexF64}(undef, ntheta)
-        real_work_tid = zeros(Float64, 1 + 2 * max_harmonic)
-        real_scratch_tid = zeros(Float64, 1 + 2 * max_harmonic)
-        thread_caches[tid] = NonlinearThreadCache(
-            spectrum_tid,
-            samples_tid,
-            scratch_samples_tid,
-            work_samples_tid,
-            gradx_samples_tid,
-            grady_samples_tid,
-            theta_derivative_samples_tid,
-            real_work_tid,
-            real_scratch_tid,
-            FFTW.plan_fft!(scratch_samples_tid; flags=FFTW.ESTIMATE),
-            FFTW.plan_ifft!(samples_tid; flags=FFTW.ESTIMATE),
-        )
-    end
-    return NonlinearTransportData(ntheta, theta, cos_theta, sin_theta, thread_caches)
 end
 
 @inline function get_nonlinear_cache(equations::FermiHarmonics2D)
@@ -1410,7 +1177,7 @@ function Trixi.rhs!(
         )
     end
 
-    Trixi.reset_du!(du, dg, cache)
+    fill!(du, zero(eltype(du)))
 
     Trixi.calc_volume_integral!(
         du,

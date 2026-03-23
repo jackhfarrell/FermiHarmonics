@@ -63,7 +63,7 @@ gmsh -2 projects/square_bells_ucsb/mesh/square_bells.geo \
 Boundary-condition keys must match physical curve names in the mesh:
 
 ```julia
-using FermiHarmonics
+using FermiFlows
 using Trixi
 
 boundary_conditions = Dict(
@@ -72,16 +72,22 @@ boundary_conditions = Dict(
     :contact_bottom => OhmicContactBC(0.5),
 )
 
-params = SolveParams()
-
-sol, semi = solve(
-    "projects/square_bells_ucsb/mesh/square_bells.inp",
-    boundary_conditions,
-    params,
-    0.0,   # gamma_mr
-    50.0;  # gamma_mc
-    max_harmonic = :auto,
+surface = Isotropic2DFermiSurface()
+model = KineticModel2D(
+    surface,
+    HarmonicBasis(:auto),
+    IsotropicHarmonicStreaming(),
+    LinearBGKCollision(0.0, TwoRateProfile(50.0)),
 )
+
+config = SolverConfig()
+
+problem = TrixiProblem(;
+    mesh_path = "projects/square_bells_ucsb/mesh/square_bells.inp",
+    boundary_conditions = boundary_conditions,
+)
+
+sol, semi = solve(problem, model, config)
 ```
 
 If names do not match, boundary assignment fails.

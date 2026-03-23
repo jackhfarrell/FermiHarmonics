@@ -1,33 +1,49 @@
-# Equations
-We have implemented a custom equations type for use with Trixi. This offers a more fine-tuned way to run simulations that does not go through the `FermiHarmonics.solve()` function.
+# Model Construction
+FermiFlows v1 builds the public physics API from composable typed objects in the
+core package. The Trixi extension lowers these model objects to backend-specific
+equation adapters internally; those adapters are no longer the primary public
+API.
 
-## Type
+## Core Types
 
-```@docs
-FermiHarmonics2D
-```
+- `AbstractFermiSurface2D`
+- `AbstractAngularDiscretization2D`
+- `AbstractStreamingOperator2D`
+- `AbstractModeRateProfile`
+- `AbstractCollisionModel2D`
+- `Isotropic2DFermiSurface`
+- `HarmonicBasis`
+- `AngleGrid`
+- `IsotropicHarmonicStreaming`
+- `IsotropicAngleStreaming`
+- `TwoRateProfile`
+- `OddQuarticRateProfile`
+- `ConstantModeRateProfile`
+- `CustomModeRateProfile`
+- `LinearBGKCollision`
+- `QuadraticBGKCollision`
+- `ExactAngleBGKCollision`
+- `TwoRateAngleBGKCollision`
+- `KineticModel2D`
+- `BandSpec`
 
-## Constructor
-
-```@docs
-FermiHarmonics.FermiHarmonics2D
-```
-
-## Script-Style Usage
+## Example
 
 ```julia
-params = SolveParams(;
-    max_harmonic = 60,
-    # ... other solver settings
-)
+surface = Isotropic2DFermiSurface(; vF=1.0, nu=1.0, mass=1.0, charge=-1.0)
+discretization = HarmonicBasis(:auto)
+streaming = IsotropicHarmonicStreaming()
+collision = LinearBGKCollision(0.05, TwoRateProfile(0.40))
 
-nvars = 1 + 2 * params.max_harmonic
-equations = FermiHarmonics2D(
-    nvars;
-    gamma_mr = 0.05,
-    gamma_mc = 0.4,
-    max_harmonic = params.max_harmonic,
+model = KineticModel2D(
+    surface,
+    discretization,
+    streaming,
+    collision;
+    reference = blg_reference_setup(),
 )
 ```
 
-Use `:auto` at solve-time, e.g. `solve(...; max_harmonic=:auto)`.
+Multiband linear models are constructed by passing a `bands=[BandSpec(...), ...]`
+vector to `KineticModel2D`. In v1, multiband support is intentionally limited to
+the existing two-band linear harmonic workflow.

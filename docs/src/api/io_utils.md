@@ -1,14 +1,9 @@
 # I/O Utilities
 
-## Analysis Output
+The public output helpers remain available through the Trixi extension:
 
-```@docs
-FermiHarmonics.save_for_analysis
-FermiHarmonics.save_observables_for_python
-```
-
-## Solution Output
-
-```@docs
-FermiHarmonics.save_solution_custom
-```
+- `save_for_analysis`
+- `save_solution_custom`
+- `save_mesh_native_analysis`
+- `evaluate_solution`
+- `evaluate_observables`

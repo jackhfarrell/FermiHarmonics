@@ -1,15 +1,10 @@
 # Boundary Conditions
 
-## Boundary Condition Types
-We implement two types of boundary condition.
+Boundary conditions remain backend-facing in v1. The core package exposes the
+physical boundary-condition types used by the Trixi extension, but does not yet
+define a backend-neutral execution interface.
 
-```@docs
-MaxwellWallBC
-OhmicContactBC
-```
+## Public Types
 
-## Projectors
-
-```@docs
-FermiHarmonics.incoming_projector
-```
+- `MaxwellWallBC`
+- `OhmicContactBC`

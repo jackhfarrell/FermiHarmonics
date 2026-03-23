@@ -1,16 +1,15 @@
 # SLURM Utilities API
 
-```@docs
-FermiHarmonics.submit_sweep!
-FermiHarmonics.write_sweep_metadata!
-FermiHarmonics.archive_mesh!
-FermiHarmonics.copy_mesh_to_scratch
-FermiHarmonics.select_cases
-FermiHarmonics.grid_lookup
-```
+SLURM and sweep-management helpers are not part of the new public `FermiFlows`
+v1 API. Existing project-specific scripts can still carry local automation, but
+the package interface is now focused on:
+
+- backend-agnostic model construction in `src/FermiFlows.jl`
+- backend execution through Julia package extensions such as `FermiFlowsTrixiExt`
+- analysis and export helpers that operate on solved backend problems
 
 ## Behavior Notes
 
-- `submit_sweep!` returns a `Cmd` only in `dry_run=true`; otherwise it submits and returns `nothing`.
-- `write_sweep_metadata!` writes/overwrites `sweep_metadata.toml`.
-- `select_cases` uses `SLURM_ARRAY_TASK_ID` from environment and defaults to task `1` if unset.
+- Project-level SLURM automation should live beside the project that owns it.
+- If these helpers are promoted back into the package later, they should follow
+  the same backend-extension pattern as the solver interface.

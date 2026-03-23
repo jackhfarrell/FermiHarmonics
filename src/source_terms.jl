@@ -45,35 +45,9 @@ Source terms from a BGK-type approximation to the collision integral.  We do not
 ``\\gamma_mr + \\gamma_mc``.
 """
 @inline function physical_sources(u, x, t, equations::AbstractFermiTransportEquations2D)::SVector
-    if transport_is_nonlinear(equations)
-        return nonlinear_bgk_sources(u, equations)
-    end
-
     n = length(u)
     out = MVector{n, Float64}(undef)
-    @inbounds begin
-        # Monopole: no damping (charge conservation)
-        out[1] = 0.0
-        
-        # Dipole: momentum-relaxing scattering only
-        if n >= 3
-            gamma_mr = equations.gamma_mr
-            out[2] = -gamma_mr * u[2]
-            out[3] = -gamma_mr * u[3]
-        end
-        
-        # Higher harmonics: full scattering (momentum-relaxing + momentum-conserving)
-        if n > 3
-            gamma_hi = equations.gamma_mr + equations.gamma_mc
-            max_harmonic = (n - 1) ÷ 2
-            for m in 2:max_harmonic
-                ci = cosine_index(m)
-                si = sine_index(m)
-                out[ci] = -gamma_hi * u[ci]
-                out[si] = -gamma_hi * u[si]
-            end
-        end
-    end
+    collision_sources!(out, u, equations)
     return SVector(out)
 end
 
@@ -158,7 +132,7 @@ end
 end
 
 @inline nonlinear_mode_rate(m::Int, equations::FermiHarmonics2D) =
-    iseven(m) ? equations.gamma_mc : min(equations.gamma_mc, equations.gamma3 * m^4)
+    mode_rate(mode_profile(equations.model.collision), m)
 
 @inline function nonlinear_bgk_sources(u, ::Val{:dispatch}, equations::FermiHarmonics2D)::SVector
     t0 = nonlinear_timing_enabled() ? time_ns() : UInt64(0)
@@ -196,4 +170,43 @@ end
         record_nonlinear_timing!(:bgk, time_ns() - t0)
     end
     return SVector(out)
+end
+
+function collision_sources!(out::AbstractVector{Float64}, u, equations::FermiHarmonics2D)
+    if transport_is_nonlinear(equations)
+        copyto!(out, nonlinear_bgk_sources(u, equations))
+        return out
+    end
+
+    n = length(u)
+    profile = mode_profile(equations.model.collision)
+    @inbounds begin
+        out[1] = 0.0
+        if n >= 3
+            gamma_mr = equations.gamma_mr
+            out[2] = -gamma_mr * Float64(u[2])
+            out[3] = -gamma_mr * Float64(u[3])
+        end
+        if n > 3
+            max_harmonic = (n - 1) ÷ 2
+            for m in 2:max_harmonic
+                gamma_mode = equations.gamma_mr + mode_rate(profile, m)
+                ci = cosine_index(m)
+                si = sine_index(m)
+                out[ci] = -gamma_mode * Float64(u[ci])
+                out[si] = -gamma_mode * Float64(u[si])
+            end
+        end
+    end
+    return out
+end
+
+function collision_sources!(out::AbstractVector{Float64}, u, equations::MultiBandFermiHarmonics2D)
+    copyto!(out, physical_sources(u, nothing, 0.0, equations))
+    return out
+end
+
+function collision_sources!(out::AbstractVector{Float64}, u, equations::FermiAngles2D)
+    copyto!(out, nonlinear_bgk_sources(u, equations))
+    return out
 end
