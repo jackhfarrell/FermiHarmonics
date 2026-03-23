@@ -185,10 +185,11 @@ end
         return surface_flux_function(state, out, normal_direction, equations)
     elseif transport_is_nonlinear(equations)
         effective_tol = max(bc.tol, 1.0e-12)
+        face_data = boundary_index > 0 ? get(bc.cache.nonlinear_faces, boundary_index, nothing) : nothing
         if bc_type === :maxwell
-            nonlinear_maxwell_wall!(out, state, unit_n, bc.p_scatter, target, equations, effective_tol)
+            nonlinear_maxwell_wall!(out, state, unit_n, bc.p_scatter, target, equations, effective_tol, face_data)
         else
-            nonlinear_ohmic_contact!(out, state, unit_n, bc.p_ohmic_absorb, bc.bias, target, equations, effective_tol)
+            nonlinear_ohmic_contact!(out, state, unit_n, bc.p_ohmic_absorb, bc.bias, target, equations, effective_tol, face_data)
         end
         return surface_flux_function(state, out, normal_direction, equations)
     elseif bc.cache.initialized && boundary_index > 0 && haskey(bc.cache.projectors, boundary_index)

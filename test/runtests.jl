@@ -702,15 +702,12 @@ end
     function reference_nonlinear_boundary_samples(state, unit_normal, incoming_value, specular_weight, eq, tol)
         state_samples = reference_harmonic_state_to_samples(state, eq)
         result_samples = copy(state_samples)
-        target = similar(state)
-        FermiHarmonics.specular_target!(target, state, unit_normal)
-        specular_samples = reference_harmonic_state_to_samples(target, eq)
-        data = FermiHarmonics.nonlinear_data(eq)
+        face_data = FermiHarmonics.build_nonlinear_face_data(eq, unit_normal, tol)
         diffuse_weight = 1.0 - specular_weight
         for j in eachindex(result_samples)
-            projection = unit_normal[1] * data.cos_theta[j] + unit_normal[2] * data.sin_theta[j]
-            if projection < -tol
-                incoming_sample = diffuse_weight * incoming_value + specular_weight * real(specular_samples[j])
+            if face_data.incoming_mask[j]
+                specular_value = specular_weight > 0.0 ? real(FermiHarmonics.apply_specular_stencil(state_samples, face_data, j)) : 0.0
+                incoming_sample = diffuse_weight * incoming_value + specular_weight * specular_value
                 result_samples[j] = ComplexF64(incoming_sample, 0.0)
             end
         end
@@ -721,21 +718,19 @@ end
 
     function reference_nonlinear_boundary_flux(state, normal, unit_normal, incoming_value, specular_weight, eq, tol)
         state_samples = reference_harmonic_state_to_samples(state, eq)
-        target = similar(state)
-        FermiHarmonics.specular_target!(target, state, unit_normal)
-        specular_samples = reference_harmonic_state_to_samples(target, eq)
-        data = FermiHarmonics.nonlinear_data(eq)
+        face_data = FermiHarmonics.build_nonlinear_face_data(eq, unit_normal, tol)
         diffuse_weight = 1.0 - specular_weight
         flux_samples = Vector{ComplexF64}(undef, length(state_samples))
+        scale = hypot(normal[1], normal[2])
         for j in eachindex(state_samples)
-            projection = unit_normal[1] * data.cos_theta[j] + unit_normal[2] * data.sin_theta[j]
             phi_trace = real(state_samples[j])
-            if projection < -tol
-                phi_trace = diffuse_weight * incoming_value + specular_weight * real(specular_samples[j])
+            if face_data.incoming_mask[j]
+                specular_value = specular_weight > 0.0 ? real(FermiHarmonics.apply_specular_stencil(state_samples, face_data, j)) : 0.0
+                phi_trace = diffuse_weight * incoming_value + specular_weight * specular_value
             end
-            directional = normal[1] * data.cos_theta[j] + normal[2] * data.sin_theta[j]
+            directional = scale * face_data.projections[j]
             flux_samples[j] = ComplexF64(
-                directional * FermiHarmonics.parabolic_shifted_flux(phi_trace, eq),
+                directional * FermiHarmonics.quadratic_shifted_flux(phi_trace, eq),
                 0.0,
             )
         end
@@ -819,7 +814,8 @@ end
         1.0e-12,
     )
     state_samples = reference_harmonic_state_to_samples(nonlinear_state, eq)
-    wall_incoming = FermiHarmonics.nonlinear_diffuse_incoming_value(state_samples, unit_normal, eq, 1.0e-12)
+    wall_face_data = FermiHarmonics.build_nonlinear_face_data(eq, unit_normal, 1.0e-12)
+    wall_incoming = FermiHarmonics.nonlinear_diffuse_incoming_value(state_samples, wall_face_data, eq, 1.0e-12)
     wall_trace_ref = reference_nonlinear_boundary_samples(
         nonlinear_state,
         unit_normal,
@@ -1088,6 +1084,10 @@ end
     )
     @test semi_stable.equations.collision_model === :quadratic_bgk
     @test sol_stable.t[end] ≈ stability_params.tspan_end atol=1.0e-12 rtol=1.0e-12
+    status_stable = FermiHarmonics.solve_status(sol_stable, semi_stable, stability_params)
+    @test status_stable.hit_final_time
+    @test status_stable.stop_reason === :final_time
+    @test !status_stable.converged
 
     sol_gamma3, semi_gamma3 = solve(
         mesh_path,

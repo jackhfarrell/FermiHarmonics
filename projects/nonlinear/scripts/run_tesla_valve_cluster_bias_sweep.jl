@@ -90,7 +90,7 @@ function run_tesla_valve_cluster_bias_sweep(; direction::AbstractString=get(ENV,
 
     params = SolveParams(;
         polydeg=3,
-        tspan_end=2.0,
+        tspan_end=parse(Float64, get(ENV, "TESLA_TSPAN_END", "2.0")),
         residual_tol=1e-3,
         cfl=0.8,
         log_every=200,
@@ -123,11 +123,15 @@ function run_tesla_valve_cluster_bias_sweep(; direction::AbstractString=get(ENV,
             name=run_name,
         )
 
+        status = FermiHarmonics.solve_status(sol, semi, params)
         cartesian_path = joinpath(output_dir, "$(run_name).h5")
         mesh_native_path = joinpath(output_dir, "$(run_name)_mesh_native.h5")
         FermiHarmonics.save_for_analysis(sol, semi, cartesian_path; nvisnodes=400, observables=[:n, :jx, :jy])
         FermiHarmonics.save_mesh_native_analysis(sol, semi, mesh_native_path; refine=6, observables=[:n, :jx, :jy])
-        @info "Saved Tesla valve sweep outputs" direction=direction_label bias cartesian_path mesh_native_path final_time=sol.t[end]
+        @info "Saved Tesla valve sweep outputs" direction=direction_label bias cartesian_path mesh_native_path final_time=sol.t[end] stop_reason=status.stop_reason final_residual=status.final_residual converged=status.converged
+        if !status.converged
+            @warn "Tesla valve sweep case did not reach residual tolerance before stopping" direction=direction_label bias final_time=status.final_time target_final_time=status.target_final_time final_residual=status.final_residual tolerance=params.residual_tol stop_reason=status.stop_reason
+        end
 
         u0 = copy(sol.u[end])
     end

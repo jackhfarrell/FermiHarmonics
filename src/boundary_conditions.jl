@@ -39,6 +39,8 @@ struct NonlinearBoundaryFaceData
     incoming_mask::BitVector
     stencil_indices::Matrix{Int}
     stencil_weights::Matrix{Float64}
+    projections::Vector{Float64}
+    incoming_weight::Float64
 end
 
 @inline function get_bc_thread_buffer!(buffers::Vector{Vector{Float64}}, nvars::Int)
@@ -212,35 +214,42 @@ function nonlinear_diffuse_incoming_value(
     incoming_weight *= dtheta
     incoming_weight > 0.0 || return 0.0
     outgoing_flux *= dtheta
-    return parabolic_shifted_flux_inverse(outgoing_flux / incoming_weight, equations)
+    return quadratic_shifted_flux_inverse(outgoing_flux / incoming_weight, equations)
+end
+
+function nonlinear_diffuse_incoming_value(
+    state_samples::Vector{ComplexF64},
+    face_data::NonlinearBoundaryFaceData,
+    equations::FermiHarmonics2D,
+    tol::Float64,
+)
+    outgoing_flux = 0.0
+    @inbounds for j in eachindex(state_samples)
+        projection = face_data.projections[j]
+        if projection > tol
+            outgoing_flux += projection * quadratic_shifted_flux(real(state_samples[j]), equations)
+        end
+    end
+
+    face_data.incoming_weight > 0.0 || return 0.0
+    outgoing_flux *= 2.0 * pi / nonlinear_data(equations).theta_count
+    return quadratic_shifted_flux_inverse(outgoing_flux / face_data.incoming_weight, equations)
 end
 
 function nonlinear_boundary_samples!(
     out::AbstractVector{Float64},
     state_samples::Vector{ComplexF64},
-    state::AbstractVector{Float64},
-    unit_normal::SVector{2, Float64},
+    face_data::NonlinearBoundaryFaceData,
     incoming_value::Float64,
     specular_weight::Float64,
-    target::AbstractVector{Float64},
     equations::FermiHarmonics2D,
-    tol::Float64,
 )
     cache = get_nonlinear_cache(equations)
     copy!(cache.work_samples, state_samples)
-
-    if specular_weight > 0.0
-        specular_target!(target, state, unit_normal)
-        harmonic_state_to_samples!(cache.scratch_samples, target, equations)
-    end
-
-    data = nonlinear_data(equations)
-    nx, ny = unit_normal
     diffuse_weight = 1.0 - specular_weight
     @inbounds for j in eachindex(state_samples)
-        projection = nx * data.cos_theta[j] + ny * data.sin_theta[j]
-        if projection < -tol
-            specular_value = specular_weight > 0.0 ? real(cache.scratch_samples[j]) : 0.0
+        if face_data.incoming_mask[j]
+            specular_value = specular_weight > 0.0 ? real(apply_specular_stencil(state_samples, face_data, j)) : 0.0
             incoming_sample = diffuse_weight * incoming_value + specular_weight * specular_value
             cache.work_samples[j] = ComplexF64(incoming_sample, 0.0)
         end
@@ -252,35 +261,25 @@ end
 function nonlinear_boundary_flux!(
     out_flux::AbstractVector{Float64},
     state_samples::Vector{ComplexF64},
-    state::AbstractVector{Float64},
+    face_data::NonlinearBoundaryFaceData,
     normal::SVector{2, Float64},
-    unit_normal::SVector{2, Float64},
     incoming_value::Float64,
     specular_weight::Float64,
-    target::AbstractVector{Float64},
     equations::FermiHarmonics2D,
-    tol::Float64,
 )
     cache = get_nonlinear_cache(equations)
-    if specular_weight > 0.0
-        specular_target!(target, state, unit_normal)
-        harmonic_state_to_samples!(cache.scratch_samples, target, equations)
-    end
-
-    data = nonlinear_data(equations)
-    nx, ny = unit_normal
     normal_x, normal_y = normal
+    scale = hypot(normal_x, normal_y)
     diffuse_weight = 1.0 - specular_weight
     @inbounds for j in eachindex(state_samples)
-        projection = nx * data.cos_theta[j] + ny * data.sin_theta[j]
         phi_trace = real(state_samples[j])
-        if projection < -tol
-            specular_value = specular_weight > 0.0 ? real(cache.scratch_samples[j]) : 0.0
+        if face_data.incoming_mask[j]
+            specular_value = specular_weight > 0.0 ? real(apply_specular_stencil(state_samples, face_data, j)) : 0.0
             phi_trace = diffuse_weight * incoming_value + specular_weight * specular_value
         end
-        directional = normal_x * data.cos_theta[j] + normal_y * data.sin_theta[j]
+        directional = scale * face_data.projections[j]
         cache.scratch_samples[j] = ComplexF64(
-            directional * parabolic_shifted_flux(phi_trace, equations),
+            directional * quadratic_shifted_flux(phi_trace, equations),
             0.0,
         )
     end
@@ -296,20 +295,19 @@ function nonlinear_maxwell_wall!(
     target::AbstractVector{Float64},
     equations::FermiHarmonics2D,
     tol::Float64,
+    face_data::Union{Nothing, NonlinearBoundaryFaceData} = nothing,
 )
     cache = get_nonlinear_cache(equations)
     harmonic_state_to_samples!(cache.samples, state, equations)
-    diffuse_value = nonlinear_diffuse_incoming_value(cache.samples, unit_normal, equations, tol)
+    local_face_data = isnothing(face_data) ? build_nonlinear_face_data(equations, unit_normal, tol) : face_data
+    diffuse_value = nonlinear_diffuse_incoming_value(cache.samples, local_face_data, equations, tol)
     return nonlinear_boundary_samples!(
         out,
         cache.samples,
-        state,
-        unit_normal,
+        local_face_data,
         diffuse_value,
         1.0 - Float64(p_scatter),
-        target,
         equations,
-        tol,
     )
 end
 
@@ -322,57 +320,44 @@ function nonlinear_maxwell_wall_flux!(
     target::AbstractVector{Float64},
     equations::FermiHarmonics2D,
     tol::Float64,
+    face_data::Union{Nothing, NonlinearBoundaryFaceData} = nothing,
 )
     cache = get_nonlinear_cache(equations)
     harmonic_state_to_samples!(cache.samples, state, equations)
-    diffuse_value = nonlinear_diffuse_incoming_value(cache.samples, unit_normal, equations, tol)
+    local_face_data = isnothing(face_data) ? build_nonlinear_face_data(equations, unit_normal, tol) : face_data
+    diffuse_value = nonlinear_diffuse_incoming_value(cache.samples, local_face_data, equations, tol)
     return nonlinear_boundary_flux!(
         out_flux,
         cache.samples,
-        state,
+        local_face_data,
         normal,
-        unit_normal,
         diffuse_value,
         1.0 - Float64(p_scatter),
-        target,
         equations,
-        tol,
     )
 end
 
 function nonlinear_ohmic_incoming_value(
     state_samples::Vector{ComplexF64},
-    state::AbstractVector{Float64},
-    unit_normal::SVector{2, Float64},
+    face_data::NonlinearBoundaryFaceData,
     p_ohmic_absorb::Real,
     bias::Real,
-    target::AbstractVector{Float64},
     equations::FermiHarmonics2D,
-    tol::Float64,
 )
     electrochemical_bias = nonlinear_electrochemical_bias(bias, equations)
     if !nonlinear_has_electrostatic_force(equations)
         return electrochemical_bias
     end
 
-    cache = get_nonlinear_cache(equations)
     specular_weight = 1.0 - Float64(p_ohmic_absorb)
-    if specular_weight > 0.0
-        specular_target!(target, state, unit_normal)
-        harmonic_state_to_samples!(cache.scratch_samples, target, equations)
-    end
-
-    data = nonlinear_data(equations)
-    nx, ny = unit_normal
     diffuse_weight = 1.0 - specular_weight
     base_sum = 0.0
     phi0_coeff = 0.0
-    inv_ntheta = 1.0 / data.theta_count
+    inv_ntheta = 1.0 / nonlinear_data(equations).theta_count
 
     @inbounds for j in eachindex(state_samples)
-        projection = nx * data.cos_theta[j] + ny * data.sin_theta[j]
-        if projection < -tol
-            specular_value = specular_weight > 0.0 ? real(cache.scratch_samples[j]) : 0.0
+        if face_data.incoming_mask[j]
+            specular_value = specular_weight > 0.0 ? real(apply_specular_stencil(state_samples, face_data, j)) : 0.0
             base_sum += specular_weight * specular_value
             phi0_coeff += diffuse_weight * inv_ntheta
         else
@@ -397,18 +382,17 @@ function nonlinear_ohmic_incoming_value(
     target::AbstractVector{Float64},
     equations::FermiHarmonics2D,
     tol::Float64,
+    face_data::Union{Nothing, NonlinearBoundaryFaceData} = nothing,
 )
     cache = get_nonlinear_cache(equations)
     harmonic_state_to_samples!(cache.samples, state, equations)
+    local_face_data = isnothing(face_data) ? build_nonlinear_face_data(equations, unit_normal, tol) : face_data
     return nonlinear_ohmic_incoming_value(
         cache.samples,
-        state,
-        unit_normal,
+        local_face_data,
         p_ohmic_absorb,
         bias,
-        target,
         equations,
-        tol,
     )
 end
 
@@ -421,28 +405,25 @@ function nonlinear_ohmic_contact!(
     target::AbstractVector{Float64},
     equations::FermiHarmonics2D,
     tol::Float64,
+    face_data::Union{Nothing, NonlinearBoundaryFaceData} = nothing,
 )
-    harmonic_state_to_samples!(get_nonlinear_cache(equations).samples, state, equations)
+    cache = get_nonlinear_cache(equations)
+    harmonic_state_to_samples!(cache.samples, state, equations)
+    local_face_data = isnothing(face_data) ? build_nonlinear_face_data(equations, unit_normal, tol) : face_data
     incoming_value = nonlinear_ohmic_incoming_value(
-        get_nonlinear_cache(equations).samples,
-        state,
-        unit_normal,
+        cache.samples,
+        local_face_data,
         p_ohmic_absorb,
         bias,
-        target,
         equations,
-        tol,
     )
     return nonlinear_boundary_samples!(
         out,
-        get_nonlinear_cache(equations).samples,
-        state,
-        unit_normal,
+        cache.samples,
+        local_face_data,
         incoming_value,
         1.0 - Float64(p_ohmic_absorb),
-        target,
         equations,
-        tol,
     )
 end
 
@@ -456,29 +437,26 @@ function nonlinear_ohmic_contact_flux!(
     target::AbstractVector{Float64},
     equations::FermiHarmonics2D,
     tol::Float64,
+    face_data::Union{Nothing, NonlinearBoundaryFaceData} = nothing,
 )
-    harmonic_state_to_samples!(get_nonlinear_cache(equations).samples, state, equations)
+    cache = get_nonlinear_cache(equations)
+    harmonic_state_to_samples!(cache.samples, state, equations)
+    local_face_data = isnothing(face_data) ? build_nonlinear_face_data(equations, unit_normal, tol) : face_data
     incoming_value = nonlinear_ohmic_incoming_value(
-        get_nonlinear_cache(equations).samples,
-        state,
-        unit_normal,
+        cache.samples,
+        local_face_data,
         p_ohmic_absorb,
         bias,
-        target,
         equations,
-        tol,
     )
     return nonlinear_boundary_flux!(
         out_flux,
-        get_nonlinear_cache(equations).samples,
-        state,
+        cache.samples,
+        local_face_data,
         normal,
-        unit_normal,
         incoming_value,
         1.0 - Float64(p_ohmic_absorb),
-        target,
         equations,
-        tol,
     )
 end
 
@@ -506,6 +484,44 @@ function cubic_periodic_stencil(theta_ref::Float64, theta_count::Int, dtheta::Fl
 end
 
 function build_nonlinear_face_data(
+    equations::FermiHarmonics2D,
+    unit_normal::SVector{2, Float64},
+    tol::Float64,
+)
+    data = nonlinear_data(equations)
+    theta_count = data.theta_count
+    incoming_mask = falses(theta_count)
+    stencil_indices = Matrix{Int}(undef, 4, theta_count)
+    stencil_weights = Matrix{Float64}(undef, 4, theta_count)
+    projections = Vector{Float64}(undef, theta_count)
+    alpha = atan(unit_normal[2], unit_normal[1])
+    dtheta = 2.0 * pi / theta_count
+    incoming_weight = 0.0
+
+    @inbounds for j in 1:theta_count
+        projection = unit_normal[1] * data.cos_theta[j] + unit_normal[2] * data.sin_theta[j]
+        projections[j] = projection
+        incoming_mask[j] = projection < -tol
+        if projection < -tol
+            incoming_weight -= projection
+        end
+        theta_ref = mod(2.0 * alpha + pi - data.theta[j], 2.0 * pi)
+        indices, weights = cubic_periodic_stencil(theta_ref, theta_count, dtheta)
+        stencil_indices[:, j] .= indices
+        stencil_weights[:, j] .= weights
+    end
+
+    return NonlinearBoundaryFaceData(
+        unit_normal,
+        incoming_mask,
+        stencil_indices,
+        stencil_weights,
+        projections,
+        incoming_weight * dtheta,
+    )
+end
+
+function build_nonlinear_face_data(
     equations::FermiAngles2D,
     unit_normal::SVector{2, Float64},
     tol::Float64,
@@ -515,23 +531,36 @@ function build_nonlinear_face_data(
     incoming_mask = falses(theta_count)
     stencil_indices = Matrix{Int}(undef, 4, theta_count)
     stencil_weights = Matrix{Float64}(undef, 4, theta_count)
+    projections = Vector{Float64}(undef, theta_count)
     alpha = atan(unit_normal[2], unit_normal[1])
     dtheta = data.weight
+    incoming_weight = 0.0
 
     @inbounds for j in 1:theta_count
         projection = unit_normal[1] * data.cos_theta[j] + unit_normal[2] * data.sin_theta[j]
+        projections[j] = projection
         incoming_mask[j] = projection < -tol
+        if projection < -tol
+            incoming_weight -= projection
+        end
         theta_ref = mod(2.0 * alpha + pi - data.theta[j], 2.0 * pi)
         indices, weights = cubic_periodic_stencil(theta_ref, theta_count, dtheta)
         stencil_indices[:, j] .= indices
         stencil_weights[:, j] .= weights
     end
 
-    return NonlinearBoundaryFaceData(unit_normal, incoming_mask, stencil_indices, stencil_weights)
+    return NonlinearBoundaryFaceData(
+        unit_normal,
+        incoming_mask,
+        stencil_indices,
+        stencil_weights,
+        projections,
+        incoming_weight * data.weight,
+    )
 end
 
 @inline function apply_specular_stencil(
-    state::AbstractVector{<:Real},
+    state::AbstractVector,
     face_data::NonlinearBoundaryFaceData,
     angle_index::Int,
 )
@@ -552,14 +581,12 @@ function nonlinear_diffuse_incoming_value(
     incoming_weight = 0.0
     nx, ny = face_data.unit_normal
     @inbounds for j in eachindex(state)
-        projection = nx * data.cos_theta[j] + ny * data.sin_theta[j]
+        projection = face_data.projections[j]
         if projection > tol
             outgoing_flux += projection * parabolic_shifted_flux(state[j], equations)
-        elseif projection < -tol
-            incoming_weight -= projection
         end
     end
-    incoming_weight *= data.weight
+    incoming_weight = face_data.incoming_weight
     incoming_weight > 0.0 || return 0.0
     outgoing_flux *= data.weight
     return parabolic_shifted_flux_inverse(outgoing_flux / incoming_weight, equations)
@@ -1004,6 +1031,40 @@ function build_projectors(
 end
 
 function build_nonlinear_faces(
+    equations::FermiHarmonics2D,
+    tol::Float64,
+    mesh::Trixi.P4estMesh{2},
+    solver,
+    cache,
+    boundary_indexing::Vector{Int},
+)::Dict{Int, Any}
+    n_nodes = Trixi.nnodes(solver)
+    contravariant_vectors = cache.elements.contravariant_vectors
+    boundaries = cache.boundaries
+    nonlinear_faces = Dict{Int, Any}()
+    for global_idx in boundary_indexing
+        element = boundaries.neighbor_ids[global_idx]
+        node_indices = boundaries.node_indices[global_idx]
+        direction = Trixi.indices2direction(node_indices)
+        if direction == 1 || direction == 2
+            i_index = direction == 1 ? 1 : n_nodes
+            j_index = 1
+        else
+            i_index = 1
+            j_index = direction == 3 ? 1 : n_nodes
+        end
+        normal_direction = Trixi.get_normal_direction(
+            direction, contravariant_vectors, i_index, j_index, element
+        )
+        unit_n = unit_normal(
+            SVector(Float64(normal_direction[1]), Float64(normal_direction[2]))
+        )
+        nonlinear_faces[global_idx] = build_nonlinear_face_data(equations, unit_n, tol)
+    end
+    return nonlinear_faces
+end
+
+function build_nonlinear_faces(
     equations::FermiAngles2D,
     tol::Float64,
     mesh::Trixi.P4estMesh{2},
@@ -1084,7 +1145,7 @@ function init_projector_cache!(
         boundary_conditions.boundary_indices,
     )
         if !bc.cache.initialized
-            if semi.equations isa FermiAngles2D
+            if transport_is_nonlinear(semi.equations) || semi.equations isa FermiAngles2D
                 new_faces = build_nonlinear_faces(
                     semi.equations, bc.tol, semi.mesh, semi.solver, semi.cache, boundary_indexing
                 )
@@ -1132,7 +1193,7 @@ function init_projector_cache!(
         boundary_conditions.boundary_indices,
     )
         if !bc.cache.initialized
-            if semi.equations isa FermiAngles2D
+            if transport_is_nonlinear(semi.equations) || semi.equations isa FermiAngles2D
                 new_faces = build_nonlinear_faces(
                     semi.equations, bc.tol, semi.mesh, semi.solver, semi.cache, boundary_indexing
                 )

@@ -214,6 +214,18 @@ end
     return vF * Float64(phi) + Float64(phi)^2 / (2.0 * equations.mass * vF)
 end
 
+@inline function quadratic_shifted_flux_inverse(flux_value::Real, equations::FermiHarmonics2D)
+    vF = quadratic_flux_linear_speed(equations)
+    discriminant = equations.mass^2 * vF^4 + 2.0 * equations.mass * vF * Float64(flux_value)
+    if !(discriminant > 0.0)
+        throw(DomainError(
+            Float64(flux_value),
+            "quadratic shifted flux inverse requires a positive discriminant; got $discriminant",
+        ))
+    end
+    return -equations.mass * vF^2 + sqrt(discriminant)
+end
+
 @inline function quadratic_speed(phi::Real, equations::FermiHarmonics2D)
     vF = quadratic_flux_linear_speed(equations)
     phi_value = Float64(phi)
@@ -378,35 +390,38 @@ function nonlinear_flux!(
     return out
 end
 
+@inline function harmonic_sup_norm_bound(state::AbstractVector{<:Real})
+    amplitude = 0.5 * abs(Float64(state[1]))
+    max_harmonic = (length(state) - 1) ÷ 2
+    @inbounds for m in 1:max_harmonic
+        amplitude += hypot(Float64(state[cosine_index(m)]), Float64(state[sine_index(m)]))
+    end
+    return amplitude
+end
+
+@inline function quadratic_speed_bound(phi_bound::Real, equations::FermiHarmonics2D)
+    vF = quadratic_flux_linear_speed(equations)
+    amp = abs(Float64(phi_bound))
+    return vF +
+           amp / (equations.mass * vF) +
+           0.5 * amp^2 / (equations.mass^2 * vF^3)
+end
+
 function nonlinear_max_abs_speed(
     state::AbstractVector{<:Real},
     normal::SVector{2, Float64},
     equations::FermiHarmonics2D,
 )
-    cache = get_nonlinear_cache(equations)
-    harmonic_state_to_spectrum!(cache.spectrum, state, equations)
-    harmonic_spectrum_to_samples!(cache.samples, cache.spectrum, equations)
-    normal_x, normal_y = normal
-    vmax = 0.0
-    @inbounds for j in eachindex(cache.samples)
-        directional_factor = abs(normal_x * nonlinear_data(equations).cos_theta[j] +
-                                 normal_y * nonlinear_data(equations).sin_theta[j])
-        vmax = max(vmax, directional_factor * quadratic_speed(real(cache.samples[j]), equations))
-    end
-    return vmax
+    phi_bound = harmonic_sup_norm_bound(state)
+    directional_bound = hypot(normal[1], normal[2])
+    return directional_bound * quadratic_speed_bound(phi_bound, equations)
 end
 
 function nonlinear_max_abs_speeds(
     state::AbstractVector{<:Real},
     equations::FermiHarmonics2D,
 )
-    cache = get_nonlinear_cache(equations)
-    harmonic_state_to_spectrum!(cache.spectrum, state, equations)
-    harmonic_spectrum_to_samples!(cache.samples, cache.spectrum, equations)
-    vmax = 0.0
-    @inbounds for j in eachindex(cache.samples)
-        vmax = max(vmax, quadratic_speed(real(cache.samples[j]), equations))
-    end
+    vmax = quadratic_speed_bound(harmonic_sup_norm_bound(state), equations)
     return (vmax, vmax)
 end
 
@@ -478,66 +493,19 @@ function recover_mu_u_closed_form(state::AbstractVector{<:Real}, equations::Ferm
         throw(DomainError(velocity_scale, "recover_mu_u requires positive drift scale"))
     ux = length(state) >= 2 ? Float64(state[2]) / velocity_scale : 0.0
     uy = length(state) >= 3 ? Float64(state[3]) / velocity_scale : 0.0
-    return mu, SVector(ux, uy)
+    velocity = quadratic_project_velocity(SVector(ux, uy), mu, equations)
+    return mu, velocity
 end
 
 function match_quadratic_equilibrium_moments(
     state::AbstractVector{<:Real},
     equations::FermiHarmonics2D,
 )
-    target_density = nonlinear_density(state, equations)
-    target_current = nonlinear_current(state, equations)
-    target_density > 0.0 ||
-        throw(DomainError(target_density, "quadratic recovery requires positive density"))
-
-    mu_guess, velocity_guess = recover_mu_u_closed_form(state, equations)
-    velocity_guess = quadratic_project_velocity(velocity_guess, mu_guess, equations)
-    cache = get_nonlinear_cache(equations)
-    equilibrium_state = Vector{Float64}(undef, length(state))
-
-    # The quadratic harmonic BGK model recovers macroscopic parameters by matching
-    # density and current only; higher harmonics remain nonequilibrium content.
-    function residual!(residual, x)
-        mu_trial = max(Float64(x[1]), 1.0e-12)
-        velocity_trial = quadratic_project_velocity(
-            SVector(Float64(x[2]), Float64(x[3])),
-            mu_trial,
-            equations,
-        )
-        local_equilibrium_state!(equilibrium_state, mu_trial, velocity_trial, equations)
-        density_trial = nonlinear_density(equilibrium_state, equations)
-        current_trial = nonlinear_current(equilibrium_state, equations)
-        residual[1] = density_trial - target_density
-        residual[2] = current_trial[1] - target_current[1]
-        residual[3] = current_trial[2] - target_current[2]
-        return residual
-    end
-
-    initial_guess = [mu_guess, velocity_guess[1], velocity_guess[2]]
-    result = nlsolve(
-        residual!,
-        initial_guess;
-        method=:newton,
-        ftol=1.0e-12,
-        xtol=1.0e-12,
-        iterations=50,
-    )
-
-    if converged(result)
-        mu = max(Float64(result.zero[1]), 1.0e-12)
-        velocity = quadratic_project_velocity(
-            SVector(Float64(result.zero[2]), Float64(result.zero[3])),
-            mu,
-            equations,
-        )
-        return mu, velocity
-    end
-
-    return mu_guess, velocity_guess
+    return recover_mu_u_closed_form(state, equations)
 end
 
 function recover_mu_u(state::AbstractVector{<:Real}, equations::FermiHarmonics2D)
-    return match_quadratic_equilibrium_moments(state, equations)
+    return recover_mu_u_closed_form(state, equations)
 end
 
 function isotropic_equilibrium_state!(

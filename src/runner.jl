@@ -385,6 +385,11 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
         save_end=true,
     )
 
+    status = solve_status(sol, semi, params)
+    @info "Solve complete" name=name stop_reason=status.stop_reason final_time=status.final_time target_final_time=status.target_final_time final_residual=status.final_residual tolerance=params.residual_tol converged=status.converged retcode=status.retcode successful=status.successful
+    flush(stdout)
+    flush(stderr)
+
     return sol, semi
 end
 
@@ -418,6 +423,36 @@ function monitor_callback(params, semi)
             nothing
         end;
         save_positions=(false, false),
+    )
+end
+
+"""
+    solve_status(sol, semi, params; time_atol=1e-10)
+
+Summarize how a solve terminated by computing the final steady-state residual and
+classifying whether the run stopped due to the steady-state callback or simply
+reached `params.tspan_end`.
+"""
+function solve_status(sol, semi, params::SolveParams; time_atol::Real=1e-10)
+    final_u_ode = similar(sol.u[end])
+    sol.prob.f(final_u_ode, sol.u[end], sol.prob.p, sol.t[end])
+    final_du = Trixi.wrap_array(final_u_ode, semi)
+    final_residual = Trixi.residual_steady_state(final_du, semi.equations)
+    converged = final_residual <= params.residual_tol
+    hit_final_time = isapprox(sol.t[end], params.tspan_end; atol=time_atol, rtol=0.0)
+    stop_reason = converged ? :steady_state : (hit_final_time ? :final_time : :other)
+    successful = hasfield(typeof(sol), :retcode) ?
+        SciMLBase.successful_retcode(getfield(sol, :retcode)) :
+        true
+    return (
+        stop_reason=stop_reason,
+        final_residual=final_residual,
+        converged=converged,
+        hit_final_time=hit_final_time,
+        final_time=sol.t[end],
+        target_final_time=params.tspan_end,
+        successful=successful,
+        retcode=sol.retcode,
     )
 end
 
