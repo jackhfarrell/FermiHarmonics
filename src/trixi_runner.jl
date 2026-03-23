@@ -97,7 +97,7 @@ function solve(
         save_end=true,
     )
 
-    status = solve_status(sol, semi, config)
+    status = solve_status(sol, semi, config; stop_reason_override=monitor_state.window_closed ? :window_closed : nothing)
     finalize_live_dashboard!(monitor_state, sol.u[end], semi, status, config)
     @info "Solve complete" name=name stop_reason=status.stop_reason final_time=status.final_time target_final_time=status.target_final_time final_residual=status.final_residual tolerance=config.residual_tol converged=status.converged retcode=status.retcode successful=status.successful
     flush(stdout)
@@ -106,14 +106,14 @@ function solve(
     return sol, semi
 end
 
-function solve_status(sol, semi, config::SolverConfig; time_atol::Real=1e-10)
+function solve_status(sol, semi, config::SolverConfig; time_atol::Real=1e-10, stop_reason_override::Union{Nothing, Symbol}=nothing)
     final_u_ode = similar(sol.u[end])
     sol.prob.f(final_u_ode, sol.u[end], sol.prob.p, sol.t[end])
     final_du = Trixi.wrap_array(final_u_ode, semi)
     final_residual = Trixi.residual_steady_state(final_du, semi.equations)
     converged = final_residual <= config.residual_tol
     hit_final_time = isapprox(sol.t[end], config.tspan_end; atol=time_atol, rtol=0.0)
-    stop_reason = converged ? :steady_state : (hit_final_time ? :final_time : :other)
+    stop_reason = isnothing(stop_reason_override) ? (converged ? :steady_state : (hit_final_time ? :final_time : :other)) : stop_reason_override
     retcode = hasproperty(sol, :retcode) ? getproperty(sol, :retcode) : nothing
     successful = isnothing(retcode) ? true : SciMLBase.successful_retcode(retcode)
     return (

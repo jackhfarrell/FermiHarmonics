@@ -963,3 +963,7 @@ end
 function finalize_live_dashboard!(args...; kwargs...)
     return nothing
 end
+
+function live_dashboard_is_open(args...; kwargs...)
+    return true
+end

@@ -10,6 +10,7 @@ Minimal guidance for agents working in this Julia repository.
 - Julia manual: <https://docs.julialang.org/en/v1/manual/>
 - Julia style guide: <https://docs.julialang.org/en/v1/manual/style-guide/>
 - Julia performance tips: <https://docs.julialang.org/en/v1/manual/performance-tips/>
+- Makie docs: <https://docs.makie.org/stable/>
 - Pkg docs: <https://pkgdocs.julialang.org/v1/>
 - Julia testing docs: <https://docs.julialang.org/en/v1/stdlib/Test/>
 

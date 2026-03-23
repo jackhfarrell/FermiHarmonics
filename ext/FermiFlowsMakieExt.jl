@@ -6,6 +6,7 @@ using GLMakie
 import FermiFlows: LiveVisualizationConfig,
                    LiveVisualizationSnapshot,
                    create_live_dashboard,
+                   live_dashboard_is_open,
                    finalize_live_dashboard!,
                    update_live_dashboard!
 
@@ -66,7 +67,7 @@ function create_live_dashboard(config::LiveVisualizationConfig, snapshot::LiveVi
     title_text = Observable(field_title(snapshot, name))
     panel_text = Observable(panel_summary(snapshot))
 
-    fig = Figure(; size=(1100, 720))
+    fig = Figure(; size=(1500, 900), figure_padding=(8, 8, 8, 8))
     axis = Axis(fig[1, 1]; title=title_text, xlabel="x", ylabel="y", aspect=DataAspect())
 
     field_plot = if snapshot.field.geometry_mode === :cartesian
@@ -92,17 +93,21 @@ function create_live_dashboard(config::LiveVisualizationConfig, snapshot::LiveVi
 
     Colorbar(fig[1, 2], field_plot; label=snapshot.field.label)
     Label(
-        fig[1, 3],
+        fig[2, 1:2],
         panel_text;
         tellwidth=false,
+        tellheight=false,
         halign=:left,
         valign=:top,
         justification=:left,
     )
 
-    colsize!(fig.layout, 1, Relative(0.72))
-    colsize!(fig.layout, 2, Relative(0.05))
-    colsize!(fig.layout, 3, Relative(0.23))
+    colsize!(fig.layout, 1, Relative(0.94))
+    colsize!(fig.layout, 2, Relative(0.06))
+    rowsize!(fig.layout, 1, Relative(0.88))
+    rowsize!(fig.layout, 2, Relative(0.12))
+    colgap!(fig.layout, 8)
+    rowgap!(fig.layout, 6)
 
     screen = config.show_window ? display(fig) : nothing
     return MakieLiveDashboard(fig, field_plot, field_values, colorrange, title_text, panel_text, String(name), screen)
@@ -119,6 +124,11 @@ end
 function finalize_live_dashboard!(dashboard::MakieLiveDashboard, snapshot::LiveVisualizationSnapshot)
     update_live_dashboard!(dashboard, snapshot)
     return dashboard
+end
+
+function live_dashboard_is_open(dashboard::MakieLiveDashboard)
+    isnothing(dashboard.screen) && return true
+    return isopen(dashboard.screen)
 end
 
 end

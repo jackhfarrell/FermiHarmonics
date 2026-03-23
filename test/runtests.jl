@@ -99,6 +99,7 @@ const TESLA_BCS = Dict(
         1.0,
         time() - 1.0,
         0,
+        false,
     )
     @test TrixiExt.should_update_live_visualization(state, 5)
     state.last_update_time = time()
@@ -167,9 +168,11 @@ end
         live_visualization=LiveVisualizationConfig(; geometry_mode=:cartesian, accepted_step_interval=5, min_update_seconds=0.0, show_window=false, nvisnodes=24),
     )
     status = solve_status(sol, semi, config)
+    overridden_status = solve_status(sol, semi, config; stop_reason_override=:window_closed)
 
     @test length(sol.u[end]) == length(Trixi.wrap_array(sol.u[end], semi))
     @test status.successful
+    @test overridden_status.stop_reason === :window_closed
 end
 
 @testset "Nonlinear Harmonic Solve And Export" begin

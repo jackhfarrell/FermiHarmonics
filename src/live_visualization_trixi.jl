@@ -4,6 +4,7 @@ mutable struct SolveMonitorState
     initial_residual::Float64
     last_update_time::Float64
     last_accepted_steps::Int
+    window_closed::Bool
 end
 
 function default_live_field(equations)
@@ -137,7 +138,7 @@ end
 
 function create_monitor_state(ode, semi, live_visualization::Union{Nothing, LiveVisualizationConfig})
     initial_residual = compute_residual(ode, ode.u0, 0.0, semi)
-    return SolveMonitorState(live_visualization, nothing, initial_residual, -Inf, 0)
+    return SolveMonitorState(live_visualization, nothing, initial_residual, -Inf, 0, false)
 end
 
 function initialize_live_dashboard!(state::SolveMonitorState, solution_vector, semi, config::SolverConfig, name::AbstractString)
@@ -169,6 +170,12 @@ function solve_monitor_callback(config::SolverConfig, semi, state::SolveMonitorS
         integrator -> begin
             accepted_steps = integrator.stats.naccept
             state.last_accepted_steps = accepted_steps
+
+            if !isnothing(state.dashboard) && !live_dashboard_is_open(state.dashboard)
+                state.window_closed = true
+                SciMLBase.terminate!(integrator)
+                return nothing
+            end
 
             log_due = accepted_steps > 0 && accepted_steps % config.log_every == 0
             update_due = should_update_live_visualization(state, accepted_steps)
@@ -209,6 +216,7 @@ end
 
 function finalize_live_dashboard!(state::SolveMonitorState, solution_vector, semi, status, config::SolverConfig)
     isnothing(state.live_visualization) && return nothing
+    isnothing(state.dashboard) && return nothing
     progress = build_progress_snapshot(
         state.last_accepted_steps,
         status.final_time,
@@ -219,6 +227,6 @@ function finalize_live_dashboard!(state::SolveMonitorState, solution_vector, sem
         stop_reason=status.stop_reason,
     )
     snapshot = LiveVisualizationSnapshot(progress, build_live_field_snapshot(solution_vector, semi, state.live_visualization))
-    finalize_live_dashboard!(state.dashboard, snapshot)
+    live_dashboard_is_open(state.dashboard) && finalize_live_dashboard!(state.dashboard, snapshot)
     return nothing
 end
