@@ -13,7 +13,7 @@ The right hand side is the collision integral, featuring physical terms designed
 ```
 By default, we adaptively pick `M` based on how strong the damping is from collisions. The minimum `M` is `4` and the maximum `M` is `150`. This way, simulations in high damping regimes use fewer harmonics, while weakly damped cases keep higher angular resolution.
 
-We adopt a relaxation-time-like (BGK) approximation for the collision integral, so that the Boltzmann equation in Harmonic basis reads, for $m=0$
+For linear transport we adopt a relaxation-time-like (BGK) approximation for the collision integral, so that the Boltzmann equation in harmonic basis reads, for $m=0$
 ```math
 \partial_t a_0 + v_F\left(\partial_x a_1 + \partial_y b_1\right) = -\gamma_0 a_0,
 ```
@@ -42,6 +42,33 @@ For the scattering rates, we adopt a two-time (linearized BGK) model to capture 
 ```
 
 In this code release, source terms are purely physical; we do not apply additional numerical tail damping.
+
+For `transport = :parabolic_nonlinear`, the streaming term is evaluated from the exact parabolic-band flux
+and the collision term relaxes toward local equilibrium on the drifting Fermi-disk manifold. The nonlinear
+solver reports physical observables `n`, `jx`, and `jy` in analysis output.
+
+## BLG Reference Convention
+
+For nonlinear straight-channel studies, the canonical dimensionless reference
+case is:
+
+- `mu0 = 1`
+- `vF = 1`
+- `mass = 2`
+- `gamma_mr = 0`
+- `gamma_mc = 0`
+- total channel length `L = 1`
+
+This convention is exposed through `FermiHarmonics.blg_reference_setup()`.
+Because the nonlinear parabolic-band transport uses
+`vF = sqrt(2 * mu0 / mass)`, setting `mu0 = 1` and `vF = 1` fixes the solver
+mass to `2`.
+
+The intended physical interpretation is BLG-inspired, but the solver remains
+dimensionless. Physical values like `m = 0.03 m_e` belong to the back-mapping
+layer in analysis and notes, not to the low-level solver API. Exact
+neutrality is also out of scope for the current nonlinear parabolic-band
+transport, which requires `mu0 > 0`.
 
 ## Solve Entry Point
 

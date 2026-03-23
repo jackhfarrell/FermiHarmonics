@@ -10,7 +10,7 @@ FermiHarmonics2D
 ## Constructor
 
 ```@docs
-FermiHarmonics.FermiHarmonics2D(nvars::Integer; gamma_mr, gamma_mc, max_harmonic=0)
+FermiHarmonics.FermiHarmonics2D
 ```
 
 ## Script-Style Usage

@@ -36,8 +36,12 @@ def load_fields(path: Path) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndar
     with h5py.File(path, "r") as f:
         x = np.asarray(f["x"])
         y = np.asarray(f["y"])
-        a1 = np.asarray(f["a1"])  # stored as (nx, ny)
-        b1 = np.asarray(f["b1"])  # stored as (nx, ny)
+        if "jx" in f and "jy" in f:
+            a1 = np.asarray(f["jx"])  # stored as (nx, ny)
+            b1 = np.asarray(f["jy"])  # stored as (nx, ny)
+        else:
+            a1 = np.asarray(f["a1"])  # stored as (nx, ny)
+            b1 = np.asarray(f["b1"])  # stored as (nx, ny)
         mask = np.asarray(f["mask"]).astype(bool)  # stored as (nx, ny)
 
     u = np.where(mask, a1, np.nan)
