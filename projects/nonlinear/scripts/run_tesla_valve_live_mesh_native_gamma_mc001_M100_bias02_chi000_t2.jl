@@ -1,4 +1,4 @@
-using FermiHarmonics
+using ElectronKinetics, Trixi
 
 function main()
     project_root = normpath(joinpath(@__DIR__, "..", "..", ".."))
@@ -6,7 +6,7 @@ function main()
     output_dir = joinpath(project_root, "projects", "nonlinear", "data")
     mkpath(output_dir)
 
-    reference = FermiHarmonics.blg_reference_setup()
+    reference = ElectronKinetics.blg_reference_setup()
     mu0 = reference.mu0
     mass = reference.mass
     gamma_mr = 0.01
@@ -36,7 +36,7 @@ function main()
 
     @info "Running Tesla valve nonlinear live mesh-native case" mu0 mass gamma_mr gamma_mc bias chi max_harmonic polydeg=params.polydeg tspan_end=params.tspan_end residual_tol=params.residual_tol
 
-    sol, semi = FermiHarmonics.solve(
+    sol, semi = ElectronKinetics.solve(
         mesh_path,
         boundary_conditions,
         params,
@@ -55,8 +55,8 @@ function main()
 
     cartesian_path = joinpath(output_dir, "$(run_name).h5")
     mesh_native_path = joinpath(output_dir, "$(run_name)_mesh_native.h5")
-    FermiHarmonics.save_for_analysis(sol, semi, cartesian_path)
-    FermiHarmonics.save_mesh_native_analysis(sol, semi, mesh_native_path; refine=6)
+    ElectronKinetics.save_for_analysis(sol, semi, cartesian_path)
+    ElectronKinetics.save_mesh_native_analysis(sol, semi, mesh_native_path; refine=6)
     @info "Saved Tesla valve nonlinear analysis output" cartesian_path mesh_native_path final_time=sol.t[end]
 
     return nothing

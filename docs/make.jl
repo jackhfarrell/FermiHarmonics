@@ -1,11 +1,11 @@
 using Documenter
-using FermiFlows
+using ElectronKinetics
 using Trixi
 
 # Build documentation
 makedocs(;
-    modules = [FermiFlows],
-    sitename = "FermiFlows.jl",
+    modules = [ElectronKinetics],
+    sitename = "ElectronKinetics.jl",
     remotes = nothing,  # Disable remote source links
     format = Documenter.HTML(;
         prettyurls = get(ENV, "CI", "false") == "true",
@@ -30,7 +30,7 @@ makedocs(;
 
 if get(ENV, "CI", "false") == "true"
     deploydocs(;
-        repo = "github.com/jackhfarrell/FermiHarmonics.git",
+        repo = "github.com/jackhfarrell/ElectronKinetics.git",
         devbranch = "main",
         cname = "fermiflows.jackhfarrell.com",
     )

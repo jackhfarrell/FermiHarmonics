@@ -4,7 +4,7 @@
 # usage:
 #   julia --project=. test/compare_harmonic_estimate.jl
 
-using FermiHarmonics
+using ElectronKinetics, Trixi
 using Trixi
 using Plots
 using Statistics
@@ -25,7 +25,7 @@ gamma_mr = 0.0
 gamma_ee = 50.0
 
 reference_max_harmonic = 100
-estimated_max_harmonic = FermiHarmonics.estimate_max_harmonic(gamma_mr, gamma_ee)
+estimated_max_harmonic = ElectronKinetics.estimate_max_harmonic(gamma_mr, gamma_ee)
 
 boundary_conditions = Dict(
     :walls => MaxwellWallBC(p_scatter),
@@ -51,7 +51,7 @@ params = SolveParams(;
 # ======================================================================================================================
 
 @info "Running reference solve" max_harmonic=reference_max_harmonic
-sol_ref, semi_ref = FermiHarmonics.solve(
+sol_ref, semi_ref = ElectronKinetics.solve(
     mesh_path,
     boundary_conditions,
     params,
@@ -67,7 +67,7 @@ sol_ref, semi_ref = FermiHarmonics.solve(
 # ======================================================================================================================
 
 @info "Running estimated solve" max_harmonic=estimated_max_harmonic
-sol_est, semi_est = FermiHarmonics.solve(
+sol_est, semi_est = ElectronKinetics.solve(
     mesh_path,
     boundary_conditions,
     params,

@@ -4,7 +4,7 @@
 
 using Plots
 using Trixi
-using FermiHarmonics
+using ElectronKinetics, Trixi
 using DrWatson
 
 # ======================================================================================================================
@@ -44,11 +44,11 @@ output_dir = joinpath(project_root, "data", "dogleg_live_viz")
 mkpath(output_dir)
 
 # Write live visualization files into the dogleg_live_viz folder.
-function FermiHarmonics.visualization_callback(params::FermiHarmonics.SolveParams, semi, name::AbstractString)
+function ElectronKinetics.visualization_callback(params::ElectronKinetics.SolveParams, semi, name::AbstractString)
     return Trixi.VisualizationCallback(
         semi;
         interval = params.log_every,
-        solution_variables = FermiHarmonics.current_norm_variables,
+        solution_variables = ElectronKinetics.current_norm_variables,
         variable_names = ["j_norm"],
         filename = joinpath(output_dir, "live_viz_$(name)"),
         overwrite = true,
@@ -62,7 +62,7 @@ isfile(mesh_path) || error("Dogleg .inp not found: $mesh_path")
 # Solve
 # ======================================================================================================================
 
-sol, semi = FermiHarmonics.solve(
+sol, semi = ElectronKinetics.solve(
     mesh_path,
     boundary_conditions,
     params,
@@ -86,6 +86,6 @@ if save_analysis
         gamma_mc = gamma_mc,
     )
     small_filename = joinpath(output_dir, "observables_" * DrWatson.savename(file_params, "h5"))
-    FermiHarmonics.save_for_analysis(sol, semi, small_filename)
+    ElectronKinetics.save_for_analysis(sol, semi, small_filename)
     @info "Saved analysis: $(basename(small_filename))"
 end

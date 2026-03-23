@@ -1,4 +1,4 @@
-using FermiHarmonics
+using ElectronKinetics, Trixi
 
 function env_float(name::AbstractString, default::Float64)
     return haskey(ENV, name) ? parse(Float64, ENV[name]) : default
@@ -12,7 +12,7 @@ function main()
     project_root = normpath(joinpath(@__DIR__, ".."))
     mesh_path = joinpath(project_root, "projects", "nonlinearities", "mesh", "tesla_valve.inp")
 
-    reference = FermiHarmonics.blg_reference_setup()
+    reference = ElectronKinetics.blg_reference_setup()
     mu0 = reference.mu0
     mass = reference.mass
     gamma_mr = env_float("FH_TIMING_GAMMA_MR", 0.01)

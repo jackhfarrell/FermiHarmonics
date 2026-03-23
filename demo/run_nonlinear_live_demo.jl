@@ -1,5 +1,5 @@
 using Plots
-using FermiFlows
+using ElectronKinetics
 using Trixi
 
 function main()

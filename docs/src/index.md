@@ -1,5 +1,5 @@
-# FermiFlows
-FermiFlows is a Julia framework for simulating space-resolved electron flow in
+# ElectronKinetics
+ElectronKinetics is a Julia framework for simulating space-resolved electron flow in
 2D kinetic theory. The package now exposes a backend-agnostic physics core and
 loads the current `Trixi.jl` solver integration through a Julia package
 extension.
@@ -68,7 +68,7 @@ case is:
 - `gamma_mc = 0`
 - total channel length `L = 1`
 
-This convention is exposed through `FermiFlows.blg_reference_setup()`.
+This convention is exposed through `ElectronKinetics.blg_reference_setup()`.
 Because the nonlinear parabolic-band transport uses
 `vF = sqrt(2 * mu0 / mass)`, setting `mu0 = 1` and `vF = 1` fixes the solver
 mass to `2`.
@@ -90,7 +90,7 @@ The main public interfaces are documented in:
 ## Quick Start
 
 ```julia
-using FermiFlows
+using ElectronKinetics
 using Trixi
 
 surface = Isotropic2DFermiSurface(; vF=1.0, nu=1.0, mass=1.0, charge=-1.0)

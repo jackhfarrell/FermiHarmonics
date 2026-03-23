@@ -6,12 +6,14 @@
 
 using Dates
 using DrWatson
-using FermiHarmonics
+using ElectronKinetics, Trixi
 using HDF5
 using Plots
 using StaticArrays
 using Statistics
 using Trixi
+
+const TrixiExt = Base.get_extension(ElectronKinetics, :ElectronKineticsTrixiExt)
 
 
 # ======================================================================================================================
@@ -63,18 +65,18 @@ end
 # Live Visualization Override (safe against NaN/Inf in plotting)
 # ======================================================================================================================
 
-@inline function safe_current_norm_variables(u, equations::FermiHarmonics.FermiHarmonics2D{NVARS}) where {NVARS}
+@inline function safe_current_norm_variables(u, equations::TrixiExt.FermiHarmonics2D{NVARS}) where {NVARS}
     a1 = length(u) >= 2 && isfinite(u[2]) ? u[2] : 0.0
     b1 = length(u) >= 3 && isfinite(u[3]) ? u[3] : 0.0
     j_norm = hypot(a1, b1)
     return SVector{NVARS, Float64}(ntuple(i -> i == 1 ? j_norm : 0.0, NVARS))
 end
 
-function Trixi.varnames(::typeof(safe_current_norm_variables), equations::FermiHarmonics.FermiHarmonics2D{NVARS}) where {NVARS}
+function Trixi.varnames(::typeof(safe_current_norm_variables), equations::TrixiExt.FermiHarmonics2D{NVARS}) where {NVARS}
     return ntuple(i -> i == 1 ? "j_norm" : "_viz_pad_$(i)", NVARS)
 end
 
-function FermiHarmonics.visualization_callback(params::FermiHarmonics.SolveParams, semi, name::AbstractString)
+function ElectronKinetics.visualization_callback(params::ElectronKinetics.SolveParams, semi, name::AbstractString)
     return Trixi.VisualizationCallback(
         semi;
         interval=params.log_every,
@@ -264,7 +266,7 @@ for device in devices
     @info "Running device" device=device.name mesh=basename(device.mesh_path) bias p_scatter gamma_mr gamma_mc
     boundary_conditions = make_boundary_conditions(bias, p_scatter)
 
-    sol, semi = FermiHarmonics.solve(
+    sol, semi = ElectronKinetics.solve(
         device.mesh_path,
         boundary_conditions,
         params,

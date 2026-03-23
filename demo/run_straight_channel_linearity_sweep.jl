@@ -1,4 +1,4 @@
-using FermiHarmonics
+using ElectronKinetics, Trixi
 using Plots
 using TOML
 
@@ -109,7 +109,7 @@ function trapz(x_values, y_values)
 end
 
 function integrated_cross_section_current(solution_vector, semi, target_x; nvisnodes::Int=301)
-    grids = FermiHarmonics.compute_analysis_grids(solution_vector, semi; nvisnodes=nvisnodes)
+    grids = ElectronKinetics.compute_analysis_grids(solution_vector, semi; nvisnodes=nvisnodes)
     current_grid = something(grids.jx, grids.a1)
     x_index = argmin(abs.(grids.x .- target_x))
     line_mask = vec(grids.mask[x_index, :])
@@ -124,7 +124,7 @@ function integrated_cross_section_current(solution_vector, semi, target_x; nvisn
 end
 
 function cross_section_average_a0(solution_vector, semi, target_x; nvisnodes::Int=301)
-    grids = FermiHarmonics.compute_analysis_grids(solution_vector, semi; nvisnodes=nvisnodes)
+    grids = ElectronKinetics.compute_analysis_grids(solution_vector, semi; nvisnodes=nvisnodes)
     x_index = argmin(abs.(grids.x .- target_x))
     line_mask = vec(grids.mask[x_index, :])
     y_line = collect(grids.y[line_mask])
@@ -171,7 +171,7 @@ function main()
     project_root = normpath(joinpath(@__DIR__, ".."))
     geo_path = joinpath(project_root, "demo", "mesh", "straight_channel.geo")
     mesh_path = joinpath(project_root, "demo", "mesh", "straight_channel.inp")
-    reference = FermiHarmonics.blg_reference_setup()
+    reference = ElectronKinetics.blg_reference_setup()
     mu0 = reference.mu0
     mass = reference.mass
     p_scatter = reference.p_scatter
@@ -216,7 +216,7 @@ function main()
         run_name = run_prefix * replace(string(round(bias; sigdigits=4)), "." => "p")
         @info "Running straight-channel sweep case" bias gamma_mr gamma_mc mu0 mass
 
-        sol, semi = FermiHarmonics.solve(
+        sol, semi = ElectronKinetics.solve(
             mesh_path,
             boundary_conditions,
             params,
@@ -231,7 +231,7 @@ function main()
             name = run_name,
         )
 
-        probe = FermiHarmonics.evaluate_observables(sol, semi, probe_x, probe_y)
+        probe = ElectronKinetics.evaluate_observables(sol, semi, probe_x, probe_y)
         probe.in_domain || error("Probe point ($(probe_x), $(probe_y)) is outside the straight-channel mesh")
         section = integrated_cross_section_current(sol.u[end], semi, probe_x)
         left_avg = cross_section_average_a0(sol.u[end], semi, left_probe_x)

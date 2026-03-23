@@ -1,4 +1,4 @@
-using FermiHarmonics
+using ElectronKinetics, Trixi
 using Plots
 using TOML
 
@@ -44,7 +44,7 @@ function trapz(x_values, y_values)
 end
 
 function integrated_cross_section_current(solution_vector, semi, target_x; nvisnodes::Int=301)
-    grids = FermiHarmonics.compute_analysis_grids(solution_vector, semi; nvisnodes=nvisnodes)
+    grids = ElectronKinetics.compute_analysis_grids(solution_vector, semi; nvisnodes=nvisnodes)
     current_grid = something(grids.jx, grids.a1)
     x_index = argmin(abs.(grids.x .- target_x))
     line_mask = vec(grids.mask[x_index, :])
@@ -118,7 +118,7 @@ function main()
     mkpath(output_dir)
     ensure_straight_channel_mesh(geo_path, mesh_path)
 
-    reference = FermiHarmonics.blg_reference_setup()
+    reference = ElectronKinetics.blg_reference_setup()
     mu0 = reference.mu0
     mass = reference.mass
     p_scatter = reference.p_scatter
@@ -160,7 +160,7 @@ function main()
         run_name = "reference_straight_channel_low_drive_" * replace(string(bias), "." => "p")
         @info "Running low-drive fit case" bias gamma_mr gamma_mc residual_tol=params.residual_tol
 
-        sol, semi = FermiHarmonics.solve(
+        sol, semi = ElectronKinetics.solve(
             mesh_path,
             boundary_conditions,
             params,

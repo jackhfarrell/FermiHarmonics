@@ -5,7 +5,7 @@
 
 using Dates
 using DrWatson
-using FermiHarmonics
+using ElectronKinetics
 using Sockets: gethostname
 
 parse_env_float(name::AbstractString, default::Float64) =
@@ -166,7 +166,7 @@ let
 
         case_start = now()
 
-        sol, semi = FermiHarmonics.solve(
+        sol, semi = ElectronKinetics.solve(
             local_mesh_path, boundary_conditions, solve_params, gamma_mr, gamma_mc;
             max_harmonic=:auto,
             u0_override=u0_override,

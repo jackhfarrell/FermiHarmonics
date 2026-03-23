@@ -5,7 +5,7 @@
 
 using Dates
 using DrWatson
-using FermiHarmonics
+using ElectronKinetics, Trixi
 using Sockets: gethostname
 
 # ======================================================================================================================
@@ -164,7 +164,7 @@ let
         case_start = now()
 
         # solve the case!
-        sol, semi = FermiHarmonics.solve(
+        sol, semi = ElectronKinetics.solve(
             local_mesh_path, boundary_conditions, solve_params, gamma_mr, gamma_mc;
             max_harmonic=:auto,
             u0_override=u0_override,

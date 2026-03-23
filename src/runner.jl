@@ -365,7 +365,7 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
         semi = Trixi.SemidiscretizationHyperbolic(
             mesh, equations, (x, t, eq) -> zeros(SVector{nvars, Float64}), solver;
             boundary_conditions=boundary_conditions,
-            source_terms=FermiHarmonics.source_terms,
+            source_terms=source_terms,
         )
     elseif nonlinear_has_electrostatic_force(equations)
         equations_parabolic = ElectrostaticGradientEquation2D(equations)
@@ -375,15 +375,15 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
             (x, t, eq) -> zeros(SVector{nvars, Float64}),
             solver;
             solver_parabolic=Trixi.ViscousFormulationLocalDG(),
-            source_terms=FermiHarmonics.source_terms,
-            source_terms_parabolic=FermiHarmonics.source_terms,
+            source_terms=source_terms,
+            source_terms_parabolic=source_terms,
             boundary_conditions=(boundary_conditions, boundary_conditions),
         )
     else
         semi = Trixi.SemidiscretizationHyperbolic(
             mesh, equations, (x, t, eq) -> zeros(SVector{nvars, Float64}), solver;
             boundary_conditions=boundary_conditions,
-            source_terms=FermiHarmonics.source_terms,
+            source_terms=source_terms,
         )
     end
 
@@ -515,7 +515,7 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
     semi = Trixi.SemidiscretizationHyperbolic(
         mesh, equations, (x, t, eq) -> zeros(SVector{nvars, Float64}), solver;
         boundary_conditions=boundary_conditions,
-        source_terms=FermiHarmonics.source_terms,
+        source_terms=source_terms,
     )
 
     boundary_types = Dict(key => boundary_condition_name(value) for (key, value) in boundary_conditions)

@@ -1,4 +1,4 @@
-using FermiHarmonics
+using ElectronKinetics, Trixi
 
 function tesla_cluster_required_env(primary::AbstractString, fallback::AbstractString="")
     value = get(ENV, primary, "")

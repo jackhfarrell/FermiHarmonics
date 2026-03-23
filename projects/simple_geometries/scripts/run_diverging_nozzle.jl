@@ -3,7 +3,7 @@
 #   JULIA_NUM_THREADS=9 julia --project=. projects/simple_geometries/scripts/run_diverging_nozzle.jl
 
 using Plots
-using FermiHarmonics
+using ElectronKinetics, Trixi
 
 name = "simple_geometries_diverging_nozzle"
 project_root = normpath(joinpath(@__DIR__, ".."))
@@ -34,7 +34,7 @@ max_harmonic = 150
 
 isfile(mesh_path) || error("Diverging nozzle .inp not found: $mesh_path")
 
-FermiHarmonics.solve(
+ElectronKinetics.solve(
     mesh_path,
     boundary_conditions,
     params,

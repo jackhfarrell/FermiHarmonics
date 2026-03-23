@@ -1,4 +1,4 @@
-module FermiFlows
+module ElectronKinetics
 
 using FFTW
 using LinearAlgebra
@@ -8,6 +8,9 @@ using StaticArrays
 include("core_api.jl")
 include("live_visualization_api.jl")
 include("reference_setup.jl")
+include("slurm_utils.jl")
+
+const SolveParams = SolverConfig
 
 export AbstractFermiSurface2D,
        AbstractAngularDiscretization2D,
@@ -30,6 +33,7 @@ export AbstractFermiSurface2D,
        TwoRateAngleBGKCollision,
        KineticModel2D,
        SolverConfig,
+       SolveParams,
        LiveVisualizationConfig,
        LiveProgressSnapshot,
        LiveFieldSnapshot,
@@ -58,6 +62,13 @@ export AbstractFermiSurface2D,
        streaming_matrices,
        cosine_index,
        sine_index,
-       residual_progress_fraction
+       residual_progress_fraction,
+       submit_sweep!,
+       write_sweep_metadata!,
+       archive_mesh!,
+       copy_mesh_to_scratch,
+       select_cases,
+       grid_lookup,
+       ordered_case_indices
 
 end

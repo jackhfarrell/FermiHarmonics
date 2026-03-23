@@ -1,9 +1,9 @@
 using Test
-using FermiFlows
+using ElectronKinetics
 using StaticArrays
 
 @testset "Core Package Loads Without Trixi" begin
-    @test Base.get_extension(FermiFlows, :FermiFlowsTrixiExt) === nothing
+    @test Base.get_extension(ElectronKinetics, :ElectronKineticsTrixiExt) === nothing
 
     surface = Isotropic2DFermiSurface(; vF=1.2, nu=1.5, mass=2.0, charge=-1.0)
     basis = HarmonicBasis(:auto)
@@ -11,8 +11,8 @@ using StaticArrays
     collision = LinearBGKCollision(0.1, TwoRateProfile(0.4))
     model = KineticModel2D(surface, basis, streaming, collision)
 
-    @test FermiFlows.transport_symbol(model) === :linear
-    @test FermiFlows.collision_symbol(model.collision) === :linear_mrt
+    @test ElectronKinetics.transport_symbol(model) === :linear
+    @test ElectronKinetics.collision_symbol(model.collision) === :linear_mrt
     @test harmonic_state_nvars(4) == 9
     @test estimate_max_harmonic(0.0, 0.0; min_harmonic=4, max_harmonic=100) == 100
     @test mode_rate(TwoRateProfile(0.7), 2) ≈ 0.7
@@ -67,17 +67,17 @@ end
 using Trixi
 
 @testset "Trixi Extension Loads" begin
-    @test Base.get_extension(FermiFlows, :FermiFlowsTrixiExt) !== nothing
+    @test Base.get_extension(ElectronKinetics, :ElectronKineticsTrixiExt) !== nothing
 end
 
 using GLMakie
 
 @testset "Makie Extension Loads" begin
-    @test Base.get_extension(FermiFlows, :FermiFlowsMakieExt) !== nothing
+    @test Base.get_extension(ElectronKinetics, :ElectronKineticsMakieExt) !== nothing
 end
 
-const TrixiExt = Base.get_extension(FermiFlows, :FermiFlowsTrixiExt)
-const MakieExt = Base.get_extension(FermiFlows, :FermiFlowsMakieExt)
+const TrixiExt = Base.get_extension(ElectronKinetics, :ElectronKineticsTrixiExt)
+const MakieExt = Base.get_extension(ElectronKinetics, :ElectronKineticsMakieExt)
 
 const TESLA_MESH = normpath(joinpath(@__DIR__, "..", "projects", "nonlinearities", "mesh", "tesla_valve.inp"))
 const TESLA_BCS = Dict(
@@ -122,7 +122,7 @@ end
             nothing,
         ),
     )
-    dashboard = FermiFlows.create_live_dashboard(config, snapshot0; name="dashboard_test")
+    dashboard = ElectronKinetics.create_live_dashboard(config, snapshot0; name="dashboard_test")
     original_plot = dashboard.field_plot
 
     snapshot1 = LiveVisualizationSnapshot(
@@ -138,7 +138,7 @@ end
             nothing,
         ),
     )
-    FermiFlows.update_live_dashboard!(dashboard, snapshot1)
+    ElectronKinetics.update_live_dashboard!(dashboard, snapshot1)
 
     @test dashboard.field_plot === original_plot
     @test all(dashboard.field_values[] .== 2.0)
@@ -173,6 +173,33 @@ end
     @test length(sol.u[end]) == length(Trixi.wrap_array(sol.u[end], semi))
     @test status.successful
     @test overridden_status.stop_reason === :window_closed
+end
+
+@testset "Legacy SolveParams Wrapper" begin
+    params = SolveParams(;
+        polydeg=1,
+        tspan_end=0.005,
+        residual_tol=1e-3,
+        cfl=0.2,
+        log_every=10_000,
+        min_harmonic=2,
+        max_harmonic_auto=4,
+    )
+    sol, semi = ElectronKinetics.solve(
+        TESLA_MESH,
+        TESLA_BCS,
+        params,
+        0.0,
+        0.5;
+        max_harmonic=2,
+        visualize=false,
+        name="test_legacy_wrapper",
+    )
+    status = ElectronKinetics.solve_status(sol, semi, params)
+
+    @test ElectronKinetics.SolveParams === ElectronKinetics.SolverConfig
+    @test status.successful
+    @test length(sol.u[end]) == length(Trixi.wrap_array(sol.u[end], semi))
 end
 
 @testset "Nonlinear Harmonic Solve And Export" begin

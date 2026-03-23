@@ -1,4 +1,4 @@
-# single run script for the simple_geometries intersection device, as simulated by FermiHarmonics.jl. optional live
+# single run script for the simple_geometries intersection device, as simulated by ElectronKinetics.jl. optional live
 # visualization through visualize = true.
 # usage: to run using 4 threads for example,
 #   JULIA_NUM_THREADS=4 julia --project=. projects/simple_geometries/scripts/run_intersection.jl
@@ -6,24 +6,26 @@
 using Plots
 using Trixi
 using StaticArrays
-using FermiHarmonics
+using ElectronKinetics, Trixi
 using DrWatson
+
+const TrixiExt = Base.get_extension(ElectronKinetics, :ElectronKineticsTrixiExt)
 
 
 # ======================================================================================================================
 # Live Visualization Override (a1 instead of j_norm)
 # ======================================================================================================================
 
-@inline function a1_only_variables(u, equations::FermiHarmonics.FermiHarmonics2D{NVARS}) where {NVARS}
+@inline function a1_only_variables(u, equations::TrixiExt.FermiHarmonics2D{NVARS}) where {NVARS}
     a1 = length(u) >= 2 ? u[2] : 0.0
     return SVector{NVARS, Float64}(ntuple(i -> i == 1 ? a1 : 0.0, NVARS))
 end
 
-function Trixi.varnames(::typeof(a1_only_variables), equations::FermiHarmonics.FermiHarmonics2D{NVARS}) where {NVARS}
+function Trixi.varnames(::typeof(a1_only_variables), equations::TrixiExt.FermiHarmonics2D{NVARS}) where {NVARS}
     return ntuple(i -> i == 1 ? "a1" : "_viz_pad_$(i)", NVARS)
 end
 
-function FermiHarmonics.visualization_callback(params::FermiHarmonics.SolveParams, semi, name::AbstractString)
+function ElectronKinetics.visualization_callback(params::ElectronKinetics.SolveParams, semi, name::AbstractString)
     return Trixi.VisualizationCallback(
         semi;
         interval=params.log_every,
@@ -74,7 +76,7 @@ mkpath(output_dir)
 # Solve
 # ======================================================================================================================
 
-sol, semi = FermiHarmonics.solve(
+sol, semi = ElectronKinetics.solve(
     mesh_path,
     boundary_conditions,
     params,
@@ -92,6 +94,6 @@ sol, semi = FermiHarmonics.solve(
 if save_analysis
     file_params = (bias = bias, p_scatter = p_scatter, gamma_mr = gamma_mr, gamma_mc = gamma_mc)
     small_filename = joinpath(output_dir, "observables_" * DrWatson.savename(file_params, "h5"))
-    FermiHarmonics.save_for_analysis(sol, semi, small_filename)
+    ElectronKinetics.save_for_analysis(sol, semi, small_filename)
     @info "Saved analysis: $(basename(small_filename))"
 end

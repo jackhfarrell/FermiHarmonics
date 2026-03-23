@@ -63,7 +63,7 @@ gmsh -2 projects/square_bells_ucsb/mesh/square_bells.geo \
 Boundary-condition keys must match physical curve names in the mesh:
 
 ```julia
-using FermiFlows
+using ElectronKinetics
 using Trixi
 
 boundary_conditions = Dict(

@@ -1,14 +1,14 @@
-module FermiFlowsMakieExt
+module ElectronKineticsMakieExt
 
-using FermiFlows
+using ElectronKinetics
 using GLMakie
 
-import FermiFlows: LiveVisualizationConfig,
-                   LiveVisualizationSnapshot,
-                   create_live_dashboard,
-                   live_dashboard_is_open,
-                   finalize_live_dashboard!,
-                   update_live_dashboard!
+import ElectronKinetics: LiveVisualizationConfig,
+                         LiveVisualizationSnapshot,
+                         create_live_dashboard,
+                         live_dashboard_is_open,
+                         finalize_live_dashboard!,
+                         update_live_dashboard!
 
 mutable struct MakieLiveDashboard
     figure
@@ -19,12 +19,6 @@ mutable struct MakieLiveDashboard
     panel_text
     name::String
     screen
-end
-
-function ascii_progress_bar(fraction::Real; width::Int=18)
-    frac = clamp(Float64(fraction), 0.0, 1.0)
-    filled = clamp(round(Int, frac * width), 0, width)
-    return "[" * repeat("#", filled) * repeat("-", width - filled) * "]"
 end
 
 function finite_colorrange(values)
@@ -50,14 +44,12 @@ end
 function panel_summary(snapshot::LiveVisualizationSnapshot)
     progress = snapshot.progress
     return join([
-        "status: $(progress.stop_reason)",
-        "leading stop: $(progress.leading_stop_condition)",
-        "steps: $(progress.accepted_steps)",
-        "t = $(round(progress.current_time, digits=4)) / $(round(progress.final_time, digits=4))",
-        "residual = $(round(progress.residual, sigdigits=4))",
-        "tol = $(round(progress.residual_tol, sigdigits=4))",
-        "convergence " * ascii_progress_bar(progress.residual_progress) * " $(round(progress.residual_progress * 100, digits=1))%",
-        "time        " * ascii_progress_bar(progress.time_progress) * " $(round(progress.time_progress * 100, digits=1))%",
+        "status  $(progress.stop_reason)",
+        "target  $(progress.leading_stop_condition)",
+        "steps   $(progress.accepted_steps)",
+        "time    $(round(progress.current_time, digits=4)) / $(round(progress.final_time, digits=4))",
+        "resid   $(round(progress.residual, sigdigits=4))",
+        "tol     $(round(progress.residual_tol, sigdigits=4))",
     ], "\n")
 end
 
@@ -67,7 +59,7 @@ function create_live_dashboard(config::LiveVisualizationConfig, snapshot::LiveVi
     title_text = Observable(field_title(snapshot, name))
     panel_text = Observable(panel_summary(snapshot))
 
-    fig = Figure(; size=(1500, 900), figure_padding=(8, 8, 8, 8))
+    fig = Figure(; size=(1020, 680), figure_padding=(8, 8, 8, 8))
     axis = Axis(fig[1, 1]; title=title_text, xlabel="x", ylabel="y", aspect=DataAspect())
 
     field_plot = if snapshot.field.geometry_mode === :cartesian
@@ -104,8 +96,8 @@ function create_live_dashboard(config::LiveVisualizationConfig, snapshot::LiveVi
 
     colsize!(fig.layout, 1, Relative(0.94))
     colsize!(fig.layout, 2, Relative(0.06))
-    rowsize!(fig.layout, 1, Relative(0.88))
-    rowsize!(fig.layout, 2, Relative(0.12))
+    rowsize!(fig.layout, 1, Relative(0.9))
+    rowsize!(fig.layout, 2, Relative(0.1))
     colgap!(fig.layout, 8)
     rowgap!(fig.layout, 6)
 

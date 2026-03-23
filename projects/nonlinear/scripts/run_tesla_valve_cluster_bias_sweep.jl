@@ -1,4 +1,4 @@
-using FermiHarmonics
+using ElectronKinetics, Trixi
 
 function tesla_cluster_mesh_has_nodesets(mesh_path::AbstractString, names)
     isfile(mesh_path) || return false
@@ -75,7 +75,7 @@ function run_tesla_valve_cluster_bias_sweep(; direction::AbstractString=get(ENV,
     mesh_path = joinpath(project_root, "projects", "nonlinearities", "mesh", "tesla_valve.inp")
     ensure_tesla_cluster_mesh(geo_path, mesh_path)
 
-    reference = FermiHarmonics.blg_reference_setup()
+    reference = ElectronKinetics.blg_reference_setup()
     mu0 = reference.mu0
     mass = reference.mass
     p_scatter = reference.p_scatter
@@ -107,7 +107,7 @@ function run_tesla_valve_cluster_bias_sweep(; direction::AbstractString=get(ENV,
 
         @info "Running Tesla valve sweep case" direction=direction_label bias bias_index total_biases=length(biases) warm_start=!isnothing(u0)
 
-        sol, semi = FermiHarmonics.solve(
+        sol, semi = ElectronKinetics.solve(
             mesh_path,
             boundary_conditions,
             params,
@@ -123,11 +123,11 @@ function run_tesla_valve_cluster_bias_sweep(; direction::AbstractString=get(ENV,
             name=run_name,
         )
 
-        status = FermiHarmonics.solve_status(sol, semi, params)
+        status = ElectronKinetics.solve_status(sol, semi, params)
         cartesian_path = joinpath(output_dir, "$(run_name).h5")
         mesh_native_path = joinpath(output_dir, "$(run_name)_mesh_native.h5")
-        FermiHarmonics.save_for_analysis(sol, semi, cartesian_path; nvisnodes=400, observables=[:n, :jx, :jy])
-        FermiHarmonics.save_mesh_native_analysis(sol, semi, mesh_native_path; refine=6, observables=[:n, :jx, :jy])
+        ElectronKinetics.save_for_analysis(sol, semi, cartesian_path; nvisnodes=400, observables=[:n, :jx, :jy])
+        ElectronKinetics.save_mesh_native_analysis(sol, semi, mesh_native_path; refine=6, observables=[:n, :jx, :jy])
         @info "Saved Tesla valve sweep outputs" direction=direction_label bias cartesian_path mesh_native_path final_time=sol.t[end] stop_reason=status.stop_reason final_residual=status.final_residual converged=status.converged
         if !status.converged
             @warn "Tesla valve sweep case did not reach residual tolerance before stopping" direction=direction_label bias final_time=status.final_time target_final_time=status.target_final_time final_residual=status.final_residual tolerance=params.residual_tol stop_reason=status.stop_reason

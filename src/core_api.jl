@@ -944,6 +944,18 @@ function save_mesh_native_analysis(args...; kwargs...)
     throw(ArgumentError("save_mesh_native_analysis is provided by backend extensions. Load Trixi to use the current backend implementation."))
 end
 
+function compute_analysis_grids(args...; kwargs...)
+    throw(ArgumentError("compute_analysis_grids is provided by backend extensions. Load Trixi to use the current backend implementation."))
+end
+
+function current_norm_variables(args...; kwargs...)
+    throw(ArgumentError("current_norm_variables is provided by backend extensions. Load Trixi to use the current backend implementation."))
+end
+
+function visualization_callback(args...; kwargs...)
+    throw(ArgumentError("visualization_callback is provided by backend extensions. Load Trixi to use the current backend implementation."))
+end
+
 function evaluate_solution(args...; kwargs...)
     throw(ArgumentError("evaluate_solution is provided by backend extensions. Load Trixi to use the current backend implementation."))
 end

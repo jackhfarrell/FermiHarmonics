@@ -13,7 +13,7 @@
 ## Trixi-Backed Usage
 
 ```julia
-using FermiFlows
+using ElectronKinetics
 using Trixi
 
 config = SolverConfig(;
@@ -71,7 +71,7 @@ sol, semi = solve(problem, model, config; name = "exact_bgk_case")
 
 ## Behavior Notes
 
-- `FermiFlows.solve` is provided by the Trixi extension, not by the core-only package load.
+- `ElectronKinetics.solve` is provided by the Trixi extension, not by the core-only package load.
 - `SolverConfig` controls discretization order, CFL, end time, residual target, logging cadence, and auto-harmonic bounds.
 - `HarmonicBasis(:auto)` resolves its working harmonic count from `estimate_max_harmonic(gamma_mr, gamma_mc; ...)`.
 - Linear harmonic closures use `LinearBGKCollision(gamma_mr, profile)`.

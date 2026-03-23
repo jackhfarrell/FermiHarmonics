@@ -1,9 +1,9 @@
-# single run script for the square bells device, as simulated by FermiHarmonics.jl. optional live visualization through
+# single run script for the square bells device, as simulated by ElectronKinetics.jl. optional live visualization through
 # visualization = true.
 # usage: to run using 4 threads for example,
 #   JULIA_NUM_THREADS=4 julia --project=. projects/square_bells_ucsb/scripts/run_square_bells.jl
 
-using FermiHarmonics
+using ElectronKinetics, Trixi
 using DrWatson
 
 # ======================================================================================================================
@@ -44,7 +44,7 @@ mkpath(output_dir)
 # Solve
 # ======================================================================================================================
 
-sol, semi = FermiHarmonics.solve(
+sol, semi = ElectronKinetics.solve(
     mesh_path,
     boundary_conditions,
     params,
@@ -61,6 +61,6 @@ sol, semi = FermiHarmonics.solve(
 if save_analysis
     file_params = (bias = bias, p_scatter = p_scatter, gamma_mr = gamma_mr, gamma_ee = gamma_ee)
     small_filename = joinpath(output_dir, "observables_" * DrWatson.savename(file_params, "h5"))
-    FermiHarmonics.save_for_analysis(sol, semi, small_filename)
+    ElectronKinetics.save_for_analysis(sol, semi, small_filename)
     @info "Saved analysis: $(basename(small_filename))"
 end

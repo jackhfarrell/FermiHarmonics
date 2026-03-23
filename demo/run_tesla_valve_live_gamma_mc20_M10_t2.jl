@@ -1,5 +1,5 @@
 using Plots
-using FermiHarmonics
+using ElectronKinetics, Trixi
 
 function mesh_has_nodesets(mesh_path::AbstractString, names)
     isfile(mesh_path) || return false
@@ -46,7 +46,7 @@ function main()
     mkpath(output_dir)
     ensure_tesla_valve_mesh(geo_path, mesh_path)
 
-    reference = FermiHarmonics.blg_reference_setup()
+    reference = ElectronKinetics.blg_reference_setup()
     mu0 = reference.mu0
     mass = reference.mass
     gamma_mr = reference.gamma_mr
@@ -76,7 +76,7 @@ function main()
 
     @info "Running Tesla valve nonlinear live visualization case" mu0 mass gamma_mr gamma_mc bias chi max_harmonic polydeg=params.polydeg tspan_end=params.tspan_end residual_tol=params.residual_tol
 
-    sol, semi = FermiHarmonics.solve(
+    sol, semi = ElectronKinetics.solve(
         mesh_path,
         boundary_conditions,
         params,
@@ -92,7 +92,7 @@ function main()
     )
 
     save_path = joinpath(output_dir, "$(run_name).h5")
-    FermiHarmonics.save_for_analysis(sol, semi, save_path)
+    ElectronKinetics.save_for_analysis(sol, semi, save_path)
     @info "Saved Tesla valve nonlinear analysis output" path = save_path final_time = sol.t[end]
 
     return nothing

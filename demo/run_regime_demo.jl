@@ -7,7 +7,7 @@
 # min_harmonic=4 and max_harmonic_auto=100.
 
 using Plots
-using FermiFlows
+using ElectronKinetics
 using Trixi
 
 # ======================================================================================================================

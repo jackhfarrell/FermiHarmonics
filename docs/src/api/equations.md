@@ -1,5 +1,5 @@
 # Model Construction
-FermiFlows v1 builds the public physics API from composable typed objects in the
+ElectronKinetics v1 builds the public physics API from composable typed objects in the
 core package. The Trixi extension lowers these model objects to backend-specific
 equation adapters internally; those adapters are no longer the primary public
 API.
