@@ -41,6 +41,7 @@ struct NonlinearBoundaryFaceData
     stencil_weights::Matrix{Float64}
     projections::Vector{Float64}
     incoming_weight::Float64
+    sample_to_harmonics::Union{Nothing, Matrix{Float64}}
 end
 
 @inline function get_bc_thread_buffer!(buffers::Vector{Vector{Float64}}, nvars::Int)
@@ -238,6 +239,7 @@ end
 
 function nonlinear_boundary_samples!(
     out::AbstractVector{Float64},
+    state::AbstractVector{Float64},
     state_samples::Vector{ComplexF64},
     face_data::NonlinearBoundaryFaceData,
     incoming_value::Float64,
@@ -245,17 +247,23 @@ function nonlinear_boundary_samples!(
     equations::FermiHarmonics2D,
 )
     cache = get_nonlinear_cache(equations)
-    copy!(cache.work_samples, state_samples)
+    copy!(out, state)
     diffuse_weight = 1.0 - specular_weight
     @inbounds for j in eachindex(state_samples)
         if face_data.incoming_mask[j]
             specular_value = specular_weight > 0.0 ? real(apply_specular_stencil(state_samples, face_data, j)) : 0.0
             incoming_sample = diffuse_weight * incoming_value + specular_weight * specular_value
-            cache.work_samples[j] = ComplexF64(incoming_sample, 0.0)
+            cache.work_samples[j] = ComplexF64(incoming_sample - real(state_samples[j]), 0.0)
+        else
+            cache.work_samples[j] = 0.0 + 0.0im
         end
     end
 
-    return samples_to_harmonics!(out, cache.work_samples, equations)
+    apply_sample_to_harmonics_transform!(cache.real_scratch, cache.work_samples, face_data)
+    @inbounds for i in eachindex(out)
+        out[i] += cache.real_scratch[i]
+    end
+    return out
 end
 
 function nonlinear_boundary_flux!(
@@ -284,7 +292,7 @@ function nonlinear_boundary_flux!(
         )
     end
 
-    return samples_to_harmonics!(out_flux, cache.scratch_samples, equations)
+    return apply_sample_to_harmonics_transform!(out_flux, cache.scratch_samples, face_data)
 end
 
 function nonlinear_maxwell_wall!(
@@ -303,6 +311,7 @@ function nonlinear_maxwell_wall!(
     diffuse_value = nonlinear_diffuse_incoming_value(cache.samples, local_face_data, equations, tol)
     return nonlinear_boundary_samples!(
         out,
+        state,
         cache.samples,
         local_face_data,
         diffuse_value,
@@ -419,6 +428,7 @@ function nonlinear_ohmic_contact!(
     )
     return nonlinear_boundary_samples!(
         out,
+        state,
         cache.samples,
         local_face_data,
         incoming_value,
@@ -497,6 +507,10 @@ function build_nonlinear_face_data(
     alpha = atan(unit_normal[2], unit_normal[1])
     dtheta = 2.0 * pi / theta_count
     incoming_weight = 0.0
+    nvars = length(get_nonlinear_cache(equations).real_work)
+    max_harmonic = (nvars - 1) ÷ 2
+    sample_to_harmonics = Matrix{Float64}(undef, nvars, theta_count)
+    inv_theta_count = 1.0 / theta_count
 
     @inbounds for j in 1:theta_count
         projection = unit_normal[1] * data.cos_theta[j] + unit_normal[2] * data.sin_theta[j]
@@ -509,6 +523,11 @@ function build_nonlinear_face_data(
         indices, weights = cubic_periodic_stencil(theta_ref, theta_count, dtheta)
         stencil_indices[:, j] .= indices
         stencil_weights[:, j] .= weights
+        sample_to_harmonics[1, j] = 2.0 * inv_theta_count
+        for m in 1:max_harmonic
+            sample_to_harmonics[cosine_index(m), j] = 2.0 * inv_theta_count * cos(m * data.theta[j])
+            sample_to_harmonics[sine_index(m), j] = 2.0 * inv_theta_count * sin(m * data.theta[j])
+        end
     end
 
     return NonlinearBoundaryFaceData(
@@ -518,6 +537,7 @@ function build_nonlinear_face_data(
         stencil_weights,
         projections,
         incoming_weight * dtheta,
+        sample_to_harmonics,
     )
 end
 
@@ -556,6 +576,7 @@ function build_nonlinear_face_data(
         stencil_weights,
         projections,
         incoming_weight * data.weight,
+        nothing,
     )
 end
 
@@ -568,6 +589,25 @@ end
            face_data.stencil_weights[2, angle_index] * state[face_data.stencil_indices[2, angle_index]] +
            face_data.stencil_weights[3, angle_index] * state[face_data.stencil_indices[3, angle_index]] +
            face_data.stencil_weights[4, angle_index] * state[face_data.stencil_indices[4, angle_index]]
+end
+
+@inline function apply_sample_to_harmonics_transform!(
+    out::AbstractVector{Float64},
+    sample_values::AbstractVector,
+    face_data::NonlinearBoundaryFaceData,
+)
+    transform = face_data.sample_to_harmonics
+    isnothing(transform) && error("harmonic sample transform missing from face cache")
+    nvars = size(transform, 1)
+    theta_count = size(transform, 2)
+    @inbounds for i in 1:nvars
+        acc = 0.0
+        for j in 1:theta_count
+            acc += transform[i, j] * real(sample_values[j])
+        end
+        out[i] = acc
+    end
+    return out
 end
 
 function nonlinear_diffuse_incoming_value(
