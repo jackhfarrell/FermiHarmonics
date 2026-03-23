@@ -24,54 +24,97 @@ function Trixi.varnames(::typeof(cons2cons), equations::FermiHarmonics2D)
     return Tuple(names)
 end
 
+function Trixi.varnames(::typeof(cons2cons), equations::MultiBandFermiHarmonics2D)
+    names = String[]
+    local_nvars = band_nvars(equations)
+    max_harmonic = equations.max_harmonic
+    for band in equations.bands
+        push!(names, "$(band.name)_a0")
+        for m in 1:max_harmonic
+            if local_nvars >= cosine_index(m)
+                push!(names, "$(band.name)_a$(m)")
+            end
+            if local_nvars >= sine_index(m)
+                push!(names, "$(band.name)_b$(m)")
+            end
+        end
+    end
+    return Tuple(names)
+end
+
+function Trixi.varnames(::typeof(cons2cons), equations::FermiAngles2D)
+    return Tuple(["phi_$(j - 1)" for j in 1:Trixi.nvariables(equations)])
+end
+
 Trixi.varnames(::typeof(cons2prim), equations::FermiHarmonics2D) =
     Trixi.varnames(cons2cons, equations)
+Trixi.varnames(::typeof(cons2prim), equations::MultiBandFermiHarmonics2D) =
+    Trixi.varnames(cons2cons, equations)
+Trixi.varnames(::typeof(cons2prim), equations::FermiAngles2D) =
+    Trixi.varnames(cons2cons, equations)
 
-"""
-    current_norm_variables(u, equations::FermiHarmonics2D) -> SVector{NVARS, Float64}
-
-Derived visualization state for live plots.
-
-Physics meaning:
-- component `1` stores current magnitude `j_norm = sqrt(a1^2 + b1^2)`,
-- remaining components are zero padding.
-
-Implementation note:
-- Trixi's in-place visualization transform expects the same vector length as the
-  conservative state (`NVARS`), so this function cannot return `SVector{1}`.
-"""
-@inline function current_norm_variables(u, equations::FermiHarmonics2D{NVARS}) where {NVARS}
-    a1 = length(u) >= 2 ? u[2] : 0.0
-    b1 = length(u) >= 3 ? u[3] : 0.0
-    j_norm = hypot(a1, b1)
-    return SVector{NVARS, Float64}(ntuple(i -> i == 1 ? j_norm : 0.0, NVARS))
+function Trixi.varnames(::typeof(analysis_variables), equations::MultiBandFermiHarmonics2D)
+    return ("n", "jx", "jy")
 end
 
-function Trixi.varnames(::typeof(current_norm_variables), equations::FermiHarmonics2D{NVARS}) where {NVARS}
-    return ntuple(i -> i == 1 ? "j_norm" : "_viz_pad_$(i)", NVARS)
+function Trixi.varnames(::typeof(analysis_variables), equations::AbstractFermiTransportEquations2D)
+    if transport_is_nonlinear(equations)
+        return ("n", "jx", "jy")
+    end
+    return ("a0", "a1", "b1")
 end
 
-@inline Trixi.cons2prim(u, equations::FermiHarmonics2D) = u
+@inline Trixi.cons2prim(u, equations::AbstractFermiTransportEquations2D) = u
 
-@inline Trixi.cons2cons(u, equations::FermiHarmonics2D) = u
+@inline Trixi.cons2cons(u, equations::AbstractFermiTransportEquations2D) = u
 
-@inline function Trixi.flux(u, orientation::Integer, equations::FermiHarmonics2D{NVARS}) where {NVARS}
+@inline function linear_flux!(
+    out::AbstractVector{Float64},
+    state::AbstractVector,
+    normal::SVector{2, Float64},
+    equations::MultiBandFermiHarmonics2D,
+)
+    normal_x, normal_y = normal
+    mul!(out, equations.Ax, state)
+    @inbounds for i in eachindex(out)
+        out[i] *= normal_x
+    end
+    scratch = equations.Ay * state
+    @inbounds for i in eachindex(out)
+        out[i] += normal_y * scratch[i]
+    end
+    return out
+end
+
+@inline function Trixi.flux(u, orientation::Integer, equations::AbstractFermiTransportEquations2D{NVARS}) where {NVARS}
     normal = orientation == 1 ? SVector(1.0, 0.0) : SVector(0.0, 1.0)
     out = MVector{NVARS, Float64}(undef)
-    harmonics_flux!(out, u, normal)
+    if transport_is_nonlinear(equations)
+        nonlinear_flux!(out, u, normal, equations)
+    elseif equations isa MultiBandFermiHarmonics2D
+        linear_flux!(out, u, normal, equations)
+    else
+        harmonics_flux!(out, u, normal)
+    end
     return SVector{NVARS, Float64}(out)
 end
 
-@inline function Trixi.flux(u, normal_direction::AbstractVector, equations::FermiHarmonics2D{NVARS}) where {NVARS}
+@inline function Trixi.flux(u, normal_direction::AbstractVector, equations::AbstractFermiTransportEquations2D{NVARS}) where {NVARS}
     normal = SVector(normal_direction[1], normal_direction[2])
     out = MVector{NVARS, Float64}(undef)
-    harmonics_flux!(out, u, normal)
+    if transport_is_nonlinear(equations)
+        nonlinear_flux!(out, u, normal, equations)
+    elseif equations isa MultiBandFermiHarmonics2D
+        linear_flux!(out, u, normal, equations)
+    else
+        harmonics_flux!(out, u, normal)
+    end
     return SVector{NVARS, Float64}(out)
 end
 
 @inline function (dissipation::Trixi.DissipationLocalLaxFriedrichs)(
     u_ll::AbstractVector{Float64}, u_rr::AbstractVector{Float64},
-    orientation_or_normal_direction, equations::FermiHarmonics2D{NVARS}
+    orientation_or_normal_direction, equations::AbstractFermiTransportEquations2D{NVARS}
 ) where {NVARS}
     λ = dissipation.max_abs_speed(u_ll, u_rr, orientation_or_normal_direction, equations)
     coeff = -0.5f0 * λ
@@ -83,21 +126,69 @@ end
 end
 
 @inline function Trixi.max_abs_speed_naive(u_ll, u_rr, orientation::Integer,
-                                          equations::FermiHarmonics2D)
+                                          equations::AbstractFermiTransportEquations2D)
+    if transport_is_nonlinear(equations)
+        if equations isa FermiHarmonics2D
+            if nonlinear_timing_enabled()
+                t0 = time_ns()
+                speed = equations.timestep_speed
+                record_nonlinear_timing!(:speed, time_ns() - t0)
+                return speed
+            end
+            return equations.timestep_speed
+        end
+        normal = orientation == 1 ? SVector(1.0, 0.0) : SVector(0.0, 1.0)
+        flux_speed = max(
+            nonlinear_max_abs_speed(u_ll, normal, equations),
+            nonlinear_max_abs_speed(u_rr, normal, equations),
+        )
+        return flux_speed
+    end
     return equations.max_speed
 end
 
 @inline function Trixi.max_abs_speed_naive(u_ll, u_rr, normal_direction::AbstractVector,
-                                          equations::FermiHarmonics2D)
+                                          equations::AbstractFermiTransportEquations2D)
+    if transport_is_nonlinear(equations)
+        if equations isa FermiHarmonics2D
+            if nonlinear_timing_enabled()
+                t0 = time_ns()
+                speed = equations.timestep_speed * hypot(normal_direction[1], normal_direction[2])
+                record_nonlinear_timing!(:speed, time_ns() - t0)
+                return speed
+            end
+            return equations.timestep_speed * hypot(normal_direction[1], normal_direction[2])
+        end
+        normal = SVector(normal_direction[1], normal_direction[2])
+        flux_speed = max(
+            nonlinear_max_abs_speed(u_ll, normal, equations),
+            nonlinear_max_abs_speed(u_rr, normal, equations),
+        )
+        return flux_speed
+    end
     nrm = hypot(normal_direction[1], normal_direction[2])
     return equations.max_speed * nrm
 end
 
-@inline Trixi.have_constant_speed(::FermiHarmonics2D) = Trixi.True()
+@inline function Trixi.have_constant_speed(equations::AbstractFermiTransportEquations2D)
+    return equations isa FermiAngles2D ? Trixi.False() : Trixi.True()
+end
 
-@inline Trixi.max_abs_speeds(u_or_eq::Union{FermiHarmonics2D, AbstractVector}, 
-                            equations::FermiHarmonics2D) = (equations.max_speed, equations.max_speed)
-@inline Trixi.max_abs_speeds(equations::FermiHarmonics2D) = (equations.max_speed, equations.max_speed)
+@inline function Trixi.max_abs_speeds(u_or_eq::AbstractVector, equations::AbstractFermiTransportEquations2D)
+    if transport_is_nonlinear(equations)
+        equations isa FermiHarmonics2D && return (equations.timestep_speed, equations.timestep_speed)
+        return nonlinear_max_abs_speeds(u_or_eq, equations)
+    end
+    return (equations.max_speed, equations.max_speed)
+end
+
+@inline Trixi.max_abs_speeds(u_or_eq::Union{AbstractFermiTransportEquations2D, AbstractVector},
+                            equations::AbstractFermiTransportEquations2D) =
+    transport_is_nonlinear(equations) ? (equations.timestep_speed, equations.timestep_speed) :
+                                        (equations.max_speed, equations.max_speed)
+@inline Trixi.max_abs_speeds(equations::AbstractFermiTransportEquations2D) =
+    transport_is_nonlinear(equations) ? (equations.timestep_speed, equations.timestep_speed) :
+                                        (equations.max_speed, equations.max_speed)
 # ======================================================================================================================
 # Boundary Condition Interface
 # ======================================================================================================================
@@ -122,30 +213,19 @@ end
     return buf
 end
 
-@inline function apply_bc!(bc_type::Symbol, out, state, unit_n, P_in, bc, target)
+@inline function projector_direction_index(orientation::Integer, direction::Integer)
+    return orientation == 1 ? (direction == 1 ? 1 : 2) : (direction == 3 ? 3 : 4)
+end
+
+@inline function apply_bc!(bc_type::Symbol, out, state, unit_n, P_in, bc, target, equations)
     if bc_type === :maxwell
-        maxwell_wall!(out, state, unit_n, P_in, bc.p_scatter, target)
+        maxwell_wall!(out, state, unit_n, P_in, bc.p_scatter, target, equations)
     else
-        ohmic_contact!(out, state, unit_n, P_in, bc.p_ohmic_absorb, bc.bias, target)
+        ohmic_contact!(out, state, unit_n, P_in, bc.p_ohmic_absorb, bc.bias, target, equations)
     end
     return out
 end
 
-"""
-    bc_callable(bc, bc_type, u_inner, normal_direction, x, t,
-                surface_flux_function, equations, boundary_index=0, node_index=0)
-
-Apply one kinetic boundary condition and return numerical surface flux.
-
-Physics/sign convention:
-- `normal_direction` is the outward element normal from Trixi,
-- incoming-to-domain characteristics satisfy `lambda(n) < 0`,
-- only those incoming components are replaced by BC target data.
-
-Cache policy:
-- boundary projectors must be prebuilt in `bc.cache.projectors` with key
-  `(boundary_index, node_index)`; this routine errors if cache entries are missing.
-"""
 @inline function bc_callable(bc, bc_type::Symbol, u_inner, normal_direction, x, t,
                              surface_flux_function, equations, 
                              boundary_index::Int=0, node_index::Int=0)
@@ -155,25 +235,31 @@ Cache policy:
     nvars = length(state)
     target = get_thread_buffer!(bc.cache.target_buffers, nvars)
     out = get_thread_buffer!(bc.cache.out_buffers, nvars)
-    bc.cache.initialized || throw(ArgumentError(
-        "Boundary projector cache is not initialized for $(typeof(bc)). " *
-        "Call through `Trixi.semidiscretize` so `init_projector_cache!` runs first."
-    ))
-    boundary_index > 0 || throw(ArgumentError(
-        "Boundary projector cache lookup requires boundary_index > 0, got $boundary_index."
-    ))
-    node_index > 0 || throw(ArgumentError(
-        "Boundary projector cache lookup requires node_index > 0, got $node_index."
-    ))
-
-    key = projector_cache_key(boundary_index, node_index)
-    haskey(bc.cache.projectors, key) || throw(KeyError(
-        "Missing cached boundary projector for key $(key). " *
-        "Cache size=$(length(bc.cache.projectors)); rebuild via `init_projector_cache!`."
-    ))
-    @inbounds P_in = bc.cache.projectors[key]
-
-    apply_bc!(bc_type, out, state, unit_n, P_in, bc, target)
+    if equations isa FermiAngles2D
+        effective_tol = max(bc.tol, 1.0e-12)
+        face_data = boundary_index > 0 ? get(bc.cache.nonlinear_faces, boundary_index, nothing) : nothing
+        if bc_type === :maxwell
+            nonlinear_maxwell_wall!(out, state, unit_n, bc.p_scatter, target, equations, effective_tol, face_data)
+        else
+            nonlinear_ohmic_contact!(out, state, unit_n, bc.p_ohmic_absorb, bc.bias, target, equations, effective_tol, face_data)
+        end
+        return surface_flux_function(state, out, normal_direction, equations)
+    elseif transport_is_nonlinear(equations)
+        effective_tol = max(bc.tol, 1.0e-12)
+        face_data = boundary_index > 0 ? get(bc.cache.nonlinear_faces, boundary_index, nothing) : nothing
+        if bc_type === :maxwell
+            nonlinear_maxwell_wall!(out, state, unit_n, bc.p_scatter, target, equations, effective_tol, face_data)
+        else
+            nonlinear_ohmic_contact!(out, state, unit_n, bc.p_ohmic_absorb, bc.bias, target, equations, effective_tol, face_data)
+        end
+        return surface_flux_function(state, out, normal_direction, equations)
+    elseif bc.cache.initialized && boundary_index > 0 && haskey(bc.cache.projectors, boundary_index)
+        @inbounds P_in = bc.cache.projectors[boundary_index]
+        apply_bc!(bc_type, out, state, unit_n, P_in, bc, target, equations)
+    else
+        P_in = incoming_projector(equations, unit_n; tol = bc.tol)
+        apply_bc!(bc_type, out, state, unit_n, P_in, bc, target, equations)
+    end
     return surface_flux_function(state, out, normal_direction, equations)
 end
 
@@ -208,7 +294,7 @@ end
                                            boundary_condition::Union{MaxwellWallBC, OhmicContactBC},
                                            mesh::Trixi.UnstructuredMesh2D,
                                            have_nonconservative_terms::Trixi.False,
-                                           equations::FermiHarmonics2D,
+                                           equations::AbstractFermiTransportEquations2D,
                                            surface_integral, dg::Trixi.DG, cache,
                                            node_index, side_index, element_index,
                                            boundary_index)
@@ -225,7 +311,7 @@ end
                                            boundary_condition::Union{MaxwellWallBC, OhmicContactBC},
                                            mesh::Trixi.P4estMesh{2},
                                            have_nonconservative_terms::Trixi.False,
-                                           equations::FermiHarmonics2D,
+                                           equations::AbstractFermiTransportEquations2D,
                                            surface_integral, dg::Trixi.DG, cache,
                                            i_index, j_index,
                                            node_index, direction_index, element_index,
@@ -243,7 +329,7 @@ end
                                            boundary_condition::Union{MaxwellWallBC, OhmicContactBC},
                                            mesh::Trixi.P4estMeshView{2},
                                            have_nonconservative_terms::Trixi.False,
-                                           equations::FermiHarmonics2D,
+                                           equations::AbstractFermiTransportEquations2D,
                                            surface_integral, dg::Trixi.DG, cache,
                                            i_index, j_index,
                                            node_index, direction_index, element_index,
@@ -258,63 +344,14 @@ end
 # Convergence Monitoring
 # ======================================================================================================================
 
-# Infinity norm for selected low modes of single-node state vectors.
-@inline function Trixi.residual_steady_state(du::AbstractVector, equations::FermiHarmonics2D)
-    n = min(length(du), equations.residual_nvars)
-    return maximum(abs, @view du[1:n])
+# Infinity norm for single-node state vectors.
+@inline function Trixi.residual_steady_state(du::AbstractVector, equations::AbstractFermiTransportEquations2D)
+    return maximum(abs, du)
 end
 
-# Infinity norm for selected low modes of full DG arrays.
-@inline function Trixi.residual_steady_state(du::AbstractArray{<:Any, 4}, equations::FermiHarmonics2D)
-    n = min(size(du, 1), equations.residual_nvars)
-    return maximum(abs, @view du[1:n, :, :, :])
-end
-
-"""
-    relative_residual_steady_state(du, u, equations::FermiHarmonics2D; scale_floor=0.0)
-
-Compute a low-mode relative steady-state residual
-`||du||_∞ / (||u||_∞ + scale_floor)`.
-
-For DG arrays, this returns the maximum nodal ratio over the whole mesh, matching the
-local nodal criterion used by Trixi's `SteadyStateCallback`.
-"""
-@inline function relative_residual_steady_state(
-    du::AbstractVector,
-    u::AbstractVector,
-    equations::FermiHarmonics2D;
-    scale_floor::Real = 0.0,
-)
-    n = min(length(du), length(u), equations.residual_nvars)
-    du_norm = maximum(abs, @view du[1:n])
-    u_norm = maximum(abs, @view u[1:n])
-    denom = u_norm + max(0.0, Float64(scale_floor))
-    return iszero(denom) ? (iszero(du_norm) ? 0.0 : Inf) : du_norm / denom
-end
-
-@inline function relative_residual_steady_state(
-    du::AbstractArray{<:Any, 4},
-    u::AbstractArray{<:Any, 4},
-    equations::FermiHarmonics2D;
-    scale_floor::Real = 0.0,
-)
-    n = min(size(du, 1), size(u, 1), equations.residual_nvars)
-    floor_f = max(0.0, Float64(scale_floor))
-    ratio_max = 0.0
-
-    @inbounds for e in axes(du, 4), j in axes(du, 3), i in axes(du, 2)
-        du_norm = 0.0
-        u_norm = 0.0
-        for v in 1:n
-            du_norm = max(du_norm, abs(du[v, i, j, e]))
-            u_norm = max(u_norm, abs(u[v, i, j, e]))
-        end
-        denom = u_norm + floor_f
-        ratio = iszero(denom) ? (iszero(du_norm) ? 0.0 : Inf) : du_norm / denom
-        ratio_max = max(ratio_max, ratio)
-    end
-
-    return ratio_max
+# Infinity norm for full DG arrays.
+@inline function Trixi.residual_steady_state(du::AbstractArray{<:Any, 4}, equations::AbstractFermiTransportEquations2D)
+    return maximum(abs, du)
 end
 
 # ======================================================================================================================
@@ -322,7 +359,7 @@ end
 # ======================================================================================================================
 
 function Trixi.semidiscretize(
-    semi::Trixi.SemidiscretizationHyperbolic{<:Any, <:FermiHarmonics2D},
+    semi::Trixi.SemidiscretizationHyperbolic{<:Any, <:AbstractFermiTransportEquations2D},
     tspan;
     kwargs...,
 )
@@ -336,7 +373,34 @@ end
 
 # Restart overload.
 function Trixi.semidiscretize(
-    semi::Trixi.SemidiscretizationHyperbolic{<:Any, <:FermiHarmonics2D},
+    semi::Trixi.SemidiscretizationHyperbolic{<:Any, <:AbstractFermiTransportEquations2D},
+    tspan,
+    restart_file::AbstractString;
+    kwargs...,
+)
+    init_projector_cache!(semi)
+    return invoke(
+        Trixi.semidiscretize,
+        Tuple{Trixi.AbstractSemidiscretization, Any, AbstractString},
+        semi, tspan, restart_file; kwargs...
+    )
+end
+
+function Trixi.semidiscretize(
+    semi::Trixi.SemidiscretizationHyperbolicParabolic{<:Any, <:AbstractFermiTransportEquations2D},
+    tspan;
+    kwargs...,
+)
+    init_projector_cache!(semi)
+    return invoke(
+        Trixi.semidiscretize,
+        Tuple{Trixi.AbstractSemidiscretization, Any},
+        semi, tspan; kwargs...
+    )
+end
+
+function Trixi.semidiscretize(
+    semi::Trixi.SemidiscretizationHyperbolicParabolic{<:Any, <:AbstractFermiTransportEquations2D},
     tspan,
     restart_file::AbstractString;
     kwargs...,
@@ -377,16 +441,16 @@ Trixi.pretty_form_utf(::ResidualSteadyStateIntegral) = "residual"
 Trixi.pretty_form_ascii(::ResidualSteadyStateIntegral) = "residual"
 
 # Disable default analysis integrals/errors for this equations type.
-function Trixi.default_analysis_integrals(::FermiHarmonics2D)
+function Trixi.default_analysis_integrals(::AbstractFermiTransportEquations2D)
     return ()
 end
 
-function Trixi.default_analysis_errors(::FermiHarmonics2D)
+function Trixi.default_analysis_errors(::AbstractFermiTransportEquations2D)
     return Symbol[]
 end
 
 # No-op entropy time derivative.
-function Trixi.entropy_timederivative(u, equations::FermiHarmonics2D)
+function Trixi.entropy_timederivative(u, equations::AbstractFermiTransportEquations2D)
     return 0.0
 end
 
@@ -399,7 +463,7 @@ end
 
 # Scalar placeholder integral for custom analysis object.
 function Trixi.integrate(func, u, mesh::Trixi.P4estMesh{2}, 
-                         equations::FermiHarmonics2D, 
+                         equations::AbstractFermiTransportEquations2D, 
                          dg::Trixi.DGSEM, cache; normalize=false)
     return 0.0
 end

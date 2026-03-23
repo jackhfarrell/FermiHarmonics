@@ -18,17 +18,51 @@ mutable struct BCProjectorCache
     state_buffers::Vector{Vector{Float64}}
     target_buffers::Vector{Vector{Float64}}
     out_buffers::Vector{Vector{Float64}}
-    projectors::Dict{Tuple{Int, Int}, SparseMatrixCSC{Float64, Int}}
+    projectors::Dict{Int, SparseMatrixCSC{Float64, Int}}
+    nonlinear_faces::Dict{Int, Any}
     initialized::Bool
     nvars::Int
+    signature::Tuple{Symbol, Int, Int}
 end
 BCProjectorCache() = BCProjectorCache(
     [Float64[] for _ in 1:Threads.nthreads()],
     [Float64[] for _ in 1:Threads.nthreads()],
     [Float64[] for _ in 1:Threads.nthreads()],
-    Dict{Tuple{Int, Int}, SparseMatrixCSC{Float64, Int}}(),
+    Dict{Int, SparseMatrixCSC{Float64, Int}}(),
+    Dict{Int, Any}(),
     false,
-    0)
+    0,
+    (:unset, 0, 0))
+
+struct NonlinearBoundaryFaceData
+    unit_normal::SVector{2, Float64}
+    incoming_mask::BitVector
+    stencil_indices::Matrix{Int}
+    stencil_weights::Matrix{Float64}
+    projections::Vector{Float64}
+    incoming_weight::Float64
+    sample_to_harmonics::Union{Nothing, Matrix{Float64}}
+end
+
+@inline function get_bc_thread_buffer!(buffers::Vector{Vector{Float64}}, nvars::Int)
+    tid = Threads.threadid()
+    @inbounds buf = buffers[tid]
+    if length(buf) != nvars
+        buf = Vector{Float64}(undef, nvars)
+        buffers[tid] = buf
+    end
+    return buf
+end
+
+@inline function ensure_bc_state_vector(u_inner, cache::BCProjectorCache)
+    u_inner isa AbstractVector{Float64} && return u_inner
+    nvars = length(u_inner)
+    buf = get_bc_thread_buffer!(cache.state_buffers, nvars)
+    @inbounds for i in 1:nvars
+        buf[i] = u_inner[i]
+    end
+    return buf
+end
 
 
 # ======================================================================================================================
@@ -69,7 +103,10 @@ get the final BC state.  Note that this means in the case p_ohmic_absorb = 0, we
 injected.
 
 Parameters:
-- `bias`: imposed contact value for the monopole mode
+- `bias`: imposed contact drive. For linear transport it is the raw monopole value. For
+  nonlinear transport it is interpreted as a normalized electrochemical bias, where
+  `bias = 1` corresponds to an electrochemical scale of approximately `(1 + chi) * mu0`,
+  i.e. the isotropic admissibility limit of the parabolic model.
 - `p_ohmic_absorb`: absorption fraction (`1.0` fully absorbing, `0.0` fully specular)
 - `tol`: eigenvalue tolerance for incoming-mode projector construction
 
@@ -91,6 +128,12 @@ boundary_condition_name(bc) = nameof(typeof(bc))
 boundary_condition_name(::MaxwellWallBC) = :maxwell_wall
 boundary_condition_name(::OhmicContactBC) = :ohmic_contact
 
+@inline nonlinear_bias_scale(equations::AbstractFermiTransportEquations2D) =
+    equations.mu0 * (1.0 + abs(equations.electrostatic_coupling))
+
+@inline nonlinear_electrochemical_bias(bias::Real, equations::AbstractFermiTransportEquations2D) =
+    Float64(bias) * nonlinear_bias_scale(equations)
+
 
 # ======================================================================================================================
 # Maxwell and Ohmic BC implementations
@@ -109,7 +152,28 @@ function maxwell_wall!(
     unit_normal::SVector{2, Float64},
     P_in::AbstractSparseMatrix,
     p::Real,
-    target::AbstractVector{Float64}
+    target::AbstractVector{Float64},
+    equations::Union{FermiHarmonics2D, MultiBandFermiHarmonics2D},
+)
+    diffuse_target!(target, state, unit_normal, equations)
+    specular_target!(out, state, unit_normal, equations)
+    p_scatter = Float64(p)
+    one_minus = 1.0 - p_scatter
+    N = length(state)
+    @inbounds for i in 1:N
+        target[i] = p_scatter * target[i] + one_minus * out[i]
+    end
+    apply_projector!(out, state, target, P_in)
+    return out
+end
+
+function maxwell_wall!(
+    out::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    unit_normal::SVector{2, Float64},
+    P_in::AbstractSparseMatrix,
+    p::Real,
+    target::AbstractVector{Float64},
 )
     diffuse_target!(target, state, unit_normal)
     specular_target!(out, state, unit_normal)
@@ -134,6 +198,27 @@ function ohmic_contact!(out::AbstractVector{Float64},
                         P_in::AbstractSparseMatrix,
                         p_ohmic_absorb::Real,
                         bias::Real,
+                        target::AbstractVector{Float64},
+                        equations::Union{FermiHarmonics2D, MultiBandFermiHarmonics2D})
+    diffuse_target!(target, state, unit_normal, equations)
+    contact_bias_target!(target, Float64(bias), equations)
+    specular_target!(out, state, unit_normal, equations)
+    p_absorb = Float64(p_ohmic_absorb)
+    one_minus = 1.0 - p_absorb
+    N = length(state)
+    @inbounds for i in 1:N
+        target[i] = p_absorb * target[i] + one_minus * out[i]
+    end
+    apply_projector!(out, state, target, P_in)
+    return out
+end
+
+function ohmic_contact!(out::AbstractVector{Float64},
+                        state::AbstractVector{Float64},
+                        unit_normal::SVector{2, Float64},
+                        P_in::AbstractSparseMatrix,
+                        p_ohmic_absorb::Real,
+                        bias::Real,
                         target::AbstractVector{Float64})
     diffuse_target!(target, state, unit_normal)
     @inbounds target[1] = Float64(bias)
@@ -146,6 +231,762 @@ function ohmic_contact!(out::AbstractVector{Float64},
     end
     apply_projector!(out, state, target, P_in)
     return out
+end
+
+@inline function diffuse_target!(
+    target::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    unit_normal::SVector{2, Float64},
+    ::FermiHarmonics2D,
+)::AbstractVector{Float64}
+    return diffuse_target!(target, state, unit_normal)
+end
+
+@inline function diffuse_target!(
+    target::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    unit_normal::SVector{2, Float64},
+    equations::MultiBandFermiHarmonics2D,
+)::AbstractVector{Float64}
+    local_nvars = band_nvars(equations)
+    @inbounds for band_index in 1:band_count(equations)
+        offset = band_offset(equations, band_index)
+        diffuse_target!(
+            @view(target[(offset + 1):(offset + local_nvars)]),
+            @view(state[(offset + 1):(offset + local_nvars)]),
+            unit_normal,
+        )
+    end
+    return target
+end
+
+@inline function specular_target!(
+    target::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    unit_normal::SVector{2, Float64},
+    ::FermiHarmonics2D,
+)::AbstractVector{Float64}
+    return specular_target!(target, state, unit_normal)
+end
+
+@inline function specular_target!(
+    target::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    unit_normal::SVector{2, Float64},
+    equations::MultiBandFermiHarmonics2D,
+)::AbstractVector{Float64}
+    local_nvars = band_nvars(equations)
+    @inbounds for band_index in 1:band_count(equations)
+        offset = band_offset(equations, band_index)
+        specular_target!(
+            @view(target[(offset + 1):(offset + local_nvars)]),
+            @view(state[(offset + 1):(offset + local_nvars)]),
+            unit_normal,
+        )
+    end
+    return target
+end
+
+@inline function contact_bias_target!(
+    target::AbstractVector{Float64},
+    bias::Float64,
+    ::FermiHarmonics2D,
+)
+    target[1] = bias
+    return target
+end
+
+@inline function contact_bias_target!(
+    target::AbstractVector{Float64},
+    bias::Float64,
+    equations::MultiBandFermiHarmonics2D,
+)
+    @inbounds for band_index in 1:band_count(equations)
+        target[band_offset(equations, band_index) + 1] = bias
+    end
+    return target
+end
+
+function nonlinear_diffuse_incoming_value(
+    state_samples::Vector{ComplexF64},
+    unit_normal::SVector{2, Float64},
+    equations::FermiHarmonics2D,
+    tol::Float64,
+)
+    data = nonlinear_data(equations)
+    nx, ny = unit_normal
+    dtheta = 2.0 * pi / data.theta_count
+    outgoing_flux = 0.0
+    incoming_weight = 0.0
+
+    @inbounds for j in eachindex(state_samples)
+        projection = nx * data.cos_theta[j] + ny * data.sin_theta[j]
+        if projection > tol
+            outgoing_flux += projection * parabolic_shifted_flux(real(state_samples[j]), equations)
+        elseif projection < -tol
+            incoming_weight -= projection
+        end
+    end
+
+    incoming_weight *= dtheta
+    incoming_weight > 0.0 || return 0.0
+    outgoing_flux *= dtheta
+    return quadratic_shifted_flux_inverse(outgoing_flux / incoming_weight, equations)
+end
+
+function nonlinear_diffuse_incoming_value(
+    state_samples::Vector{ComplexF64},
+    face_data::NonlinearBoundaryFaceData,
+    equations::FermiHarmonics2D,
+    tol::Float64,
+)
+    t0 = nonlinear_timing_enabled() ? time_ns() : UInt64(0)
+    outgoing_flux = 0.0
+    @inbounds for j in eachindex(state_samples)
+        projection = face_data.projections[j]
+        if projection > tol
+            outgoing_flux += projection * quadratic_shifted_flux(real(state_samples[j]), equations)
+        end
+    end
+
+    face_data.incoming_weight > 0.0 || return 0.0
+    outgoing_flux *= 2.0 * pi / nonlinear_data(equations).theta_count
+    incoming_value = quadratic_shifted_flux_inverse(outgoing_flux / face_data.incoming_weight, equations)
+    if nonlinear_timing_enabled()
+        record_nonlinear_timing!(:diffuse, time_ns() - t0)
+    end
+    return incoming_value
+end
+
+function nonlinear_boundary_samples!(
+    out::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    state_samples::Vector{ComplexF64},
+    face_data::NonlinearBoundaryFaceData,
+    incoming_value::Float64,
+    specular_weight::Float64,
+    equations::FermiHarmonics2D,
+)
+    cache = get_nonlinear_cache(equations)
+    copy!(out, state)
+    diffuse_weight = 1.0 - specular_weight
+    @inbounds for j in eachindex(state_samples)
+        if face_data.incoming_mask[j]
+            specular_value = specular_weight > 0.0 ? real(apply_specular_stencil(state_samples, face_data, j)) : 0.0
+            incoming_sample = diffuse_weight * incoming_value + specular_weight * specular_value
+            cache.work_samples[j] = ComplexF64(incoming_sample - real(state_samples[j]), 0.0)
+        else
+            cache.work_samples[j] = 0.0 + 0.0im
+        end
+    end
+
+    apply_sample_to_harmonics_transform!(cache.real_scratch, cache.work_samples, face_data)
+    @inbounds for i in eachindex(out)
+        out[i] += cache.real_scratch[i]
+    end
+    return out
+end
+
+function nonlinear_boundary_flux!(
+    out_flux::AbstractVector{Float64},
+    state_samples::Vector{ComplexF64},
+    face_data::NonlinearBoundaryFaceData,
+    normal::SVector{2, Float64},
+    incoming_value::Float64,
+    specular_weight::Float64,
+    equations::FermiHarmonics2D,
+)
+    cache = get_nonlinear_cache(equations)
+    normal_x, normal_y = normal
+    scale = hypot(normal_x, normal_y)
+    diffuse_weight = 1.0 - specular_weight
+    @inbounds for j in eachindex(state_samples)
+        phi_trace = real(state_samples[j])
+        if face_data.incoming_mask[j]
+            specular_value = specular_weight > 0.0 ? real(apply_specular_stencil(state_samples, face_data, j)) : 0.0
+            phi_trace = diffuse_weight * incoming_value + specular_weight * specular_value
+        end
+        directional = scale * face_data.projections[j]
+        cache.scratch_samples[j] = ComplexF64(
+            directional * quadratic_shifted_flux(phi_trace, equations),
+            0.0,
+        )
+    end
+
+    return apply_sample_to_harmonics_transform!(out_flux, cache.scratch_samples, face_data)
+end
+
+function nonlinear_maxwell_wall!(
+    out::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    unit_normal::SVector{2, Float64},
+    p_scatter::Real,
+    target::AbstractVector{Float64},
+    equations::FermiHarmonics2D,
+    tol::Float64,
+    face_data::Union{Nothing, NonlinearBoundaryFaceData} = nothing,
+)
+    t0 = nonlinear_timing_enabled() ? time_ns() : UInt64(0)
+    cache = get_nonlinear_cache(equations)
+    harmonic_state_to_samples!(cache.samples, state, equations)
+    local_face_data = isnothing(face_data) ? build_nonlinear_face_data(equations, unit_normal, tol) : face_data
+    diffuse_value = nonlinear_diffuse_incoming_value(cache.samples, local_face_data, equations, tol)
+    result = nonlinear_boundary_samples!(
+        out,
+        state,
+        cache.samples,
+        local_face_data,
+        diffuse_value,
+        1.0 - Float64(p_scatter),
+        equations,
+    )
+    if nonlinear_timing_enabled()
+        record_nonlinear_timing!(:boundary, time_ns() - t0)
+    end
+    return result
+end
+
+function nonlinear_maxwell_wall_flux!(
+    out_flux::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    normal::SVector{2, Float64},
+    unit_normal::SVector{2, Float64},
+    p_scatter::Real,
+    target::AbstractVector{Float64},
+    equations::FermiHarmonics2D,
+    tol::Float64,
+    face_data::Union{Nothing, NonlinearBoundaryFaceData} = nothing,
+)
+    cache = get_nonlinear_cache(equations)
+    harmonic_state_to_samples!(cache.samples, state, equations)
+    local_face_data = isnothing(face_data) ? build_nonlinear_face_data(equations, unit_normal, tol) : face_data
+    diffuse_value = nonlinear_diffuse_incoming_value(cache.samples, local_face_data, equations, tol)
+    return nonlinear_boundary_flux!(
+        out_flux,
+        cache.samples,
+        local_face_data,
+        normal,
+        diffuse_value,
+        1.0 - Float64(p_scatter),
+        equations,
+    )
+end
+
+function nonlinear_ohmic_incoming_value(
+    state_samples::Vector{ComplexF64},
+    face_data::NonlinearBoundaryFaceData,
+    p_ohmic_absorb::Real,
+    bias::Real,
+    equations::FermiHarmonics2D,
+)
+    electrochemical_bias = nonlinear_electrochemical_bias(bias, equations)
+    if !nonlinear_has_electrostatic_force(equations)
+        return electrochemical_bias
+    end
+
+    specular_weight = 1.0 - Float64(p_ohmic_absorb)
+    diffuse_weight = 1.0 - specular_weight
+    base_sum = 0.0
+    phi0_coeff = 0.0
+    inv_ntheta = 1.0 / nonlinear_data(equations).theta_count
+
+    @inbounds for j in eachindex(state_samples)
+        if face_data.incoming_mask[j]
+            specular_value = specular_weight > 0.0 ? real(apply_specular_stencil(state_samples, face_data, j)) : 0.0
+            base_sum += specular_weight * specular_value
+            phi0_coeff += diffuse_weight * inv_ntheta
+        else
+            base_sum += real(state_samples[j])
+        end
+    end
+
+    phi0_base = base_sum * inv_ntheta
+    denominator = 1.0 + equations.electrostatic_coupling * phi0_coeff
+    abs(denominator) > 1.0e-14 || throw(DomainError(
+        denominator,
+        "electrochemical contact solve became singular",
+    ))
+    return (electrochemical_bias - equations.electrostatic_coupling * phi0_base) / denominator
+end
+
+function nonlinear_ohmic_incoming_value(
+    state::AbstractVector{Float64},
+    unit_normal::SVector{2, Float64},
+    p_ohmic_absorb::Real,
+    bias::Real,
+    target::AbstractVector{Float64},
+    equations::FermiHarmonics2D,
+    tol::Float64,
+    face_data::Union{Nothing, NonlinearBoundaryFaceData} = nothing,
+)
+    cache = get_nonlinear_cache(equations)
+    harmonic_state_to_samples!(cache.samples, state, equations)
+    local_face_data = isnothing(face_data) ? build_nonlinear_face_data(equations, unit_normal, tol) : face_data
+    return nonlinear_ohmic_incoming_value(
+        cache.samples,
+        local_face_data,
+        p_ohmic_absorb,
+        bias,
+        equations,
+    )
+end
+
+function nonlinear_ohmic_contact!(
+    out::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    unit_normal::SVector{2, Float64},
+    p_ohmic_absorb::Real,
+    bias::Real,
+    target::AbstractVector{Float64},
+    equations::FermiHarmonics2D,
+    tol::Float64,
+    face_data::Union{Nothing, NonlinearBoundaryFaceData} = nothing,
+)
+    t0 = nonlinear_timing_enabled() ? time_ns() : UInt64(0)
+    cache = get_nonlinear_cache(equations)
+    harmonic_state_to_samples!(cache.samples, state, equations)
+    local_face_data = isnothing(face_data) ? build_nonlinear_face_data(equations, unit_normal, tol) : face_data
+    incoming_value = nonlinear_ohmic_incoming_value(
+        cache.samples,
+        local_face_data,
+        p_ohmic_absorb,
+        bias,
+        equations,
+    )
+    result = nonlinear_boundary_samples!(
+        out,
+        state,
+        cache.samples,
+        local_face_data,
+        incoming_value,
+        1.0 - Float64(p_ohmic_absorb),
+        equations,
+    )
+    if nonlinear_timing_enabled()
+        record_nonlinear_timing!(:boundary, time_ns() - t0)
+    end
+    return result
+end
+
+function nonlinear_ohmic_contact_flux!(
+    out_flux::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    normal::SVector{2, Float64},
+    unit_normal::SVector{2, Float64},
+    p_ohmic_absorb::Real,
+    bias::Real,
+    target::AbstractVector{Float64},
+    equations::FermiHarmonics2D,
+    tol::Float64,
+    face_data::Union{Nothing, NonlinearBoundaryFaceData} = nothing,
+)
+    cache = get_nonlinear_cache(equations)
+    harmonic_state_to_samples!(cache.samples, state, equations)
+    local_face_data = isnothing(face_data) ? build_nonlinear_face_data(equations, unit_normal, tol) : face_data
+    incoming_value = nonlinear_ohmic_incoming_value(
+        cache.samples,
+        local_face_data,
+        p_ohmic_absorb,
+        bias,
+        equations,
+    )
+    return nonlinear_boundary_flux!(
+        out_flux,
+        cache.samples,
+        local_face_data,
+        normal,
+        incoming_value,
+        1.0 - Float64(p_ohmic_absorb),
+        equations,
+    )
+end
+
+@inline function wrap_periodic_index(index::Integer, count::Integer)
+    return mod1(Int(index), Int(count))
+end
+
+function cubic_periodic_stencil(theta_ref::Float64, theta_count::Int, dtheta::Float64)
+    position = theta_ref / dtheta
+    base_index = floor(Int, position) + 1
+    t = position - (base_index - 1)
+    indices = (
+        wrap_periodic_index(base_index - 1, theta_count),
+        wrap_periodic_index(base_index, theta_count),
+        wrap_periodic_index(base_index + 1, theta_count),
+        wrap_periodic_index(base_index + 2, theta_count),
+    )
+    weights = (
+        -t * (t - 1.0) * (t - 2.0) / 6.0,
+        (t + 1.0) * (t - 1.0) * (t - 2.0) / 2.0,
+        -(t + 1.0) * t * (t - 2.0) / 2.0,
+        (t + 1.0) * t * (t - 1.0) / 6.0,
+    )
+    return indices, weights
+end
+
+function build_nonlinear_face_data(
+    equations::FermiHarmonics2D,
+    unit_normal::SVector{2, Float64},
+    tol::Float64,
+)
+    data = nonlinear_data(equations)
+    theta_count = data.theta_count
+    incoming_mask = falses(theta_count)
+    stencil_indices = Matrix{Int}(undef, 4, theta_count)
+    stencil_weights = Matrix{Float64}(undef, 4, theta_count)
+    projections = Vector{Float64}(undef, theta_count)
+    alpha = atan(unit_normal[2], unit_normal[1])
+    dtheta = 2.0 * pi / theta_count
+    incoming_weight = 0.0
+    nvars = length(get_nonlinear_cache(equations).real_work)
+    max_harmonic = (nvars - 1) ÷ 2
+    sample_to_harmonics = Matrix{Float64}(undef, nvars, theta_count)
+    inv_theta_count = 1.0 / theta_count
+
+    @inbounds for j in 1:theta_count
+        projection = unit_normal[1] * data.cos_theta[j] + unit_normal[2] * data.sin_theta[j]
+        projections[j] = projection
+        incoming_mask[j] = projection < -tol
+        if projection < -tol
+            incoming_weight -= projection
+        end
+        theta_ref = mod(2.0 * alpha + pi - data.theta[j], 2.0 * pi)
+        indices, weights = cubic_periodic_stencil(theta_ref, theta_count, dtheta)
+        stencil_indices[:, j] .= indices
+        stencil_weights[:, j] .= weights
+        sample_to_harmonics[1, j] = 2.0 * inv_theta_count
+        for m in 1:max_harmonic
+            sample_to_harmonics[cosine_index(m), j] = 2.0 * inv_theta_count * cos(m * data.theta[j])
+            sample_to_harmonics[sine_index(m), j] = 2.0 * inv_theta_count * sin(m * data.theta[j])
+        end
+    end
+
+    return NonlinearBoundaryFaceData(
+        unit_normal,
+        incoming_mask,
+        stencil_indices,
+        stencil_weights,
+        projections,
+        incoming_weight * dtheta,
+        sample_to_harmonics,
+    )
+end
+
+function build_nonlinear_face_data(
+    equations::FermiAngles2D,
+    unit_normal::SVector{2, Float64},
+    tol::Float64,
+)
+    data = nonlinear_data(equations)
+    theta_count = data.theta_count
+    incoming_mask = falses(theta_count)
+    stencil_indices = Matrix{Int}(undef, 4, theta_count)
+    stencil_weights = Matrix{Float64}(undef, 4, theta_count)
+    projections = Vector{Float64}(undef, theta_count)
+    alpha = atan(unit_normal[2], unit_normal[1])
+    dtheta = data.weight
+    incoming_weight = 0.0
+
+    @inbounds for j in 1:theta_count
+        projection = unit_normal[1] * data.cos_theta[j] + unit_normal[2] * data.sin_theta[j]
+        projections[j] = projection
+        incoming_mask[j] = projection < -tol
+        if projection < -tol
+            incoming_weight -= projection
+        end
+        theta_ref = mod(2.0 * alpha + pi - data.theta[j], 2.0 * pi)
+        indices, weights = cubic_periodic_stencil(theta_ref, theta_count, dtheta)
+        stencil_indices[:, j] .= indices
+        stencil_weights[:, j] .= weights
+    end
+
+    return NonlinearBoundaryFaceData(
+        unit_normal,
+        incoming_mask,
+        stencil_indices,
+        stencil_weights,
+        projections,
+        incoming_weight * data.weight,
+        nothing,
+    )
+end
+
+@inline function apply_specular_stencil(
+    state::AbstractVector,
+    face_data::NonlinearBoundaryFaceData,
+    angle_index::Int,
+)
+    return face_data.stencil_weights[1, angle_index] * state[face_data.stencil_indices[1, angle_index]] +
+           face_data.stencil_weights[2, angle_index] * state[face_data.stencil_indices[2, angle_index]] +
+           face_data.stencil_weights[3, angle_index] * state[face_data.stencil_indices[3, angle_index]] +
+           face_data.stencil_weights[4, angle_index] * state[face_data.stencil_indices[4, angle_index]]
+end
+
+@inline function apply_sample_to_harmonics_transform!(
+    out::AbstractVector{Float64},
+    sample_values::AbstractVector,
+    face_data::NonlinearBoundaryFaceData,
+)
+    transform = face_data.sample_to_harmonics
+    isnothing(transform) && error("harmonic sample transform missing from face cache")
+    nvars = size(transform, 1)
+    theta_count = size(transform, 2)
+    @inbounds for i in 1:nvars
+        acc = 0.0
+        for j in 1:theta_count
+            acc += transform[i, j] * real(sample_values[j])
+        end
+        out[i] = acc
+    end
+    return out
+end
+
+function nonlinear_diffuse_incoming_value(
+    state::AbstractVector{<:Real},
+    face_data::NonlinearBoundaryFaceData,
+    equations::FermiAngles2D,
+    tol::Float64,
+)
+    data = nonlinear_data(equations)
+    outgoing_flux = 0.0
+    incoming_weight = 0.0
+    nx, ny = face_data.unit_normal
+    @inbounds for j in eachindex(state)
+        projection = face_data.projections[j]
+        if projection > tol
+            outgoing_flux += projection * parabolic_shifted_flux(state[j], equations)
+        end
+    end
+    incoming_weight = face_data.incoming_weight
+    incoming_weight > 0.0 || return 0.0
+    outgoing_flux *= data.weight
+    return parabolic_shifted_flux_inverse(outgoing_flux / incoming_weight, equations)
+end
+
+function nonlinear_boundary_samples!(
+    out::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    face_data::NonlinearBoundaryFaceData,
+    incoming_value::Float64,
+    specular_weight::Float64,
+    equations::FermiAngles2D,
+)
+    copy!(out, state)
+    diffuse_weight = 1.0 - specular_weight
+    @inbounds for j in eachindex(out)
+        if face_data.incoming_mask[j]
+            specular_value = apply_specular_stencil(state, face_data, j)
+            out[j] = diffuse_weight * incoming_value + specular_weight * specular_value
+        end
+    end
+    return out
+end
+
+function nonlinear_maxwell_wall!(
+    out::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    unit_normal::SVector{2, Float64},
+    p_scatter::Real,
+    target::AbstractVector{Float64},
+    equations::FermiAngles2D,
+    tol::Float64,
+    face_data::Union{Nothing, NonlinearBoundaryFaceData} = nothing,
+)
+    local_face_data = isnothing(face_data) ? build_nonlinear_face_data(equations, unit_normal, tol) : face_data
+    diffuse_value = nonlinear_diffuse_incoming_value(state, local_face_data, equations, tol)
+    return nonlinear_boundary_samples!(
+        out,
+        state,
+        local_face_data,
+        diffuse_value,
+        1.0 - Float64(p_scatter),
+        equations,
+    )
+end
+
+function nonlinear_ohmic_incoming_value(
+    state::AbstractVector{Float64},
+    face_data::NonlinearBoundaryFaceData,
+    p_ohmic_absorb::Real,
+    bias::Real,
+    equations::FermiAngles2D,
+)
+    electrochemical_bias = nonlinear_electrochemical_bias(bias, equations)
+    if !nonlinear_has_electrostatic_force(equations)
+        return electrochemical_bias
+    end
+
+    specular_weight = 1.0 - Float64(p_ohmic_absorb)
+    diffuse_weight = 1.0 - specular_weight
+    inv_ntheta = 1.0 / nonlinear_data(equations).theta_count
+    base_sum = 0.0
+    phi0_coeff = 0.0
+
+    @inbounds for j in eachindex(state)
+        if face_data.incoming_mask[j]
+            specular_value = specular_weight > 0.0 ? apply_specular_stencil(state, face_data, j) : 0.0
+            base_sum += specular_weight * specular_value
+            phi0_coeff += diffuse_weight * inv_ntheta
+        else
+            base_sum += state[j]
+        end
+    end
+
+    phi0_base = base_sum * inv_ntheta
+    denominator = 1.0 + equations.electrostatic_coupling * phi0_coeff
+    abs(denominator) > 1.0e-14 || throw(DomainError(
+        denominator,
+        "electrochemical contact solve became singular",
+    ))
+    return (electrochemical_bias - equations.electrostatic_coupling * phi0_base) / denominator
+end
+
+function nonlinear_ohmic_contact!(
+    out::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    unit_normal::SVector{2, Float64},
+    p_ohmic_absorb::Real,
+    bias::Real,
+    target::AbstractVector{Float64},
+    equations::FermiAngles2D,
+    tol::Float64,
+    face_data::Union{Nothing, NonlinearBoundaryFaceData} = nothing,
+)
+    local_face_data = isnothing(face_data) ? build_nonlinear_face_data(equations, unit_normal, tol) : face_data
+    incoming_value = nonlinear_ohmic_incoming_value(
+        state,
+        local_face_data,
+        p_ohmic_absorb,
+        bias,
+        equations,
+    )
+    return nonlinear_boundary_samples!(
+        out,
+        state,
+        local_face_data,
+        incoming_value,
+        1.0 - Float64(p_ohmic_absorb),
+        equations,
+    )
+end
+
+@inline function (bc::MaxwellWallBC)(
+    flux_inner,
+    u_inner,
+    normal_direction::AbstractVector,
+    x,
+    t,
+    operator_type::Trixi.Gradient,
+    equations_parabolic::ElectrostaticGradientEquation2D,
+)
+    equations = equations_parabolic.equations_hyperbolic
+    state = ensure_bc_state_vector(u_inner, bc.cache)
+    out = get_bc_thread_buffer!(bc.cache.out_buffers, length(state))
+    target = get_bc_thread_buffer!(bc.cache.target_buffers, length(state))
+    normal = SVector(Float64(normal_direction[1]), Float64(normal_direction[2]))
+    unit_n = unit_normal(normal)
+    nonlinear_maxwell_wall!(out, state, unit_n, bc.p_scatter, target, equations, max(bc.tol, 1.0e-12))
+    return out
+end
+
+@inline function (bc::MaxwellWallBC)(
+    flux_inner,
+    u_inner,
+    normal_direction::AbstractVector,
+    x,
+    t,
+    operator_type::Trixi.Divergence,
+    equations_parabolic::ElectrostaticGradientEquation2D,
+)
+    return flux_inner
+end
+
+@inline function (bc::MaxwellWallBC)(
+    flux_inner,
+    u_inner,
+    normal_direction::AbstractVector,
+    x,
+    t,
+    operator_type::Trixi.Gradient,
+    equations_parabolic::MeanModeGradientEquation2D,
+)
+    return u_inner
+end
+
+@inline function (bc::MaxwellWallBC)(
+    flux_inner,
+    u_inner,
+    normal_direction::AbstractVector,
+    x,
+    t,
+    operator_type::Trixi.Divergence,
+    equations_parabolic::MeanModeGradientEquation2D,
+)
+    return flux_inner
+end
+
+@inline function (bc::OhmicContactBC)(
+    flux_inner,
+    u_inner,
+    normal_direction::AbstractVector,
+    x,
+    t,
+    operator_type::Trixi.Gradient,
+    equations_parabolic::ElectrostaticGradientEquation2D,
+)
+    equations = equations_parabolic.equations_hyperbolic
+    state = ensure_bc_state_vector(u_inner, bc.cache)
+    out = get_bc_thread_buffer!(bc.cache.out_buffers, length(state))
+    target = get_bc_thread_buffer!(bc.cache.target_buffers, length(state))
+    normal = SVector(Float64(normal_direction[1]), Float64(normal_direction[2]))
+    unit_n = unit_normal(normal)
+    nonlinear_ohmic_contact!(
+        out,
+        state,
+        unit_n,
+        bc.p_ohmic_absorb,
+        bc.bias,
+        target,
+        equations,
+        max(bc.tol, 1.0e-12),
+    )
+    return out
+end
+
+@inline function (bc::OhmicContactBC)(
+    flux_inner,
+    u_inner,
+    normal_direction::AbstractVector,
+    x,
+    t,
+    operator_type::Trixi.Divergence,
+    equations_parabolic::ElectrostaticGradientEquation2D,
+)
+    return flux_inner
+end
+
+@inline function (bc::OhmicContactBC)(
+    flux_inner,
+    u_inner,
+    normal_direction::AbstractVector,
+    x,
+    t,
+    operator_type::Trixi.Gradient,
+    equations_parabolic::MeanModeGradientEquation2D,
+)
+    return u_inner
+end
+
+@inline function (bc::OhmicContactBC)(
+    flux_inner,
+    u_inner,
+    normal_direction::AbstractVector,
+    x,
+    t,
+    operator_type::Trixi.Divergence,
+    equations_parabolic::MeanModeGradientEquation2D,
+)
+    return flux_inner
 end
 
 
@@ -237,183 +1078,60 @@ end
 # number of degrees of freedom even in the hydro, diffusive regimes.  So we work instead in this harmonic basis.
 
 """
-    characteristic_spectral_data(Ax, Ay, unit_normal; tol=0.0)
-        -> (; eigvectors, eigenvalues, incoming_mask, outgoing_mask, grazing_mask, Dx, Dxinv, tol_effective)
-
-Compute weighted characteristic data for boundary projectors.
-
-The weighted transform uses `A_s = Dxinv * A * Dx`, which is symmetric for this harmonic
-basis, so its eigenvectors define robust incoming/outgoing/grazing subspaces.
-"""
-function characteristic_spectral_data(
-    Ax::AbstractMatrix,
-    Ay::AbstractMatrix,
-    unit_normal::SVector{2, Float64},
-    ;tol::Float64=0.0,
-)
-    tol >= 0 || throw(ArgumentError("tol must be >= 0"))
-
-    # Weighted similarity transform that symmetrizes the truncated harmonic transport operator.
-    # This lets us use an orthogonal eigendecomposition and build stable projectors.
-    A = unit_normal[1] .* Ax .+ unit_normal[2] .* Ay
-    n = size(A, 1)
-    D = ones(Float64, n)
-    D[1] = sqrt(2.0)
-    Dinv = ones(Float64, n)
-    Dinv[1] = 1 / sqrt(2.0)
-
-    Dx = Diagonal(D)
-    Dxinv = Diagonal(Dinv)
-    A_s = Dxinv * A * Dx
-    eig = eigen(Symmetric(A_s))
-
-    # Roundoff-safe grazing band: exact zero-speed modes are physically tangential and should
-    # remain unconstrained by incoming BC projection.
-    tol_floor = 100.0 * eps(Float64) * max(1.0, opnorm(A_s, Inf))
-    tol_effective = max(tol, tol_floor)
-
-    incoming_mask = eig.values .< -tol_effective
-    outgoing_mask = eig.values .> tol_effective
-    grazing_mask = .!(incoming_mask .| outgoing_mask)
-
-    return (
-        eigvectors = eig.vectors,
-        eigenvalues = eig.values,
-        incoming_mask = incoming_mask,
-        outgoing_mask = outgoing_mask,
-        grazing_mask = grazing_mask,
-        Dx = Dx,
-        Dxinv = Dxinv,
-        tol_effective = tol_effective,
-    )
-end
-
-"""
-    projector_from_mask(eigvectors, mask, Dx, Dxinv) -> SparseMatrixCSC{Float64, Int}
-
-Construct one characteristic projector from a boolean eigenvector mask in weighted space.
-"""
-function projector_from_mask(
-    eigvectors::AbstractMatrix,
-    mask::AbstractVector{Bool},
-    Dx::Diagonal,
-    Dxinv::Diagonal,
-)::SparseMatrixCSC{Float64, Int}
-    n = size(eigvectors, 1)
-    if !any(mask)
-        return spzeros(Float64, n, n)
-    end
-
-    Q = eigvectors[:, mask]
-    P_s = Q * transpose(Q)
-    P_dense = Dx * P_s * Dxinv
-    P_sparse = sparse(P_dense)
-    droptol!(P_sparse, 1e-12)
-    return P_sparse
-end
-
-"""
     incoming_projector(Ax, Ay, unit_normal; tol=0.0) -> SparseMatrixCSC{Float64}
 
 Compute incoming projector for flux Jacobian A = Ax*nx + Ay*ny as sparse matrix.
-Incoming modes are eigenvectors with eigenvalues strictly `< -tol`.
-Grazing modes with `|lambda| <= tol` are left untouched by the boundary projector.
+Incoming modes are eigenvectors with eigenvalues <= -tol.
 """
 function incoming_projector(
     Ax::AbstractMatrix,
     Ay::AbstractMatrix,
     unit_normal::SVector{2, Float64},
     ;tol::Float64=0.0,
+    monopole_indices::AbstractVector{<:Integer}=Int[1],
 )::SparseMatrixCSC{Float64, Int}
-    spec = characteristic_spectral_data(Ax, Ay, unit_normal; tol=tol)
-    return projector_from_mask(spec.eigvectors, spec.incoming_mask, spec.Dx, spec.Dxinv)
+    A = unit_normal[1] .* Ax .+ unit_normal[2] .* Ay
+    n = size(A, 1)
+    D = ones(Float64, n)
+    Dinv = ones(Float64, n)
+    @inbounds for index in monopole_indices
+        D[Int(index)] = sqrt(2.0)
+        Dinv[Int(index)] = 1 / sqrt(2.0)
+    end
+
+    Dx = Diagonal(D)
+    Dxinv = Diagonal(Dinv)
+    A_s = Dxinv * A * Dx
+    eig = eigen(Symmetric(A_s))
+    mask = eig.values .<= -tol
+    
+    if !any(mask)
+        return spzeros(Float64, n, n)
+    end
+
+    Q_in = eig.vectors[:, mask]
+    P_s = Q_in * transpose(Q_in)
+    P_dense = Dx * P_s * Dxinv
+    P_sparse = sparse(P_dense)
+    droptol!(P_sparse, 1e-12)
+    return P_sparse
 end
 
-"""
-    characteristic_projectors(Ax, Ay, unit_normal; tol=0.0)
-        -> (; incoming, outgoing, grazing, eigenvalues, nincoming, noutgoing, ngrazing)
-
-Compute incoming/outgoing/grazing characteristic projectors for
-`A(unit_normal) = n_x A_x + n_y A_y`.
-
-Sign convention:
-- `lambda < -tol`: incoming-to-domain modes (constrained by BC targets),
-- `lambda > +tol`: outgoing-from-domain modes (left as interior state),
-- `|lambda| <= tol`: grazing/tangential modes (left untouched to avoid basis-dependent bias).
-
-Numerical note:
-- an internal roundoff floor is always applied to `tol` so machine-zero eigenvalues do not
-  get misclassified as incoming/outgoing when users pass `tol=0`.
-"""
-function characteristic_projectors(
-    Ax::AbstractMatrix,
-    Ay::AbstractMatrix,
-    unit_normal::SVector{2, Float64},
-    ;tol::Float64=0.0,
-)
-    spec = characteristic_spectral_data(Ax, Ay, unit_normal; tol=tol)
-    P_in = projector_from_mask(spec.eigvectors, spec.incoming_mask, spec.Dx, spec.Dxinv)
-    P_out = projector_from_mask(spec.eigvectors, spec.outgoing_mask, spec.Dx, spec.Dxinv)
-    P_g = projector_from_mask(spec.eigvectors, spec.grazing_mask, spec.Dx, spec.Dxinv)
-
-    return (
-        incoming = P_in,
-        outgoing = P_out,
-        grazing = P_g,
-        eigenvalues = spec.eigenvalues,
-        tol_effective = spec.tol_effective,
-        nincoming = count(spec.incoming_mask),
-        noutgoing = count(spec.outgoing_mask),
-        ngrazing = count(spec.grazing_mask),
-    )
+function incoming_projector(
+    equations::FermiHarmonics2D,
+    unit_normal::SVector{2, Float64};
+    tol::Float64 = 0.0,
+)::SparseMatrixCSC{Float64, Int}
+    return incoming_projector(equations.Ax, equations.Ay, unit_normal; tol=tol, monopole_indices=[1])
 end
 
-"""
-    audit_characteristic_projectors(Ax, Ay, unit_normal; tol=0.0)
-        -> NamedTuple
-
-Audit projector algebra and opposite-normal consistency. Useful for checking BC operators:
-- idempotence (`P^2 = P`),
-- decomposition (`P_in + P_out + P_g = I`),
-- orthogonality between subspaces,
-- reciprocity under `n -> -n` (`P_in(n) ≈ P_out(-n)` and `P_g(n) ≈ P_g(-n)`).
-"""
-function audit_characteristic_projectors(
-    Ax::AbstractMatrix,
-    Ay::AbstractMatrix,
-    unit_normal::SVector{2, Float64},
-    ;tol::Float64=0.0,
-)
-    proj = characteristic_projectors(Ax, Ay, unit_normal; tol=tol)
-    proj_opposite = characteristic_projectors(Ax, Ay, -unit_normal; tol=tol)
-
-    n = size(Ax, 1)
-    Id = Matrix{Float64}(I, n, n)
-    P_in = Matrix(proj.incoming)
-    P_out = Matrix(proj.outgoing)
-    P_g = Matrix(proj.grazing)
-    P_in_opposite = Matrix(proj_opposite.incoming)
-    P_out_opposite = Matrix(proj_opposite.outgoing)
-    P_g_opposite = Matrix(proj_opposite.grazing)
-
-    return (
-        tol_effective = proj.tol_effective,
-        nincoming = proj.nincoming,
-        noutgoing = proj.noutgoing,
-        ngrazing = proj.ngrazing,
-        idempotence_in = opnorm(P_in * P_in - P_in, Inf),
-        idempotence_out = opnorm(P_out * P_out - P_out, Inf),
-        idempotence_grazing = opnorm(P_g * P_g - P_g, Inf),
-        decomposition_error = opnorm(P_in + P_out + P_g - Id, Inf),
-        orthogonality_error = max(
-            opnorm(P_in * P_out, Inf),
-            opnorm(P_in * P_g, Inf),
-            opnorm(P_out * P_g, Inf),
-        ),
-        opposite_incoming_outgoing_error = opnorm(P_in - P_out_opposite, Inf),
-        opposite_outgoing_incoming_error = opnorm(P_out - P_in_opposite, Inf),
-        opposite_grazing_error = opnorm(P_g - P_g_opposite, Inf),
-    )
+function incoming_projector(
+    equations::MultiBandFermiHarmonics2D,
+    unit_normal::SVector{2, Float64};
+    tol::Float64 = 0.0,
+)::SparseMatrixCSC{Float64, Int}
+    monopole_indices = [band_offset(equations, band_index) + 1 for band_index in 1:band_count(equations)]
+    return incoming_projector(equations.Ax, equations.Ay, unit_normal; tol=tol, monopole_indices=monopole_indices)
 end
 
 """
@@ -456,8 +1174,8 @@ end
 """
     build_projectors(equations, tol, mesh, dg, cache, boundary_indexing)
 
-Build sparse projector matrices for each `(boundary face, node)` pair in a P4est mesh.
-Returns `Dict{Tuple{Int, Int}, SparseMatrixCSC}` keyed by `(boundary_index, node_index)`.
+Build sparse projector matrix for each boundary face in a P4est mesh.
+Returns Dict{Int, SparseMatrixCSC} mapping global boundary_index to projector.
 """
 function build_projectors(
     equations::FermiHarmonics2D,
@@ -466,34 +1184,135 @@ function build_projectors(
     solver,
     cache,
     boundary_indexing::Vector{Int},
-)::Dict{Tuple{Int, Int}, SparseMatrixCSC{Float64, Int}}
+)::Dict{Int, SparseMatrixCSC{Float64, Int}}
     n_nodes = Trixi.nnodes(solver)
     contravariant_vectors = cache.elements.contravariant_vectors
     boundaries = cache.boundaries
-    projectors = Dict{Tuple{Int, Int}, SparseMatrixCSC{Float64, Int}}()
-
-    # Build projectors at each boundary node so the cached projector uses the same local
-    # normal as the runtime flux evaluation. Using one face-representative normal can
-    # create directional bias on warped/curved faces.
+    projectors = Dict{Int, SparseMatrixCSC{Float64, Int}}()
+    # Loop over all global boundary indices assigned to this BC type
     for global_idx in boundary_indexing
         element = boundaries.neighbor_ids[global_idx]
         node_indices = boundaries.node_indices[global_idx]
         direction = Trixi.indices2direction(node_indices)
-        for node_index in 1:n_nodes
-            i_index, j_index = boundary_node_ij(direction, node_index, n_nodes)
-            normal_direction = Trixi.get_normal_direction(
-                direction, contravariant_vectors, i_index, j_index, element
-            )
-            unit_n = unit_normal(
-                SVector(Float64(normal_direction[1]), Float64(normal_direction[2]))
-            )
-            key = projector_cache_key(global_idx, node_index)
-            projectors[key] = incoming_projector(
-                equations.Ax, equations.Ay, unit_n; tol = tol
-            )
+        # Use first node to compute normal
+        if direction == 1 || direction == 2
+            i_index = (direction == 1) ? 1 : n_nodes
+            j_index = 1
+        else  # direction == 3 || direction == 4
+            i_index = 1
+            j_index = (direction == 3) ? 1 : n_nodes
         end
+        normal_direction = Trixi.get_normal_direction(
+            direction, contravariant_vectors, i_index, j_index, element
+        )
+        unit_n = unit_normal(
+            SVector(Float64(normal_direction[1]), Float64(normal_direction[2]))
+        )
+        projectors[global_idx] = incoming_projector(equations, unit_n; tol = tol)
     end
     return projectors
+end
+
+function build_projectors(
+    equations::MultiBandFermiHarmonics2D,
+    tol::Float64,
+    mesh::Trixi.P4estMesh{2},
+    solver,
+    cache,
+    boundary_indexing::Vector{Int},
+)::Dict{Int, SparseMatrixCSC{Float64, Int}}
+    n_nodes = Trixi.nnodes(solver)
+    contravariant_vectors = cache.elements.contravariant_vectors
+    boundaries = cache.boundaries
+    projectors = Dict{Int, SparseMatrixCSC{Float64, Int}}()
+    for global_idx in boundary_indexing
+        element = boundaries.neighbor_ids[global_idx]
+        node_indices = boundaries.node_indices[global_idx]
+        direction = Trixi.indices2direction(node_indices)
+        if direction == 1 || direction == 2
+            i_index = (direction == 1) ? 1 : n_nodes
+            j_index = 1
+        else
+            i_index = 1
+            j_index = (direction == 3) ? 1 : n_nodes
+        end
+        normal_direction = Trixi.get_normal_direction(
+            direction, contravariant_vectors, i_index, j_index, element
+        )
+        unit_n = unit_normal(
+            SVector(Float64(normal_direction[1]), Float64(normal_direction[2]))
+        )
+        projectors[global_idx] = incoming_projector(equations, unit_n; tol = tol)
+    end
+    return projectors
+end
+
+function build_nonlinear_faces(
+    equations::FermiHarmonics2D,
+    tol::Float64,
+    mesh::Trixi.P4estMesh{2},
+    solver,
+    cache,
+    boundary_indexing::Vector{Int},
+)::Dict{Int, Any}
+    n_nodes = Trixi.nnodes(solver)
+    contravariant_vectors = cache.elements.contravariant_vectors
+    boundaries = cache.boundaries
+    nonlinear_faces = Dict{Int, Any}()
+    for global_idx in boundary_indexing
+        element = boundaries.neighbor_ids[global_idx]
+        node_indices = boundaries.node_indices[global_idx]
+        direction = Trixi.indices2direction(node_indices)
+        if direction == 1 || direction == 2
+            i_index = direction == 1 ? 1 : n_nodes
+            j_index = 1
+        else
+            i_index = 1
+            j_index = direction == 3 ? 1 : n_nodes
+        end
+        normal_direction = Trixi.get_normal_direction(
+            direction, contravariant_vectors, i_index, j_index, element
+        )
+        unit_n = unit_normal(
+            SVector(Float64(normal_direction[1]), Float64(normal_direction[2]))
+        )
+        nonlinear_faces[global_idx] = build_nonlinear_face_data(equations, unit_n, tol)
+    end
+    return nonlinear_faces
+end
+
+function build_nonlinear_faces(
+    equations::FermiAngles2D,
+    tol::Float64,
+    mesh::Trixi.P4estMesh{2},
+    solver,
+    cache,
+    boundary_indexing::Vector{Int},
+)::Dict{Int, Any}
+    n_nodes = Trixi.nnodes(solver)
+    contravariant_vectors = cache.elements.contravariant_vectors
+    boundaries = cache.boundaries
+    nonlinear_faces = Dict{Int, Any}()
+    for global_idx in boundary_indexing
+        element = boundaries.neighbor_ids[global_idx]
+        node_indices = boundaries.node_indices[global_idx]
+        direction = Trixi.indices2direction(node_indices)
+        if direction == 1 || direction == 2
+            i_index = direction == 1 ? 1 : n_nodes
+            j_index = 1
+        else
+            i_index = 1
+            j_index = direction == 3 ? 1 : n_nodes
+        end
+        normal_direction = Trixi.get_normal_direction(
+            direction, contravariant_vectors, i_index, j_index, element
+        )
+        unit_n = unit_normal(
+            SVector(Float64(normal_direction[1]), Float64(normal_direction[2]))
+        )
+        nonlinear_faces[global_idx] = build_nonlinear_face_data(equations, unit_n, tol)
+    end
+    return nonlinear_faces
 end
 
 """
@@ -508,21 +1327,26 @@ initialized and reuses it across multiple solves, which is critical for paramete
 # Performance note
 Building projectors is expensive (eigendecomposition of flux Jacobians). Reusing the cache
 can save significant time when running multiple cases with the same mesh/solver but 
-different physics parameters (gamma_mr, gamma_ee, etc.).
+different physics parameters (gamma_mr, gamma_mc, etc.).
 """
 function init_projector_cache!(
-    semi::Trixi.SemidiscretizationHyperbolic{<:Any, <:FermiHarmonics2D},
-)::Trixi.SemidiscretizationHyperbolic{<:Any, <:FermiHarmonics2D}
+    semi::Trixi.SemidiscretizationHyperbolic{<:Any, <:AbstractFermiTransportEquations2D},
+)::Trixi.SemidiscretizationHyperbolic{<:Any, <:AbstractFermiTransportEquations2D}
     boundary_conditions = semi.boundary_conditions
     nvars = Trixi.nvariables(semi.equations)
+    desired_signature = transport_is_nonlinear(semi.equations) ?
+        (semi.equations.transport, nvars, nonlinear_data(semi.equations).theta_count) :
+        (semi.equations.transport, nvars, 0)
     
     # Reset caches if number of variables changed (e.g., adaptive harmonics in sweeps)
     for bc in boundary_conditions.boundary_condition_types
-        if bc.cache.nvars != 0 && bc.cache.nvars != nvars
+        if bc.cache.signature != desired_signature
             empty!(bc.cache.projectors)
+            empty!(bc.cache.nonlinear_faces)
             bc.cache.initialized = false
         end
         bc.cache.nvars = nvars
+        bc.cache.signature = desired_signature
     end
 
     # Check if cache already initialized - reuse if possible
@@ -538,10 +1362,65 @@ function init_projector_cache!(
         boundary_conditions.boundary_indices,
     )
         if !bc.cache.initialized
-            new_projectors = build_projectors(
-                semi.equations, bc.tol, semi.mesh, semi.solver, semi.cache, boundary_indexing
-            )
-            merge!(bc.cache.projectors, new_projectors)
+            if transport_is_nonlinear(semi.equations) || semi.equations isa FermiAngles2D
+                new_faces = build_nonlinear_faces(
+                    semi.equations, bc.tol, semi.mesh, semi.solver, semi.cache, boundary_indexing
+                )
+                merge!(bc.cache.nonlinear_faces, new_faces)
+            else
+                new_projectors = build_projectors(
+                    semi.equations, bc.tol, semi.mesh, semi.solver, semi.cache, boundary_indexing
+                )
+                merge!(bc.cache.projectors, new_projectors)
+            end
+            bc.cache.initialized = true
+        end
+    end
+    @debug "Initialized BC projector cache" mesh = typeof(semi.mesh)
+    return semi
+end
+
+function init_projector_cache!(
+    semi::Trixi.SemidiscretizationHyperbolicParabolic{<:Any, <:AbstractFermiTransportEquations2D},
+)::Trixi.SemidiscretizationHyperbolicParabolic{<:Any, <:AbstractFermiTransportEquations2D}
+    boundary_conditions = semi.boundary_conditions
+    nvars = Trixi.nvariables(semi.equations)
+    desired_signature = transport_is_nonlinear(semi.equations) ?
+        (semi.equations.transport, nvars, nonlinear_data(semi.equations).theta_count) :
+        (semi.equations.transport, nvars, 0)
+
+    for bc in boundary_conditions.boundary_condition_types
+        if bc.cache.signature != desired_signature
+            empty!(bc.cache.projectors)
+            empty!(bc.cache.nonlinear_faces)
+            bc.cache.initialized = false
+        end
+        bc.cache.nvars = nvars
+        bc.cache.signature = desired_signature
+    end
+
+    all_initialized = all(bc.cache.initialized for bc in boundary_conditions.boundary_condition_types)
+    if all_initialized
+        @debug "BC projector cache already initialized, reusing" mesh = typeof(semi.mesh)
+        return semi
+    end
+
+    for (bc, boundary_indexing) in zip(
+        boundary_conditions.boundary_condition_types,
+        boundary_conditions.boundary_indices,
+    )
+        if !bc.cache.initialized
+            if transport_is_nonlinear(semi.equations) || semi.equations isa FermiAngles2D
+                new_faces = build_nonlinear_faces(
+                    semi.equations, bc.tol, semi.mesh, semi.solver, semi.cache, boundary_indexing
+                )
+                merge!(bc.cache.nonlinear_faces, new_faces)
+            else
+                new_projectors = build_projectors(
+                    semi.equations, bc.tol, semi.mesh, semi.solver, semi.cache, boundary_indexing
+                )
+                merge!(bc.cache.projectors, new_projectors)
+            end
             bc.cache.initialized = true
         end
     end
@@ -569,7 +1448,7 @@ Normalize a normal vector to unit length.
 end
 
 """
-    normal_cos_sin(normal) -> (cosine, sine)
+    _normal_cos_sin(normal) -> (cosine, sine)
 
 Compute cosine and sine of the angle defined by the normal vector.
 """
@@ -581,36 +1460,4 @@ Compute cosine and sine of the angle defined by the normal vector.
     else
         return nx / nrm, ny / nrm
     end
-end
-
-"""
-    projector_cache_key(boundary_index, node_index) -> (Int, Int)
-
-Canonical dictionary key for cached boundary projectors.
-"""
-@inline projector_cache_key(boundary_index::Int, node_index::Int) = (boundary_index, node_index)
-
-"""
-    boundary_node_ij(direction, node_index, n_nodes) -> (i_index, j_index)
-
-Map a boundary-local node number to `(i, j)` indices on a tensor-product P4est face.
-Direction follows Trixi convention:
-- `1,2`: x-normal faces (`i` fixed),
-- `3,4`: y-normal faces (`j` fixed).
-"""
-@inline function boundary_node_ij(
-    direction::Int,
-    node_index::Int,
-    n_nodes::Int,
-)::Tuple{Int, Int}
-    if direction == 1
-        return 1, node_index
-    elseif direction == 2
-        return n_nodes, node_index
-    elseif direction == 3
-        return node_index, 1
-    elseif direction == 4
-        return node_index, n_nodes
-    end
-    throw(ArgumentError("Unsupported boundary direction $direction"))
 end

@@ -14,8 +14,17 @@
 
 Compute physical scattering source terms.
 """
-@inline function source_terms(u, x, t, equations::FermiHarmonics2D)::SVector
+@inline function source_terms(u, x, t, equations::AbstractFermiTransportEquations2D)::SVector
     return physical_sources(u, x, t, equations)
+end
+
+@inline function source_terms(u, gradients, x, t,
+                              equations_parabolic::ElectrostaticGradientEquation2D)::SVector
+    equations = equations_parabolic.equations_hyperbolic
+    n = length(u)
+    out = MVector{n, Float64}(undef)
+    electrostatic_force_sources!(out, u, gradients, equations)
+    return SVector(out)
 end
 
 # ======================================================================================================================
@@ -30,16 +39,18 @@ end
 """
     physical_sources(u, x, t, equations) -> SVector
 
-Source terms from a tomographic approximation to the collision integral. We do not damp
-``a_0`` (density). The momentum modes ``a_1, b_1`` are damped at the momentum-relaxing rate
-``\\gamma_{mr}``. Higher even harmonics are damped at ``\\gamma_{mr} + \\gamma_{ee}``, while
-higher odd harmonics receive the extra capped enhancement
-``\\min(\\gamma_3 m^4, \\gamma_{ee})``.
+Source terms from a BGK-type approximation to the collision integral.  We do not damp 
+``a_0`` (density). The momentum modes ``a_1, b_1`` are damped at the momentum-relaxing rate 
+``\\gamma_mr``, while higher harmonics are damped at the full scattering rate 
+``\\gamma_mr + \\gamma_mc``.
 """
-@inline function physical_sources(u, x, t, equations::FermiHarmonics2D)::SVector
+@inline function physical_sources(u, x, t, equations::AbstractFermiTransportEquations2D)::SVector
+    if transport_is_nonlinear(equations)
+        return nonlinear_bgk_sources(u, equations)
+    end
+
     n = length(u)
     out = MVector{n, Float64}(undef)
-    omega_c = equations.omega_c
     @inbounds begin
         # Monopole: no damping (charge conservation)
         out[1] = 0.0
@@ -47,26 +58,142 @@ higher odd harmonics receive the extra capped enhancement
         # Dipole: momentum-relaxing scattering only
         if n >= 3
             gamma_mr = equations.gamma_mr
-            out[2] = -gamma_mr * u[2] - omega_c * u[3]
-            out[3] = -gamma_mr * u[3] + omega_c * u[2]
+            out[2] = -gamma_mr * u[2]
+            out[3] = -gamma_mr * u[3]
         end
         
-        # Higher harmonics: tomographic odd/even scattering rates
+        # Higher harmonics: full scattering (momentum-relaxing + momentum-conserving)
         if n > 3
-            gamma_even = equations.gamma_mr + equations.gamma_ee
+            gamma_hi = equations.gamma_mr + equations.gamma_mc
             max_harmonic = (n - 1) ÷ 2
             for m in 2:max_harmonic
                 ci = cosine_index(m)
                 si = sine_index(m)
-                gamma_mode = if iseven(m)
-                    gamma_even
-                else
-                    gamma_even + min(equations.gamma_3 * m^4, equations.gamma_ee)
-                end
-                out[ci] = -gamma_mode * u[ci] - m * omega_c * u[si]
-                out[si] = -gamma_mode * u[si] + m * omega_c * u[ci]
+                out[ci] = -gamma_hi * u[ci]
+                out[si] = -gamma_hi * u[si]
             end
         end
+    end
+    return SVector(out)
+end
+
+@inline function physical_sources(u, x, t, equations::MultiBandFermiHarmonics2D)::SVector
+    n = length(u)
+    out = MVector{n, Float64}(undef)
+    fill!(out, 0.0)
+
+    local_nvars = band_nvars(equations)
+    M = equations.max_harmonic
+    @inbounds for (band_index, band) in enumerate(equations.bands)
+        offset = band_offset(equations, band_index)
+        out[offset + 1] = 0.0
+
+        if local_nvars >= 3
+            out[offset + cosine_index(1)] = -band.gamma_mr * Float64(u[offset + cosine_index(1)])
+            out[offset + sine_index(1)] = -band.gamma_mr * Float64(u[offset + sine_index(1)])
+        end
+
+        if M >= 2
+            gamma_hi = band.gamma_mr + band.gamma_mc
+            for m in 2:M
+                out[offset + cosine_index(m)] = -gamma_hi * Float64(u[offset + cosine_index(m)])
+                out[offset + sine_index(m)] = -gamma_hi * Float64(u[offset + sine_index(m)])
+            end
+        end
+    end
+
+    if equations.gamma_drag > 0.0 && band_count(equations) == 2 && local_nvars >= 3
+        band1 = equations.bands[1]
+        band2 = equations.bands[2]
+        w1 = band_momentum_weight(band1)
+        w2 = band_momentum_weight(band2)
+        norm_sq = w1^2 + w2^2
+        if norm_sq > 0.0
+            drag_scale = equations.gamma_drag / norm_sq
+
+            a1_1 = Float64(u[band_global_cosine_index(equations, 1, 1)])
+            a1_2 = Float64(u[band_global_cosine_index(equations, 2, 1)])
+            relative_a1 = w2 * a1_1 - w1 * a1_2
+            drag_a1_1 = -drag_scale * w2 * relative_a1
+            drag_a1_2 = drag_scale * w1 * relative_a1
+            out[band_global_cosine_index(equations, 1, 1)] += drag_a1_1
+            out[band_global_cosine_index(equations, 2, 1)] += drag_a1_2
+
+            b1_1 = Float64(u[band_global_sine_index(equations, 1, 1)])
+            b1_2 = Float64(u[band_global_sine_index(equations, 2, 1)])
+            relative_b1 = w2 * b1_1 - w1 * b1_2
+            drag_b1_1 = -drag_scale * w2 * relative_b1
+            drag_b1_2 = drag_scale * w1 * relative_b1
+            out[band_global_sine_index(equations, 1, 1)] += drag_b1_1
+            out[band_global_sine_index(equations, 2, 1)] += drag_b1_2
+        end
+    end
+
+    return SVector(out)
+end
+
+@inline function nonlinear_bgk_sources(u, equations::AbstractFermiTransportEquations2D)::SVector
+    return nonlinear_bgk_sources(u, Val(:dispatch), equations)
+end
+
+@inline function nonlinear_bgk_sources(u, ::Val{:dispatch}, equations::FermiAngles2D)::SVector
+    n = length(u)
+    out = MVector{n, Float64}(undef)
+    drift_equilibrium = MVector{n, Float64}(undef)
+    isotropic_equilibrium = MVector{n, Float64}(undef)
+
+    mu, velocity = nonlinear_collision_is_two_rate_bgk(equations) ?
+        recover_mu_u_two_rate(u, equations) :
+        recover_mu_u(u, equations)
+    local_equilibrium_state!(drift_equilibrium, mu, velocity, equations)
+    isotropic_equilibrium_state!(isotropic_equilibrium, mu, equations)
+
+    gamma_mr = equations.gamma_mr
+    gamma_mc = equations.gamma_mc
+    @inbounds for i in 1:n
+        out[i] = -gamma_mr * (u[i] - isotropic_equilibrium[i]) -
+                 gamma_mc * (u[i] - drift_equilibrium[i])
+    end
+    return SVector(out)
+end
+
+@inline nonlinear_mode_rate(m::Int, equations::FermiHarmonics2D) =
+    iseven(m) ? equations.gamma_mc : min(equations.gamma_mc, equations.gamma3 * m^4)
+
+@inline function nonlinear_bgk_sources(u, ::Val{:dispatch}, equations::FermiHarmonics2D)::SVector
+    t0 = nonlinear_timing_enabled() ? time_ns() : UInt64(0)
+    n = length(u)
+    out = MVector{n, Float64}(undef)
+    mu, velocity = recover_mu_u(u, equations)
+
+    gamma_mr = equations.gamma_mr
+    gamma_mode_2 = n > 3 ? nonlinear_mode_rate(2, equations) : 0.0
+    ux, uy = velocity
+    eq2c = 0.5 * equations.mass * (ux * ux - uy * uy)
+    eq2s = equations.mass * ux * uy
+    max_harmonic = (n - 1) ÷ 2
+    @inbounds begin
+        out[1] = 0.0
+        if n >= 3
+            out[2] = -gamma_mr * Float64(u[2])
+            out[3] = -gamma_mr * Float64(u[3])
+        end
+        if max_harmonic >= 2
+            ci = cosine_index(2)
+            si = sine_index(2)
+            out[ci] = -(gamma_mr + gamma_mode_2) * Float64(u[ci]) + gamma_mode_2 * eq2c
+            out[si] = -(gamma_mr + gamma_mode_2) * Float64(u[si]) + gamma_mode_2 * eq2s
+        end
+        for m in 3:max_harmonic
+            gamma_mode = nonlinear_mode_rate(m, equations)
+            ci = cosine_index(m)
+            si = sine_index(m)
+            out[ci] = -(gamma_mr + gamma_mode) * Float64(u[ci])
+            out[si] = -(gamma_mr + gamma_mode) * Float64(u[si])
+        end
+    end
+    if nonlinear_timing_enabled()
+        record_nonlinear_timing!(:bgk, time_ns() - t0)
     end
     return SVector(out)
 end

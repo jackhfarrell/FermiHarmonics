@@ -24,9 +24,14 @@ using LinearAlgebra
 using SparseArrays
 using StaticArrays
 using HDF5
+using FFTW
+using NLsolve
+using Plots
 
 # Include core physics and interfaces
 include("equations.jl")
+include("nonlinear_transport.jl")
+include("reference_setup.jl")
 include("source_terms.jl")
 include("boundary_conditions.jl")
 include("trixi_interface.jl")
@@ -40,18 +45,29 @@ include("io_utils.jl")
 
 # Export main types and functions
 export FermiHarmonics2D,
+       MultiBandFermiHarmonics2D,
+       FermiAngles2D,
+       BandSpec,
        SolveParams,
        MaxwellWallBC,
        OhmicContactBC,
+       blg_reference_setup,
        estimate_max_harmonic,
        save_solution_custom,
        save_for_analysis,
+       evaluate_solution,
+       evaluate_observables,
+       enable_nonlinear_timing!,
+       disable_nonlinear_timing!,
+       reset_nonlinear_timing!,
+       nonlinear_timing_snapshot,
+       print_nonlinear_timing_summary,
+       solve_status,
        solve,
        write_sweep_metadata!,
        archive_mesh!,
        copy_mesh_to_scratch,
        select_cases,
-       ordered_case_indices,
        grid_lookup,
        submit_sweep!
 

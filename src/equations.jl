@@ -10,36 +10,165 @@
 # momentum-dependence is expanded in a basis of circular harmonics. The equations are
 # purely advective with source terms from physical scattering.
 
-"""
-    FermiHarmonics2D{NVARS} <: Trixi.AbstractEquations{2, NVARS}
+abstract type AbstractFermiTransportEquations2D{NVARS} <: Trixi.AbstractEquations{2, NVARS} end
 
-Linearized 2D Boltzmann system in harmonic form:
-```math
-\\partial_t u + A_x \\partial_x u + A_y \\partial_y u = S(u;\\gamma_{mr},\\gamma_{ee}, \\gamma_3)```.
-```
 """
-struct FermiHarmonics2D{NVARS} <: Trixi.AbstractEquations{2, NVARS}
+    BandSpec
+
+Parameters for one linear circular-Fermi-surface carrier species.
+"""
+struct BandSpec
+    name::Symbol
+    vF::Float64
+    nu::Float64
+    mass::Float64
+    charge::Float64
     gamma_mr::Float64
-    gamma_ee::Float64
-    gamma_3::Float64
-    omega_c::Float64
-    max_speed::Float64
-    residual_nvars::Int
-    Ax::Matrix{Float64}
-    Ay::Matrix{Float64}
+    gamma_mc::Float64
+end
+
+@inline coerce_band_spec(band::BandSpec) = band
+@inline coerce_band_spec(band::NamedTuple) = BandSpec(; band...)
+
+function BandSpec(;
+    name,
+    vF::Real,
+    nu::Real,
+    mass::Real,
+    charge::Real,
+    gamma_mr::Real,
+    gamma_mc::Real,
+)
+    vF_value = Float64(vF)
+    nu_value = Float64(nu)
+    mass_value = Float64(mass)
+    charge_value = Float64(charge)
+    gamma_mr_value = Float64(gamma_mr)
+    gamma_mc_value = Float64(gamma_mc)
+
+    vF_value > 0.0 || throw(ArgumentError("band vF must be > 0"))
+    nu_value > 0.0 || throw(ArgumentError("band nu must be > 0"))
+    mass_value > 0.0 || throw(ArgumentError("band mass must be > 0"))
+    gamma_mr_value >= 0.0 || throw(ArgumentError("band gamma_mr must be >= 0"))
+    gamma_mc_value >= 0.0 || throw(ArgumentError("band gamma_mc must be >= 0"))
+
+    return BandSpec(
+        Symbol(name),
+        vF_value,
+        nu_value,
+        mass_value,
+        charge_value,
+        gamma_mr_value,
+        gamma_mc_value,
+    )
 end
 
 """
-    FermiHarmonics2D(nvars; gamma_mr, gamma_ee, gamma_3=0.0, max_harmonic=0)
+    FermiHarmonics2D{NVARS} <: AbstractFermiTransportEquations2D{NVARS}
+
+Linearized 2D Boltzmann system in harmonic form:
+```math
+\\partial_t u + A_x \\partial_x u + A_y \\partial_y u = S(u;\\gamma_{mr},\\gamma_{mc})```.
+```
+"""
+struct FermiHarmonics2D{NVARS, TNonlinear} <: AbstractFermiTransportEquations2D{NVARS}
+    gamma_mr::Float64
+    gamma_mc::Float64
+    gamma3::Float64
+    max_speed::Float64
+    timestep_speed::Float64
+    Ax::Matrix{Float64}
+    Ay::Matrix{Float64}
+    transport::Symbol
+    collision_model::Symbol
+    mu0::Float64
+    mass::Float64
+    electrostatic_coupling::Float64
+    theta_oversample::Int
+    nonlinear_data::TNonlinear
+end
+
+"""
+    MultiBandFermiHarmonics2D{NVARS} <: AbstractFermiTransportEquations2D{NVARS}
+
+Linear multiband harmonic Boltzmann system with one harmonic block per band.
+"""
+struct MultiBandFermiHarmonics2D{NVARS} <: AbstractFermiTransportEquations2D{NVARS}
+    bands::Vector{BandSpec}
+    gamma_drag::Float64
+    max_harmonic::Int
+    max_speed::Float64
+    timestep_speed::Float64
+    Ax::Matrix{Float64}
+    Ay::Matrix{Float64}
+    transport::Symbol
+    collision_model::Symbol
+end
+
+mutable struct AngleThreadCache{PF, PI}
+    spectrum::Vector{ComplexF64}
+    scratch_spectrum::Vector{ComplexF64}
+    real_buffer::Vector{Float64}
+    fft_plan::PF
+    ifft_plan::PI
+end
+
+struct AngleTransportData{TC<:AngleThreadCache}
+    theta_count::Int
+    theta::Vector{Float64}
+    cos_theta::Vector{Float64}
+    sin_theta::Vector{Float64}
+    weight::Float64
+    thread_caches::Vector{TC}
+end
+
+"""
+    FermiAngles2D{N} <: AbstractFermiTransportEquations2D{N}
+
+Nonlinear parabolic-band transport with one state value per discrete angle.
+"""
+struct FermiAngles2D{NVARS, TData} <: AbstractFermiTransportEquations2D{NVARS}
+    gamma_mr::Float64
+    gamma_mc::Float64
+    max_speed::Float64
+    timestep_speed::Float64
+    transport::Symbol
+    collision_model::Symbol
+    mu0::Float64
+    mass::Float64
+    electrostatic_coupling::Float64
+    nonlinear_data::TData
+end
+
+@inline nonlinear_timestep_speed(vF::Real, chi::Real) = Float64(vF) * (1.0 + abs(Float64(chi)))
+@inline band_state_nvars(max_harmonic::Integer) = 1 + 2 * Int(max_harmonic)
+@inline band_count(equations::MultiBandFermiHarmonics2D) = length(equations.bands)
+@inline band_nvars(equations::MultiBandFermiHarmonics2D) = band_state_nvars(equations.max_harmonic)
+@inline band_offset(equations::MultiBandFermiHarmonics2D, band_index::Integer) =
+    (Int(band_index) - 1) * band_nvars(equations)
+@inline band_global_cosine_index(equations::MultiBandFermiHarmonics2D, band_index::Integer, m::Int) =
+    band_offset(equations, band_index) + cosine_index(m)
+@inline band_global_sine_index(equations::MultiBandFermiHarmonics2D, band_index::Integer, m::Int) =
+    band_offset(equations, band_index) + sine_index(m)
+@inline band_momentum_weight(band::BandSpec) = band.nu * band.mass * band.vF
+
+"""
+    FermiHarmonics2D(nvars; gamma_mr, gamma_mc, gamma3=nothing, max_harmonic=0, transport=:linear,
+                     collision_model=nothing, mu0=nothing, mass=nothing,
+                     chi=0.0, theta_oversample=1)
 
 Construct `FermiHarmonics2D`.
 
 Parameters:
 - `nvars`: number of state variables, must be odd (`1 + 2M`).
 - `gamma_mr`: momentum-relaxing scattering rate.
-- `gamma_ee`: electron-electron scattering rate.
-- `gamma_3`: odd-mode tomographic enhancement prefactor.
+- `gamma_mc`: momentum-conserving scattering rate.
+- `gamma3`: optional odd-mode quartic relaxation prefactor for nonlinear harmonic transport.
 - `max_harmonic`: optional explicit harmonic cutoff; if set, must satisfy `nvars == 1 + 2*max_harmonic`.
+- `transport`: `:linear` or `:parabolic_nonlinear`.
+- `collision_model`: defaults to `:linear_mrt` for linear transport and `:quadratic_bgk` for nonlinear transport.
+- `mu0`, `mass`: required nonlinear-transport parameters.
+- `chi`: electrostatic coupling in the self-consistent relation `phi = chi * a0 / 2`.
 
 Returns:
 - `FermiHarmonics2D{nvars}` equations object.
@@ -47,11 +176,15 @@ Returns:
 function FermiHarmonics2D(
     nvars::Integer;
     gamma_mr::Real,
-    gamma_ee::Real,
-    gamma_3::Real = 0.0,
-    omega_c::Real = 0.0,
+    gamma_mc::Real,
+    gamma3::Union{Nothing, Real} = nothing,
     max_harmonic::Integer = 0,
-    residual_nvars::Integer = 0,
+    transport::Symbol = :linear,
+    collision_model::Union{Nothing, Symbol} = nothing,
+    mu0::Union{Nothing, Real} = nothing,
+    mass::Union{Nothing, Real} = nothing,
+    chi::Real = 0.0,
+    theta_oversample::Integer = 1,
 )
     nvars_int = Int(nvars)
     nvars_int >= 1 || throw(ArgumentError("nvars must be >= 1"))
@@ -61,21 +194,177 @@ function FermiHarmonics2D(
         throw(ArgumentError("max_harmonic ($max_harmonic) must match (nvars - 1) ÷ 2 = $M"))
     end
 
-    vF = 1.0
-    Ax, Ay = streaming_matrices(M, vF)
-    # Canonical LLF speed for this kinetic model: max |v · n| = vF (for unit normals).
-    max_speed = vF
-    residual_nvars_int = residual_nvars <= 0 ? nvars_int : clamp(Int(residual_nvars), 1, nvars_int)
+    validate_transport_mode(transport, mu0, mass, theta_oversample)
+    if transport === :linear && Float64(chi) != 0.0
+        throw(ArgumentError("chi must be 0 for :linear transport"))
+    end
+    collision_model_value = validate_collision_model(transport, collision_model)
+    gamma3_value = isnothing(gamma3) ? Float64(gamma_mc) : Float64(gamma3)
+    gamma3_value >= 0.0 || throw(ArgumentError("gamma3 must be >= 0"))
 
-    return FermiHarmonics2D{nvars_int}(
+    nonlinear_transport_data = nothing
+    mu0_value = isnothing(mu0) ? NaN : Float64(mu0)
+    mass_value = isnothing(mass) ? NaN : Float64(mass)
+    vF = 1.0
+    if transport === :parabolic_nonlinear
+        collision_model_value === :quadratic_bgk ||
+            throw(ArgumentError("FermiHarmonics2D supports only collision_model=:quadratic_bgk for :parabolic_nonlinear transport"))
+        vF = zero_state_speed(mu0_value, mass_value)
+        nonlinear_transport_data = create_nonlinear_transport_data(M, Int(theta_oversample))
+    end
+
+    Ax, Ay = streaming_matrices(M, vF)
+    max_speed = vF
+    timestep_speed = transport === :parabolic_nonlinear ?
+        nonlinear_timestep_speed(vF, chi) : vF
+
+    return FermiHarmonics2D{nvars_int, typeof(nonlinear_transport_data)}(
         Float64(gamma_mr),
-        Float64(gamma_ee),
-        Float64(gamma_3),
-        Float64(omega_c),
+        Float64(gamma_mc),
+        gamma3_value,
         max_speed,
-        residual_nvars_int,
+        timestep_speed,
         Ax,
         Ay,
+        transport,
+        collision_model_value,
+        mu0_value,
+        mass_value,
+        Float64(chi),
+        Int(theta_oversample),
+        nonlinear_transport_data,
+    )
+end
+
+function block_streaming_matrices(bands::AbstractVector{BandSpec}, max_harmonic::Int)
+    band_size = band_state_nvars(max_harmonic)
+    total_nvars = length(bands) * band_size
+    Ax = zeros(Float64, total_nvars, total_nvars)
+    Ay = zeros(Float64, total_nvars, total_nvars)
+
+    @inbounds for (band_index, band) in enumerate(bands)
+        local_Ax, local_Ay = streaming_matrices(max_harmonic, band.vF)
+        offset = (band_index - 1) * band_size
+        Ax[(offset + 1):(offset + band_size), (offset + 1):(offset + band_size)] .= local_Ax
+        Ay[(offset + 1):(offset + band_size), (offset + 1):(offset + band_size)] .= local_Ay
+    end
+
+    return Ax, Ay
+end
+
+"""
+    MultiBandFermiHarmonics2D(max_harmonic; bands, gamma_drag=0.0)
+
+Construct a linear multiband harmonic transport model.
+"""
+function MultiBandFermiHarmonics2D(
+    max_harmonic::Integer;
+    bands,
+    gamma_drag::Real = 0.0,
+    transport::Symbol = :linear,
+    collision_model::Union{Nothing, Symbol} = nothing,
+)
+    max_harmonic_int = Int(max_harmonic)
+    max_harmonic_int >= 1 || throw(ArgumentError("max_harmonic must be >= 1"))
+    transport === :linear || throw(ArgumentError("MultiBandFermiHarmonics2D supports only transport=:linear"))
+    collision_model_value = validate_collision_model(transport, collision_model)
+    gamma_drag_value = Float64(gamma_drag)
+    gamma_drag_value >= 0.0 || throw(ArgumentError("gamma_drag must be >= 0"))
+
+    band_specs = BandSpec[]
+    for band in bands
+        push!(band_specs, coerce_band_spec(band))
+    end
+    length(band_specs) == 2 ||
+        throw(ArgumentError("v1 multiband support requires exactly 2 bands"))
+
+    names = map(band -> band.name, band_specs)
+    length(unique(names)) == length(names) ||
+        throw(ArgumentError("band names must be unique"))
+
+    Ax, Ay = block_streaming_matrices(band_specs, max_harmonic_int)
+    total_nvars = length(band_specs) * band_state_nvars(max_harmonic_int)
+    max_speed = maximum(band.vF for band in band_specs)
+
+    return MultiBandFermiHarmonics2D{total_nvars}(
+        band_specs,
+        gamma_drag_value,
+        max_harmonic_int,
+        max_speed,
+        max_speed,
+        Ax,
+        Ay,
+        transport,
+        collision_model_value,
+    )
+end
+
+function create_angle_transport_data(theta_count::Int)
+    ntheta = Int(theta_count)
+    ntheta >= 8 || throw(ArgumentError("n_angles must be >= 8"))
+    iseven(ntheta) || throw(ArgumentError("n_angles must be even"))
+    dtheta = 2.0 * pi / ntheta
+    theta = collect(range(0.0, step=dtheta, length=ntheta))
+    cos_theta = cos.(theta)
+    sin_theta = sin.(theta)
+    spectrum = Vector{ComplexF64}(undef, ntheta)
+    scratch_spectrum = Vector{ComplexF64}(undef, ntheta)
+    real_buffer = Vector{Float64}(undef, ntheta)
+    cache_template = AngleThreadCache(
+        spectrum,
+        scratch_spectrum,
+        real_buffer,
+        FFTW.plan_fft!(spectrum; flags=FFTW.ESTIMATE),
+        FFTW.plan_ifft!(spectrum; flags=FFTW.ESTIMATE),
+    )
+    TC = typeof(cache_template)
+    thread_caches = Vector{TC}(undef, Threads.nthreads())
+    thread_caches[1] = cache_template
+    for tid in 2:length(thread_caches)
+        spectrum_tid = Vector{ComplexF64}(undef, ntheta)
+        thread_caches[tid] = AngleThreadCache(
+            spectrum_tid,
+            Vector{ComplexF64}(undef, ntheta),
+            Vector{Float64}(undef, ntheta),
+            FFTW.plan_fft!(spectrum_tid; flags=FFTW.ESTIMATE),
+            FFTW.plan_ifft!(spectrum_tid; flags=FFTW.ESTIMATE),
+        )
+    end
+    return AngleTransportData(ntheta, theta, cos_theta, sin_theta, dtheta, thread_caches)
+end
+
+function FermiAngles2D(
+    n_angles::Integer;
+    gamma_mr::Real,
+    gamma_mc::Real,
+    collision_model::Union{Nothing, Symbol} = nothing,
+    mu0::Real,
+    mass::Real,
+    chi::Real = 0.0,
+)
+    ntheta = Int(n_angles)
+    ntheta >= 8 || throw(ArgumentError("n_angles must be >= 8"))
+    iseven(ntheta) || throw(ArgumentError("n_angles must be even"))
+    collision_model_value = something(collision_model, :exact_bgk)
+    collision_model_value in (:exact_bgk, :two_rate_bgk) ||
+        throw(ArgumentError("collision_model must be :exact_bgk or :two_rate_bgk for :parabolic_nonlinear transport"))
+    mu0_value = Float64(mu0)
+    mass_value = Float64(mass)
+    mu0_value > 0.0 || throw(ArgumentError("mu0 must be > 0 for :parabolic_nonlinear transport"))
+    mass_value > 0.0 || throw(ArgumentError("mass must be > 0 for :parabolic_nonlinear transport"))
+
+    data = create_angle_transport_data(ntheta)
+    return FermiAngles2D{ntheta, typeof(data)}(
+        Float64(gamma_mr),
+        Float64(gamma_mc),
+        zero_state_speed(mu0_value, mass_value),
+        nonlinear_timestep_speed(zero_state_speed(mu0_value, mass_value), chi),
+        :parabolic_nonlinear,
+        collision_model_value,
+        mu0_value,
+        mass_value,
+        Float64(chi),
+        data,
     )
 end
 
@@ -186,9 +475,34 @@ function Base.show(io::IO, equations::FermiHarmonics2D{NVARS}) where {NVARS}
     print(io, "FermiHarmonics2D{$NVARS}(")
     print(io, "max_harmonic=$max_harmonic, ")
     print(io, "γ_mr=$(equations.gamma_mr), ")
-    print(io, "γ_ee=$(equations.gamma_ee), ")
-    print(io, "γ_3=$(equations.gamma_3), ")
-    print(io, "ω_c=$(equations.omega_c)")
+    print(io, "γ_mc=$(equations.gamma_mc), ")
+    print(io, "γ₃=$(equations.gamma3), ")
+    print(io, "transport=$(equations.transport), ")
+    print(io, "collision_model=$(equations.collision_model)")
+    if transport_is_nonlinear(equations)
+        print(io, ", mu0=$(equations.mu0), mass=$(equations.mass), chi=$(equations.electrostatic_coupling), dealiased_angles=$(nonlinear_data(equations).theta_count), timestep_speed=$(equations.timestep_speed)")
+    end
+    print(io, ")")
+end
+
+function Base.show(io::IO, equations::MultiBandFermiHarmonics2D{NVARS}) where {NVARS}
+    print(io, "MultiBandFermiHarmonics2D{$NVARS}(")
+    print(io, "bands=$(map(band -> String(band.name), equations.bands)), ")
+    print(io, "max_harmonic=$(equations.max_harmonic), ")
+    print(io, "gamma_drag=$(equations.gamma_drag), ")
+    print(io, "transport=$(equations.transport), ")
+    print(io, "collision_model=$(equations.collision_model)")
+    print(io, ")")
+end
+
+function Base.show(io::IO, equations::FermiAngles2D{NVARS}) where {NVARS}
+    print(io, "FermiAngles2D{$NVARS}(")
+    print(io, "n_angles=$NVARS, ")
+    print(io, "γ_mr=$(equations.gamma_mr), ")
+    print(io, "γ_mc=$(equations.gamma_mc), ")
+    print(io, "transport=$(equations.transport), ")
+    print(io, "collision_model=$(equations.collision_model), ")
+    print(io, "mu0=$(equations.mu0), mass=$(equations.mass), chi=$(equations.electrostatic_coupling), timestep_speed=$(equations.timestep_speed)")
     print(io, ")")
 end
 
@@ -200,9 +514,52 @@ function Base.show(io::IO, ::MIME"text/plain", equations::FermiHarmonics2D{NVARS
         Trixi.summary_header(io, "FermiHarmonics2D{$NVARS}")
         Trixi.summary_line(io, "max harmonic", max_harmonic)
         Trixi.summary_line(io, "γ_mr (momentum-relaxing)", equations.gamma_mr)
-        Trixi.summary_line(io, "γ_ee (electron-electron)", equations.gamma_ee)
-        Trixi.summary_line(io, "γ_3 (odd-mode enhancement)", equations.gamma_3)
-        Trixi.summary_line(io, "ω_c (cyclotron frequency)", equations.omega_c)
+        Trixi.summary_line(io, "γ_mc (momentum-conserving)", equations.gamma_mc)
+        Trixi.summary_line(io, "γ3 (odd quartic prefactor)", equations.gamma3)
+        Trixi.summary_line(io, "transport", equations.transport)
+        Trixi.summary_line(io, "collision model", equations.collision_model)
+        if transport_is_nonlinear(equations)
+            Trixi.summary_line(io, "mu0", equations.mu0)
+            Trixi.summary_line(io, "mass", equations.mass)
+            Trixi.summary_line(io, "chi", equations.electrostatic_coupling)
+            Trixi.summary_line(io, "dealiased angles", nonlinear_data(equations).theta_count)
+            Trixi.summary_line(io, "linearized vF", equations.max_speed)
+            Trixi.summary_line(io, "CFL timestep speed", equations.timestep_speed)
+        end
+        Trixi.summary_footer(io)
+    end
+end
+
+function Base.show(io::IO, ::MIME"text/plain", equations::MultiBandFermiHarmonics2D{NVARS}) where {NVARS}
+    if get(io, :compact, false)
+        show(io, equations)
+    else
+        Trixi.summary_header(io, "MultiBandFermiHarmonics2D{$NVARS}")
+        Trixi.summary_line(io, "bands", join(string.(getfield.(equations.bands, :name)), ", "))
+        Trixi.summary_line(io, "max harmonic", equations.max_harmonic)
+        Trixi.summary_line(io, "gamma_drag", equations.gamma_drag)
+        Trixi.summary_line(io, "transport", equations.transport)
+        Trixi.summary_line(io, "collision model", equations.collision_model)
+        Trixi.summary_line(io, "max speed", equations.max_speed)
+        Trixi.summary_footer(io)
+    end
+end
+
+function Base.show(io::IO, ::MIME"text/plain", equations::FermiAngles2D{NVARS}) where {NVARS}
+    if get(io, :compact, false)
+        show(io, equations)
+    else
+        Trixi.summary_header(io, "FermiAngles2D{$NVARS}")
+        Trixi.summary_line(io, "n angles", NVARS)
+        Trixi.summary_line(io, "γ_mr (momentum-relaxing)", equations.gamma_mr)
+        Trixi.summary_line(io, "γ_mc (momentum-conserving)", equations.gamma_mc)
+        Trixi.summary_line(io, "transport", equations.transport)
+        Trixi.summary_line(io, "collision model", equations.collision_model)
+        Trixi.summary_line(io, "mu0", equations.mu0)
+        Trixi.summary_line(io, "mass", equations.mass)
+        Trixi.summary_line(io, "chi", equations.electrostatic_coupling)
+        Trixi.summary_line(io, "linearized vF", equations.max_speed)
+        Trixi.summary_line(io, "CFL timestep speed", equations.timestep_speed)
         Trixi.summary_footer(io)
     end
 end
