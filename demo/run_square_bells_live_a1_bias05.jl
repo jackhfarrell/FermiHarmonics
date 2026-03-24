@@ -1,4 +1,4 @@
-using ElectronKinetics, Trixi
+using ElectronKinetics, Trixi, GLMakie
 
 function main()
     project_root = normpath(joinpath(@__DIR__, ".."))
@@ -40,7 +40,9 @@ function main()
         mu0                = mu0,
         mass               = mass,
         chi                = chi,
-        live_visualization = LiveVisualizationConfig(; field=:a1, colormap=:RdBu),
+        visualize     = true,
+        viz_field     = :a1,
+        viz_colormap  = :RdBu,
         name               = "square_bells_a1_bias05",
     )
 

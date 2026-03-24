@@ -161,6 +161,8 @@ function legacy_live_visualization(
     visualize::Bool,
     visualize_every::Union{Nothing, Integer},
     visualization_mode::Symbol,
+    viz_field::Union{Nothing, Symbol}=nothing,
+    viz_colormap::Symbol=:magma,
 )
     visualize || return nothing
     interval = isnothing(visualize_every) ? config.log_every : Int(visualize_every)
@@ -168,6 +170,8 @@ function legacy_live_visualization(
     return LiveVisualizationConfig(;
         accepted_step_interval=interval,
         geometry_mode=visualization_mode,
+        field=viz_field,
+        colormap=viz_colormap,
         show_window=true,
     )
 end
@@ -197,7 +201,8 @@ function solve(
     visualize::Bool=false,
     visualize_every::Union{Nothing, Integer}=nothing,
     visualization_mode::Symbol=:cartesian,
-    live_visualization::Union{Nothing, LiveVisualizationConfig}=nothing,
+    viz_field::Union{Nothing, Symbol}=nothing,
+    viz_colormap::Symbol=:magma,
     mesh_build::MeshBuildConfig=MeshBuildConfig(),
     name::AbstractString="run",
 )
@@ -232,7 +237,7 @@ function solve(
         model,
         params;
         u0_override=u0_override,
-        live_visualization=something(live_visualization, legacy_live_visualization(params; visualize=visualize, visualize_every=visualize_every, visualization_mode=visualization_mode)),
+        live_visualization=legacy_live_visualization(params; visualize=visualize, visualize_every=visualize_every, visualization_mode=visualization_mode, viz_field=viz_field, viz_colormap=viz_colormap),
         name=name,
     )
 end
