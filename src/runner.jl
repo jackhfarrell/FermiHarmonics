@@ -25,7 +25,10 @@ Fields:
 - `max_harmonic_auto::Int=100`: upper bound for auto harmonic estimation.
 - `polydeg::Int=3`: DGSEM polynomial degree.
 - `tspan_end::Float64=100.0`: final integration time.
-- `residual_tol::Float64=1e-5`: steady-state absolute tolerance.
+- `residual_tol::Float64=1e-5`: steady-state absolute tolerance on max(|du/dt|).
+- `residual_reltol::Float64=0.0`: steady-state relative tolerance; convergence is declared
+  when max(|du/dt|) ≤ abstol + reltol * initial_residual.  Set > 0 for nonlinear solves
+  where the absolute residual scale depends on the solution magnitude.
 - `cfl::Float64=0.8`: CFL number for timestep control.
 - `log_every::Int=500`: monitor/visualization logging interval (accepted steps).
 """
@@ -36,6 +39,7 @@ Base.@kwdef struct SolveParams
     polydeg::Int = 3
     tspan_end::Float64 = 100.0
     residual_tol::Float64 = 1e-5
+    residual_reltol::Float64 = 0.0
     cfl::Float64 = 0.8
     log_every::Int = 500
 end
@@ -47,7 +51,10 @@ function validate(params::SolveParams)
         throw(ArgumentError("params.max_harmonic_auto must be >= params.min_harmonic"))
     params.polydeg >= 1 || throw(ArgumentError("params.polydeg must be >= 1"))
     params.tspan_end > 0 || throw(ArgumentError("params.tspan_end must be > 0"))
-    params.residual_tol > 0 || throw(ArgumentError("params.residual_tol must be > 0"))
+    params.residual_tol >= 0 || throw(ArgumentError("params.residual_tol must be >= 0"))
+    params.residual_reltol >= 0 || throw(ArgumentError("params.residual_reltol must be >= 0"))
+    params.residual_tol + params.residual_reltol > 0 ||
+        throw(ArgumentError("at least one of residual_tol or residual_reltol must be > 0"))
     params.cfl > 0 || throw(ArgumentError("params.cfl must be > 0"))
     params.log_every >= 1 || throw(ArgumentError("params.log_every must be >= 1"))
     return params
@@ -417,7 +424,7 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
     # Callback assembly
     # ------------------------------------------------------------------------------------------------------------------
     stepsize_callback = Trixi.StepsizeCallback(cfl=params.cfl)
-    steady_state_callback = Trixi.SteadyStateCallback(abstol=params.residual_tol, reltol=0.0)
+    steady_state_callback = Trixi.SteadyStateCallback(abstol=params.residual_tol, reltol=params.residual_reltol)
     monitor = monitor_callback(params, semi)
 
     callbacks = Any[stepsize_callback, steady_state_callback, monitor]
@@ -444,7 +451,7 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
     )
 
     status = solve_status(sol, semi, params)
-    @info "Solve complete" name=name stop_reason=status.stop_reason final_time=status.final_time target_final_time=status.target_final_time final_residual=status.final_residual tolerance=params.residual_tol converged=status.converged retcode=status.retcode successful=status.successful
+    @info "Solve complete" name=name stop_reason=status.stop_reason final_time=status.final_time target_final_time=status.target_final_time final_residual=status.final_residual final_rel_residual=status.final_rel_residual abstol=params.residual_tol reltol=params.residual_reltol converged=status.converged retcode=status.retcode successful=status.successful
     flush(stdout)
     flush(stderr)
 
@@ -541,7 +548,7 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
     end
 
     stepsize_callback = Trixi.StepsizeCallback(cfl=params.cfl)
-    steady_state_callback = Trixi.SteadyStateCallback(abstol=params.residual_tol, reltol=0.0)
+    steady_state_callback = Trixi.SteadyStateCallback(abstol=params.residual_tol, reltol=params.residual_reltol)
     monitor = monitor_callback(params, semi)
     callbacks = Any[stepsize_callback, steady_state_callback, monitor]
 
@@ -592,9 +599,12 @@ function monitor_callback(params, semi)
         integrator -> begin
             du_ode = Trixi.get_du(integrator)
             integrator.f(du_ode, integrator.u, integrator.p, integrator.t)
-            du = Trixi.wrap_array(du_ode, semi)
+            du      = Trixi.wrap_array(du_ode, semi)
+            u       = Trixi.wrap_array(integrator.u, semi)
             residual = Trixi.residual_steady_state(du, semi.equations)
-            @info "Progress" iter=integrator.stats.naccept t=round(integrator.t, digits=4) dt=round(integrator.dt, digits=6) residual=round(residual, sigdigits=3) tolerance=params.residual_tol
+            u_norm   = Trixi.residual_steady_state(u,  semi.equations)
+            rel_residual = u_norm > 0 ? residual / u_norm : Inf
+            @info "Progress" iter=integrator.stats.naccept t=round(integrator.t, digits=4) dt=round(integrator.dt, digits=6) residual=round(residual, sigdigits=3) rel_residual=round(rel_residual, sigdigits=3) abstol=params.residual_tol reltol=params.residual_reltol
             flush(stdout)
             flush(stderr)
             nothing
@@ -613,16 +623,23 @@ reached `params.tspan_end`.
 function solve_status(sol, semi, params::SolveParams; time_atol::Real=1e-10)
     final_u_ode = similar(sol.u[end])
     sol.prob.f(final_u_ode, sol.u[end], sol.prob.p, sol.t[end])
-    final_du = Trixi.wrap_array(final_u_ode, semi)
-    final_residual = Trixi.residual_steady_state(final_du, semi.equations)
-    converged = final_residual <= params.residual_tol
+    final_du     = Trixi.wrap_array(final_u_ode, semi)
+    final_u      = Trixi.wrap_array(sol.u[end],  semi)
+    final_residual     = Trixi.residual_steady_state(final_du, semi.equations)
+    final_u_norm       = Trixi.residual_steady_state(final_u,  semi.equations)
+    final_rel_residual = final_u_norm > 0 ? final_residual / final_u_norm : Inf
+    retcode = hasproperty(sol, :retcode) ? getproperty(sol, :retcode) : nothing
+    # Converged if abs tol satisfied, or if the SteadyStateCallback fired (covers reltol).
+    converged_abs      = final_residual <= params.residual_tol
+    converged_callback = !isnothing(retcode) && retcode == SciMLBase.ReturnCode.Terminated
+    converged          = converged_abs || converged_callback
     hit_final_time = isapprox(sol.t[end], params.tspan_end; atol=time_atol, rtol=0.0)
     stop_reason = converged ? :steady_state : (hit_final_time ? :final_time : :other)
-    retcode = hasproperty(sol, :retcode) ? getproperty(sol, :retcode) : nothing
     successful = isnothing(retcode) ? true : SciMLBase.successful_retcode(retcode)
     return (
         stop_reason=stop_reason,
         final_residual=final_residual,
+        final_rel_residual=final_rel_residual,
         converged=converged,
         hit_final_time=hit_final_time,
         final_time=sol.t[end],
