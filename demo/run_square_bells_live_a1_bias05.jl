@@ -29,11 +29,6 @@ function main()
         max_harmonic_auto = 20,
     )
 
-    live_visualization = LiveVisualizationConfig(;
-        field    = :a1,
-        colormap = :RdBu,
-    )
-
     sol, semi = ElectronKinetics.solve(
         mesh_path,
         boundary_conditions,
@@ -45,8 +40,7 @@ function main()
         mu0                = mu0,
         mass               = mass,
         chi                = chi,
-        visualize          = true,
-        live_visualization = live_visualization,
+        live_visualization = LiveVisualizationConfig(; field=:a1, colormap=:RdBu),
         name               = "square_bells_a1_bias05",
     )
 

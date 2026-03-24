@@ -26,7 +26,7 @@ import ElectronKinetics: solve,
                          finalize_live_dashboard!,
                          update_live_dashboard!,
                          collision_sources!,
-                         BandSpec,
+                         Band,
                          BCProjectorCache,
                          CustomModeRateProfile,
                          ExactAngleBGKCollision,
@@ -55,7 +55,7 @@ import ElectronKinetics: solve,
                          IsotropicHarmonicStreaming,
                          band_momentum_weight,
                          boundary_condition_name,
-                         coerce_band_spec,
+                         coerce_band,
                          collision_electrostatic_coupling,
                          collision_gamma_mc,
                          collision_gamma_mr,
@@ -80,6 +80,11 @@ import ElectronKinetics: solve,
                          resize_multiband_warm_start,
                          resize_warm_start,
                          surface_vF,
+                         surface_max_speed,
+                         surface_vF_angle,
+                         surface_density_of_states,
+                         surface_mass,
+                         surface_charge,
                          streaming_matrices,
                          transport_symbol,
                          validate,
@@ -192,6 +197,7 @@ function solve(
     visualize::Bool=false,
     visualize_every::Union{Nothing, Integer}=nothing,
     visualization_mode::Symbol=:cartesian,
+    live_visualization::Union{Nothing, LiveVisualizationConfig}=nothing,
     mesh_build::MeshBuildConfig=MeshBuildConfig(),
     name::AbstractString="run",
 )
@@ -226,7 +232,7 @@ function solve(
         model,
         params;
         u0_override=u0_override,
-        live_visualization=legacy_live_visualization(params; visualize=visualize, visualize_every=visualize_every, visualization_mode=visualization_mode),
+        live_visualization=something(live_visualization, legacy_live_visualization(params; visualize=visualize, visualize_every=visualize_every, visualization_mode=visualization_mode)),
         name=name,
     )
 end
@@ -260,11 +266,11 @@ function solve(
     isnothing(mass) || throw(ArgumentError("mass is not supported for multiband linear solves"))
     chi == 0.0 || throw(ArgumentError("chi is not supported for multiband linear solves"))
 
-    band_specs = BandSpec[coerce_band_spec(band) for band in bands]
+    band_specs = Band[coerce_band(band) for band in bands]
     isempty(band_specs) && throw(ArgumentError("multiband solve requires at least one band"))
     first_band = band_specs[1]
     model = KineticModel2D(
-        Isotropic2DFermiSurface(; vF=first_band.vF, nu=first_band.nu, mass=first_band.mass, charge=first_band.charge),
+        first_band.surface,
         HarmonicBasis(max_harmonic),
         IsotropicHarmonicStreaming(),
         LinearBGKCollision(0.0, TwoRateProfile(0.0));
