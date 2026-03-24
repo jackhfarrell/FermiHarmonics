@@ -76,30 +76,52 @@ end
         end
     end
 
-    if equations.gamma_drag > 0.0 && band_count(equations) == 2 && local_nvars >= 3
-        band1 = equations.bands[1]
-        band2 = equations.bands[2]
-        w1 = band_momentum_weight(band1)
-        w2 = band_momentum_weight(band2)
-        norm_sq = w1^2 + w2^2
-        if norm_sq > 0.0
-            drag_scale = equations.gamma_drag / norm_sq
+    if equations.gamma_drag > 0.0 && band_count(equations) >= 2 && local_nvars >= 3
+        nb = band_count(equations)
+        if nb == 2
+            # Original 2-band formula preserved exactly (normalization: w1²+w2²)
+            band1 = equations.bands[1]
+            band2 = equations.bands[2]
+            w1 = band_momentum_weight(band1)
+            w2 = band_momentum_weight(band2)
+            norm_sq = w1^2 + w2^2
+            if norm_sq > 0.0
+                drag_scale = equations.gamma_drag / norm_sq
 
-            a1_1 = Float64(u[band_global_cosine_index(equations, 1, 1)])
-            a1_2 = Float64(u[band_global_cosine_index(equations, 2, 1)])
-            relative_a1 = w2 * a1_1 - w1 * a1_2
-            drag_a1_1 = -drag_scale * w2 * relative_a1
-            drag_a1_2 = drag_scale * w1 * relative_a1
-            out[band_global_cosine_index(equations, 1, 1)] += drag_a1_1
-            out[band_global_cosine_index(equations, 2, 1)] += drag_a1_2
+                a1_1 = Float64(u[band_global_cosine_index(equations, 1, 1)])
+                a1_2 = Float64(u[band_global_cosine_index(equations, 2, 1)])
+                relative_a1 = w2 * a1_1 - w1 * a1_2
+                drag_a1_1 = -drag_scale * w2 * relative_a1
+                drag_a1_2 = drag_scale * w1 * relative_a1
+                out[band_global_cosine_index(equations, 1, 1)] += drag_a1_1
+                out[band_global_cosine_index(equations, 2, 1)] += drag_a1_2
 
-            b1_1 = Float64(u[band_global_sine_index(equations, 1, 1)])
-            b1_2 = Float64(u[band_global_sine_index(equations, 2, 1)])
-            relative_b1 = w2 * b1_1 - w1 * b1_2
-            drag_b1_1 = -drag_scale * w2 * relative_b1
-            drag_b1_2 = drag_scale * w1 * relative_b1
-            out[band_global_sine_index(equations, 1, 1)] += drag_b1_1
-            out[band_global_sine_index(equations, 2, 1)] += drag_b1_2
+                b1_1 = Float64(u[band_global_sine_index(equations, 1, 1)])
+                b1_2 = Float64(u[band_global_sine_index(equations, 2, 1)])
+                relative_b1 = w2 * b1_1 - w1 * b1_2
+                drag_b1_1 = -drag_scale * w2 * relative_b1
+                drag_b1_2 = drag_scale * w1 * relative_b1
+                out[band_global_sine_index(equations, 1, 1)] += drag_b1_1
+                out[band_global_sine_index(equations, 2, 1)] += drag_b1_2
+            end
+        else
+            # N≥3 bands: mean-field drag — each band's dipole relaxes toward the
+            # momentum-weighted mean velocity. Conserves total weighted momentum.
+            # Note: normalization uses w_total (differs from 2-band formula above).
+            ws = ntuple(i -> band_momentum_weight(equations.bands[i]), nb)
+            w_total = sum(ws)
+            if w_total > 0.0
+                p_mean_x = sum(ws[i] * Float64(u[band_global_cosine_index(equations, i, 1)])
+                               for i in 1:nb) / w_total
+                p_mean_y = sum(ws[i] * Float64(u[band_global_sine_index(equations, i, 1)])
+                               for i in 1:nb) / w_total
+                for i in 1:nb
+                    out[band_global_cosine_index(equations, i, 1)] +=
+                        -equations.gamma_drag * (Float64(u[band_global_cosine_index(equations, i, 1)]) - p_mean_x)
+                    out[band_global_sine_index(equations, i, 1)] +=
+                        -equations.gamma_drag * (Float64(u[band_global_sine_index(equations, i, 1)]) - p_mean_y)
+                end
+            end
         end
     end
 

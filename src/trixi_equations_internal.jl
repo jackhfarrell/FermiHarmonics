@@ -19,7 +19,7 @@ struct FermiHarmonics2D{NVARS, TNonlinear, TModel} <: AbstractFermiTransportEqua
 end
 
 struct MultiBandFermiHarmonics2D{NVARS, TModel} <: AbstractFermiTransportEquations2D{NVARS}
-    bands::Vector{BandSpec}
+    bands::Vector{Band}
     gamma_drag::Float64
     max_harmonic::Int
     max_speed::Float64
@@ -54,14 +54,14 @@ end
 @inline band_global_sine_index(equations::MultiBandFermiHarmonics2D, band_index::Integer, m::Int) =
     band_offset(equations, band_index) + sine_index(m)
 
-function block_streaming_matrices(bands::AbstractVector{BandSpec}, max_harmonic::Int)
+function block_streaming_matrices(bands::AbstractVector{<:Band}, max_harmonic::Int)
     band_size = harmonic_state_nvars(max_harmonic)
     total_nvars = length(bands) * band_size
     Ax = zeros(Float64, total_nvars, total_nvars)
     Ay = zeros(Float64, total_nvars, total_nvars)
 
     @inbounds for (band_index, band) in enumerate(bands)
-        local_Ax, local_Ay = streaming_matrices(max_harmonic, band.vF)
+        local_Ax, local_Ay = streaming_matrices(max_harmonic, band.surface)
         offset = (band_index - 1) * band_size
         Ax[(offset + 1):(offset + band_size), (offset + 1):(offset + band_size)] .= local_Ax
         Ay[(offset + 1):(offset + band_size), (offset + 1):(offset + band_size)] .= local_Ay
@@ -79,7 +79,7 @@ function harmonic_equations(model::KineticModel2D, max_harmonic::Int)
     nvars = harmonic_state_nvars(max_harmonic)
     if !isempty(model.bands)
         Ax, Ay = block_streaming_matrices(model.bands, max_harmonic)
-        max_speed = maximum(band.vF for band in model.bands)
+        max_speed = maximum(surface_max_speed(band.surface) for band in model.bands)
         return MultiBandFermiHarmonics2D{length(model.bands) * nvars, typeof(model)}(
             model.bands,
             model.gamma_drag,
@@ -95,7 +95,7 @@ function harmonic_equations(model::KineticModel2D, max_harmonic::Int)
     end
 
     vF = collision isa QuadraticBGKCollision ? zero_state_speed(collision.mu0, collision.mass) : surface_vF(surface)
-    Ax, Ay = streaming_matrices(max_harmonic, vF)
+    Ax, Ay = collision isa QuadraticBGKCollision ? streaming_matrices(max_harmonic, vF) : streaming_matrices(max_harmonic, surface)
     gamma_mr = collision_gamma_mr(collision)
     gamma_mc = profile_reference_rate(mode_profile(collision))
     gamma3 = mode_profile(collision) isa OddQuarticRateProfile ? mode_profile(collision).gamma3 : gamma_mc

@@ -479,9 +479,9 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
     chi == 0.0 || throw(ArgumentError("chi is not supported for multiband linear solves"))
     collision_model_value = validate_collision_model(transport, collision_model)
 
-    band_specs = BandSpec[]
+    band_specs = Band[]
     for band in bands
-        push!(band_specs, coerce_band_spec(band))
+        push!(band_specs, coerce_band(band))
     end
     isempty(band_specs) && throw(ArgumentError("multiband solve requires at least one band"))
 
@@ -523,7 +523,7 @@ function solve(mesh_path::AbstractString, boundary_conditions::Dict{Symbol, Any}
     )
 
     boundary_types = Dict(key => boundary_condition_name(value) for (key, value) in boundary_conditions)
-    @info "Starting multiband solve" name=name max_harmonic=max_harmonic_resolved harmonic_mode=harmonic_mode gamma_drag=gamma_drag polydeg=params.polydeg cfl=params.cfl residual_tol=params.residual_tol boundaries=boundary_types transport=transport collision_model=collision_model_value bands=map(band -> (name=band.name, vF=band.vF, nu=band.nu, mass=band.mass, charge=band.charge, gamma_mr=band.gamma_mr, gamma_mc=band.gamma_mc), band_specs)
+    @info "Starting multiband solve" name=name max_harmonic=max_harmonic_resolved harmonic_mode=harmonic_mode gamma_drag=gamma_drag polydeg=params.polydeg cfl=params.cfl residual_tol=params.residual_tol boundaries=boundary_types transport=transport collision_model=collision_model_value bands=map(band -> (name=band.name, vF=surface_vF(band.surface), nu=surface_density_of_states(band.surface), mass=surface_mass(band.surface), charge=surface_charge(band.surface), gamma_mr=band.gamma_mr, gamma_mc=band.gamma_mc), band_specs)
     flush(stdout)
     flush(stderr)
 

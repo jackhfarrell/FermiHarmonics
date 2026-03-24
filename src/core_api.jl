@@ -4,51 +4,27 @@ abstract type AbstractStreamingOperator2D end
 abstract type AbstractModeRateProfile end
 abstract type AbstractCollisionModel2D end
 
-struct BandSpec
-    name::Symbol
-    vF::Float64
-    nu::Float64
-    mass::Float64
-    charge::Float64
-    gamma_mr::Float64
-    gamma_mc::Float64
+"""
+    Band{S<:AbstractFermiSurface2D}
+
+Parameters for one carrier species in a multiband linear transport model.
+The surface holds all quasiparticle properties (vF, nu, mass, charge, shape);
+the band adds momentum-relaxing and momentum-conserving scattering rates.
+"""
+struct Band{S<:AbstractFermiSurface2D}
+    name    :: Symbol
+    surface :: S
+    gamma_mr :: Float64
+    gamma_mc :: Float64
 end
 
-@inline coerce_band_spec(band::BandSpec) = band
-@inline coerce_band_spec(band::NamedTuple) = BandSpec(; band...)
-
-function BandSpec(;
-    name,
-    vF::Real,
-    nu::Real,
-    mass::Real,
-    charge::Real,
-    gamma_mr::Real,
-    gamma_mc::Real,
-)
-    vF_value = Float64(vF)
-    nu_value = Float64(nu)
-    mass_value = Float64(mass)
-    charge_value = Float64(charge)
-    gamma_mr_value = Float64(gamma_mr)
-    gamma_mc_value = Float64(gamma_mc)
-
-    vF_value > 0.0 || throw(ArgumentError("band vF must be > 0"))
-    nu_value > 0.0 || throw(ArgumentError("band nu must be > 0"))
-    mass_value > 0.0 || throw(ArgumentError("band mass must be > 0"))
-    gamma_mr_value >= 0.0 || throw(ArgumentError("band gamma_mr must be >= 0"))
-    gamma_mc_value >= 0.0 || throw(ArgumentError("band gamma_mc must be >= 0"))
-
-    return BandSpec(
-        Symbol(name),
-        vF_value,
-        nu_value,
-        mass_value,
-        charge_value,
-        gamma_mr_value,
-        gamma_mc_value,
-    )
+function Band(surface::S; name, gamma_mr::Real, gamma_mc::Real) where {S<:AbstractFermiSurface2D}
+    gamma_mr >= 0 || throw(ArgumentError("gamma_mr must be >= 0"))
+    gamma_mc >= 0 || throw(ArgumentError("gamma_mc must be >= 0"))
+    return Band{S}(Symbol(name), surface, Float64(gamma_mr), Float64(gamma_mc))
 end
+
+@inline coerce_band(band::Band) = band
 
 struct Isotropic2DFermiSurface <: AbstractFermiSurface2D
     name::Symbol
@@ -74,6 +50,101 @@ function Isotropic2DFermiSurface(;
     mass_value > 0.0 || throw(ArgumentError("surface mass must be > 0"))
     return Isotropic2DFermiSurface(Symbol(name), vF_value, nu_value, mass_value, charge_value)
 end
+
+# ------------------------------------------------------------------
+# AbstractFermiSurface2D interface — all subtypes must implement these
+# ------------------------------------------------------------------
+@inline surface_vF(s::Isotropic2DFermiSurface) = s.vF
+@inline surface_max_speed(s::Isotropic2DFermiSurface) = s.vF
+@inline surface_vF_angle(s::Isotropic2DFermiSurface, ::Float64) = s.vF
+@inline surface_density_of_states(s::Isotropic2DFermiSurface) = s.nu
+@inline surface_mass(s::Isotropic2DFermiSurface) = s.mass
+@inline surface_charge(s::Isotropic2DFermiSurface) = s.charge
+
+# ------------------------------------------------------------------
+# EllipticFermiSurface2D — elliptic Fermi surface
+#   vF(θ) = vF0 / sqrt(cos²θ + sin²θ / aspect²)
+#   aspect = b/a ratio; 1.0 → isotropic; <1 → compressed along y
+# ------------------------------------------------------------------
+struct EllipticFermiSurface2D <: AbstractFermiSurface2D
+    name    :: Symbol
+    vF0     :: Float64   # speed at θ=0 (x-axis semi-axis)
+    aspect  :: Float64   # b/a
+    nu      :: Float64
+    mass    :: Float64
+    charge  :: Float64
+    max_vF  :: Float64   # precomputed CFL bound = vF0 * max(1, 1/aspect)
+end
+
+function EllipticFermiSurface2D(;
+    name = :elliptic_2d,
+    vF0::Real,
+    aspect::Real,
+    nu::Real,
+    mass::Real,
+    charge::Real,
+)
+    vF0_v   = Float64(vF0)
+    asp_v   = Float64(aspect)
+    nu_v    = Float64(nu)
+    mass_v  = Float64(mass)
+    vF0_v  > 0.0 || throw(ArgumentError("vF0 must be > 0"))
+    asp_v  > 0.0 || throw(ArgumentError("aspect must be > 0"))
+    nu_v   > 0.0 || throw(ArgumentError("nu must be > 0"))
+    mass_v > 0.0 || throw(ArgumentError("mass must be > 0"))
+    return EllipticFermiSurface2D(
+        Symbol(name), vF0_v, asp_v, nu_v, mass_v, Float64(charge),
+        vF0_v * max(1.0, asp_v),   # max vF at θ=π/2 when aspect>1 (denominator=1/aspect)
+    )
+end
+
+@inline surface_vF(s::EllipticFermiSurface2D)          = s.vF0
+@inline surface_max_speed(s::EllipticFermiSurface2D)    = s.max_vF
+@inline surface_vF_angle(s::EllipticFermiSurface2D, θ::Float64) =
+    s.vF0 / hypot(cos(θ), sin(θ) / s.aspect)
+@inline surface_density_of_states(s::EllipticFermiSurface2D) = s.nu
+@inline surface_mass(s::EllipticFermiSurface2D)         = s.mass
+@inline surface_charge(s::EllipticFermiSurface2D)       = s.charge
+
+# ------------------------------------------------------------------
+# GeneralFermiSurface2D{F} — user-supplied vF(θ) function
+#   max_vF is required (upper bound on |vF(θ)| for CFL)
+# ------------------------------------------------------------------
+struct GeneralFermiSurface2D{F} <: AbstractFermiSurface2D
+    name    :: Symbol
+    vF_func :: F         # vF_func(θ::Float64)::Float64
+    max_vF  :: Float64   # user-supplied CFL bound
+    nu      :: Float64
+    mass    :: Float64
+    charge  :: Float64
+end
+
+function GeneralFermiSurface2D(
+    vF_func;
+    name = :general_2d,
+    max_vF::Real,
+    nu::Real,
+    mass::Real,
+    charge::Real,
+)
+    max_vF_v = Float64(max_vF)
+    nu_v     = Float64(nu)
+    mass_v   = Float64(mass)
+    max_vF_v > 0.0 || throw(ArgumentError("max_vF must be > 0"))
+    nu_v     > 0.0 || throw(ArgumentError("nu must be > 0"))
+    mass_v   > 0.0 || throw(ArgumentError("mass must be > 0"))
+    return GeneralFermiSurface2D{typeof(vF_func)}(
+        Symbol(name), vF_func, max_vF_v, nu_v, mass_v, Float64(charge),
+    )
+end
+
+# surface_vF returns the CFL-relevant maximum for a general surface
+@inline surface_vF(s::GeneralFermiSurface2D)          = s.max_vF
+@inline surface_max_speed(s::GeneralFermiSurface2D)   = s.max_vF
+@inline surface_vF_angle(s::GeneralFermiSurface2D, θ::Float64) = Float64(s.vF_func(θ))
+@inline surface_density_of_states(s::GeneralFermiSurface2D) = s.nu
+@inline surface_mass(s::GeneralFermiSurface2D)        = s.mass
+@inline surface_charge(s::GeneralFermiSurface2D)      = s.charge
 
 struct HarmonicBasis <: AbstractAngularDiscretization2D
     max_harmonic::Union{Int, Symbol, Nothing}
@@ -260,13 +331,13 @@ Base.@kwdef struct KineticModel2D{
     TD<:AbstractAngularDiscretization2D,
     TStream<:AbstractStreamingOperator2D,
     TCollision<:AbstractCollisionModel2D,
-    TBands<:AbstractVector{BandSpec},
+    TBands<:AbstractVector{<:Band},
 }
     surface::TS
     discretization::TD
     streaming::TStream
     collision::TCollision
-    bands::TBands = BandSpec[]
+    bands::TBands = Band[]
     gamma_drag::Float64 = 0.0
     reference = nothing
 end
@@ -276,11 +347,11 @@ function KineticModel2D(
     discretization::AbstractAngularDiscretization2D,
     streaming::AbstractStreamingOperator2D,
     collision::AbstractCollisionModel2D;
-    bands=BandSpec[],
+    bands=Band[],
     gamma_drag::Real=0.0,
     reference=nothing,
 )
-    band_specs = BandSpec[coerce_band_spec(band) for band in bands]
+    band_specs = Band[coerce_band(band) for band in bands]
     gamma_drag_value = Float64(gamma_drag)
     gamma_drag_value >= 0.0 || throw(ArgumentError("gamma_drag must be >= 0"))
 
@@ -303,10 +374,9 @@ function KineticModel2D(
             throw(ArgumentError("multiband support currently requires LinearBGKCollision"))
         discretization isa HarmonicBasis ||
             throw(ArgumentError("multiband support currently requires HarmonicBasis"))
-        length(unique(getfield.(band_specs, :name))) == length(band_specs) ||
+        length(unique(b.name for b in band_specs)) == length(band_specs) ||
             throw(ArgumentError("band names must be unique"))
-        length(band_specs) == 2 ||
-            throw(ArgumentError("v1 multiband support requires exactly 2 bands"))
+        # No N-band limit — drag coupling supported for N=2; N≥3 uses mean-field formula
     end
 
     return KineticModel2D(
@@ -787,7 +857,8 @@ boundary_condition_name(::OhmicContactBC) = :ohmic_contact
 @inline collision_symbol(::TwoRateAngleBGKCollision) = :two_rate_bgk
 
 @inline harmonic_state_nvars(max_harmonic::Integer) = 1 + 2 * Int(max_harmonic)
-@inline band_momentum_weight(band::BandSpec) = band.nu * band.mass * band.vF
+@inline band_momentum_weight(band::Band) =
+    surface_density_of_states(band.surface) * surface_mass(band.surface) * surface_vF(band.surface)
 @inline mode_profile(collision::Union{LinearBGKCollision, QuadraticBGKCollision}) = collision.profile
 @inline collision_gamma_mr(collision::Union{LinearBGKCollision, QuadraticBGKCollision, ExactAngleBGKCollision, TwoRateAngleBGKCollision}) = collision.gamma_mr
 @inline collision_gamma_mc(collision::Union{ExactAngleBGKCollision, TwoRateAngleBGKCollision}) = collision.gamma_mc
@@ -795,10 +866,6 @@ boundary_condition_name(::OhmicContactBC) = :ohmic_contact
 @inline collision_mass(collision::Union{QuadraticBGKCollision, ExactAngleBGKCollision, TwoRateAngleBGKCollision}) = collision.mass
 @inline collision_electrostatic_coupling(collision::Union{QuadraticBGKCollision, ExactAngleBGKCollision, TwoRateAngleBGKCollision}) = collision.electrostatic_coupling
 @inline collision_theta_oversample(collision::QuadraticBGKCollision) = collision.theta_oversample
-@inline surface_vF(surface::Isotropic2DFermiSurface) = surface.vF
-@inline surface_mass(surface::Isotropic2DFermiSurface) = surface.mass
-@inline surface_charge(surface::Isotropic2DFermiSurface) = surface.charge
-@inline surface_density_of_states(surface::Isotropic2DFermiSurface) = surface.nu
 @inline profile_reference_rate(profile::AbstractModeRateProfile) = mode_rate(profile, 2)
 
 @inline zero_state_speed(mu0::Real, mass::Real) = sqrt(2.0 * Float64(mu0) / Float64(mass))
@@ -927,6 +994,76 @@ function streaming_matrices(M::Int, vF::Float64=1.0)
         m + 1 <= M && (Ay[sine_index(m), cosine_index(m + 1)] = -0.5 * vF)
     end
 
+    return Ax, Ay
+end
+
+# ------------------------------------------------------------------
+# Surface-dispatch overloads for streaming_matrices
+# ------------------------------------------------------------------
+
+# Isotropic: delegate to the analytic tridiagonal formula above
+@inline streaming_matrices(M::Int, s::Isotropic2DFermiSurface) = streaming_matrices(M, s.vF)
+
+# Elliptic / General: numerical quadrature via surface_vF_angle
+streaming_matrices(M::Int, s::EllipticFermiSurface2D) =
+    _anisotropic_streaming_matrices(M, θ -> surface_vF_angle(s, θ))
+
+streaming_matrices(M::Int, s::GeneralFermiSurface2D) =
+    _anisotropic_streaming_matrices(M, θ -> surface_vF_angle(s, θ))
+
+# Generic fallback for any future AbstractFermiSurface2D subtype implementing surface_vF_angle
+streaming_matrices(M::Int, s::AbstractFermiSurface2D) =
+    _anisotropic_streaming_matrices(M, θ -> surface_vF_angle(s, θ))
+
+"""
+    _anisotropic_streaming_matrices(M, vF_func)
+
+Compute the harmonic-basis streaming matrices Ax and Ay for an anisotropic Fermi surface
+by numerical quadrature of `vF_func(θ)`.
+
+Normalization convention matches `streaming_matrices(M, vF::Float64)`:
+  - Basis: φ₁=1, φ_{cosine_index(m)}=cos(mθ), φ_{sine_index(m)}=sin(mθ)  (unnormalized)
+  - Weight: 1/π
+For constant vF, the result is identical to the analytic tridiagonal formula.
+"""
+function _anisotropic_streaming_matrices(M::Int, vF_func)
+    n = 1 + 2M
+    N_quad = max(4n, 128)
+    θ    = range(0.0, 2π; length = N_quad + 1)[1:N_quad]
+    dθ   = 2π / N_quad
+    vF_v = vF_func.(θ)
+
+    # Projection weights (row basis): χ[1]=1, χ[j≥2]=cos(mθ) or sin(mθ)
+    # Physical column basis (encoding f = a₀ + 2Σ(aₘcos+bₘsin)):
+    #   Φ_phys[1]=1, Φ_phys[j≥2]=2cos(mθ) or 2sin(mθ)
+    # Streaming matrix: Ax[i,j] = (1/2π) ∫ vF(θ) cos(θ) χᵢ(θ) Φ_phys,j(θ) dθ
+    # This gives the asymmetric (monopole, dipole) coupling Ax[1,2]=vF, Ax[2,1]=vF/2
+    # matching streaming_matrices(M, vF::Float64) exactly.
+    χ     = zeros(N_quad, n)   # row (test) basis: 1, cos, sin, cos2, sin2, ...
+    Φphys = zeros(N_quad, n)   # column (physical) basis: 1, 2cos, 2sin, 2cos2, ...
+    χ[:, 1] .= 1.0
+    Φphys[:, 1] .= 1.0
+    for m in 1:M
+        χ[:, cosine_index(m)]     .=  cos.(m .* θ)
+        χ[:, sine_index(m)]       .=  sin.(m .* θ)
+        Φphys[:, cosine_index(m)] .= 2 .* cos.(m .* θ)
+        Φphys[:, sine_index(m)]   .= 2 .* sin.(m .* θ)
+    end
+    cos_θ = cos.(θ)
+    sin_θ = sin.(θ)
+    Ax = zeros(n, n)
+    Ay = zeros(n, n)
+    @inbounds for j in 1:n, i in 1:n
+        ax = 0.0
+        ay = 0.0
+        for k in 1:N_quad
+            c = vF_v[k] * χ[k, i] * Φphys[k, j]
+            ax += c * cos_θ[k]
+            ay += c * sin_θ[k]
+        end
+        Ax[i, j] = ax * dθ / (2π)
+        Ay[i, j] = ay * dθ / (2π)
+    end
     return Ax, Ay
 end
 

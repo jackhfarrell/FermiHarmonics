@@ -31,24 +31,10 @@ end
 
 @testset "Core Multiband Bookkeeping" begin
     bands = [
-        BandSpec(
-            name=:light,
-            vF=1.0,
-            nu=1.5,
-            mass=1.0,
-            charge=-1.0,
-            gamma_mr=0.0,
-            gamma_mc=0.2,
-        ),
-        BandSpec(
-            name=:heavy,
-            vF=0.8,
-            nu=2.0,
-            mass=3.0,
-            charge=1.0,
-            gamma_mr=0.1,
-            gamma_mc=0.4,
-        ),
+        Band(Isotropic2DFermiSurface(; vF=1.0, nu=1.5, mass=1.0, charge=-1.0);
+             name=:light, gamma_mr=0.0, gamma_mc=0.2),
+        Band(Isotropic2DFermiSurface(; vF=0.8, nu=2.0, mass=3.0, charge=1.0);
+             name=:heavy, gamma_mr=0.1, gamma_mc=0.4),
     ]
     model = KineticModel2D(
         Isotropic2DFermiSurface(),
@@ -63,6 +49,69 @@ end
     @test band_momentum_weight(model.bands[1]) ≈ 1.5
     @test band_momentum_weight(model.bands[2]) ≈ 4.8
     @test model.gamma_drag ≈ 0.7
+end
+
+@testset "Surface Interface and New Surface Types" begin
+    # Isotropic surface interface
+    s_iso = Isotropic2DFermiSurface(; vF=1.2, nu=1.5, mass=2.0, charge=-1.0)
+    @test surface_vF(s_iso) ≈ 1.2
+    @test surface_max_speed(s_iso) ≈ 1.2
+    @test surface_vF_angle(s_iso, 0.0) ≈ 1.2
+    @test surface_density_of_states(s_iso) ≈ 1.5
+    @test surface_mass(s_iso) ≈ 2.0
+    @test surface_charge(s_iso) ≈ -1.0
+
+    # Elliptic surface — isotropic limit matches scalar streaming_matrices
+    s_ell = EllipticFermiSurface2D(; vF0=1.0, aspect=1.0, nu=1.0, mass=1.0, charge=-1.0)
+    s_ref = Isotropic2DFermiSurface(; vF=1.0, nu=1.0, mass=1.0, charge=-1.0)
+    for M in 1:3
+        Ax_e, Ay_e = streaming_matrices(M, s_ell)
+        Ax_r, Ay_r = streaming_matrices(M, s_ref)
+        @test Ax_e ≈ Ax_r atol=1e-10
+        @test Ay_e ≈ Ay_r atol=1e-10
+    end
+    # vF(θ) = vF0/hypot(cos θ, sin θ/aspect)
+    # aspect>1: max vF = vF0*aspect (at θ=π/2, hypot=1/aspect); aspect<1: max = vF0 (at θ=0)
+    s_aniso = EllipticFermiSurface2D(; vF0=1.0, aspect=2.0, nu=1.0, mass=1.0, charge=-1.0)
+    @test surface_max_speed(s_aniso) ≈ 2.0        # vF0*aspect = 2.0
+    @test surface_vF_angle(s_aniso, 0.0) ≈ 1.0   # θ=0: hypot(1,0)=1
+    @test surface_vF_angle(s_aniso, π/2) ≈ 2.0   # θ=π/2: hypot(0,0.5)=0.5 → vF=1/0.5=2
+
+    # GeneralFermiSurface2D with constant vF matches scalar formula
+    s_gen = GeneralFermiSurface2D(θ -> 1.3; max_vF=1.3, nu=1.0, mass=1.0, charge=-1.0)
+    for M in 1:2
+        Ax_g, Ay_g = streaming_matrices(M, s_gen)
+        Ax_r, Ay_r = streaming_matrices(M, 1.3)
+        @test Ax_g ≈ Ax_r atol=1e-8
+        @test Ay_g ≈ Ay_r atol=1e-8
+    end
+end
+
+@testset "Band with EllipticFermiSurface2D" begin
+    s = EllipticFermiSurface2D(; vF0=1.0, aspect=2.0, nu=1.5, mass=1.0, charge=-1.0)
+    b = Band(s; name=:electron, gamma_mr=0.1, gamma_mc=0.2)
+    @test b.surface === s
+    @test surface_vF(b.surface) ≈ 1.0
+    @test surface_max_speed(b.surface) ≈ 2.0     # vF0 * aspect = 2.0
+    @test surface_density_of_states(b.surface) ≈ 1.5
+    @test band_momentum_weight(b) ≈ 1.5 * 1.0 * 1.0
+end
+
+@testset "3-band linear model" begin
+    bands = [
+        Band(Isotropic2DFermiSurface(; vF=1.0, nu=1.0, mass=1.0, charge=-1.0); name=:a, gamma_mr=0.1, gamma_mc=0.2),
+        Band(Isotropic2DFermiSurface(; vF=0.8, nu=1.2, mass=1.5, charge=-1.0); name=:b, gamma_mr=0.1, gamma_mc=0.3),
+        Band(Isotropic2DFermiSurface(; vF=0.6, nu=0.9, mass=2.0, charge=-1.0); name=:c, gamma_mr=0.05, gamma_mc=0.1),
+    ]
+    model = KineticModel2D(
+        Isotropic2DFermiSurface(),
+        HarmonicBasis(2),
+        IsotropicHarmonicStreaming(),
+        LinearBGKCollision(0.0, TwoRateProfile(0.0));
+        bands=bands,
+        gamma_drag=0.0,
+    )
+    @test length(model.bands) == 3
 end
 
 using Trixi
@@ -394,8 +443,8 @@ end
         max_harmonic_auto=4,
     )
     bands = [
-        BandSpec(name=:light, vF=1.0, nu=1.5, mass=1.0, charge=-1.0, gamma_mr=0.0, gamma_mc=0.2),
-        BandSpec(name=:heavy, vF=0.8, nu=2.0, mass=3.0, charge=1.0, gamma_mr=0.1, gamma_mc=0.4),
+        Band(Isotropic2DFermiSurface(; vF=1.0, nu=1.5, mass=1.0, charge=-1.0); name=:light, gamma_mr=0.0, gamma_mc=0.2),
+        Band(Isotropic2DFermiSurface(; vF=0.8, nu=2.0, mass=3.0, charge=1.0); name=:heavy, gamma_mr=0.1, gamma_mc=0.4),
     ]
     model = KineticModel2D(
         Isotropic2DFermiSurface(),

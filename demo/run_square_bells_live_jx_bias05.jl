@@ -41,9 +41,9 @@ function main()
         mass               = mass,
         chi                = chi,
         visualize     = true,
-        viz_field     = :a1,
+        viz_field     = :jx,
         viz_colormap  = :RdBu,
-        name               = "square_bells_a1_bias05",
+        name               = "square_bells_jx_bias05",
     )
 
     return nothing
