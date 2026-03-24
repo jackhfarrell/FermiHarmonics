@@ -1,5 +1,6 @@
 Base.@kwdef struct LiveVisualizationConfig
     field::Union{Nothing, Symbol} = nothing
+    colormap::Symbol = :magma
     geometry_mode::Symbol = :mesh_native
     nvisnodes::Int = 120
     refine::Int = 4

@@ -82,7 +82,7 @@ function create_live_dashboard(config::LiveVisualizationConfig, snapshot::LiveVi
             snapshot.field.x,
             snapshot.field.y,
             field_values;
-            colormap=:magma,
+            colormap=config.colormap,
             colorrange=colorrange,
         )
     else
@@ -90,7 +90,7 @@ function create_live_dashboard(config::LiveVisualizationConfig, snapshot::LiveVi
             axis,
             mesh_native_geometry(snapshot);
             color=field_values,
-            colormap=:magma,
+            colormap=config.colormap,
             colorrange=colorrange,
             shading=GLMakie.NoShading,
         )
