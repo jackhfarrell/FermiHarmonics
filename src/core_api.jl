@@ -397,6 +397,7 @@ Base.@kwdef struct SolverConfig
     polydeg::Int = 3
     tspan_end::Float64 = 100.0
     residual_tol::Float64 = 1e-5
+    residual_reltol::Float64 = 0.0
     cfl::Float64 = 0.8
     log_every::Int = 500
 end
@@ -408,7 +409,10 @@ function validate(config::SolverConfig)
         throw(ArgumentError("config.max_harmonic_auto must be >= config.min_harmonic"))
     config.polydeg >= 1 || throw(ArgumentError("config.polydeg must be >= 1"))
     config.tspan_end > 0 || throw(ArgumentError("config.tspan_end must be > 0"))
-    config.residual_tol > 0 || throw(ArgumentError("config.residual_tol must be > 0"))
+    config.residual_tol >= 0 || throw(ArgumentError("config.residual_tol must be >= 0"))
+    config.residual_reltol >= 0 || throw(ArgumentError("config.residual_reltol must be >= 0"))
+    config.residual_tol + config.residual_reltol > 0 ||
+        throw(ArgumentError("at least one of residual_tol or residual_reltol must be > 0"))
     config.cfl > 0 || throw(ArgumentError("config.cfl must be > 0"))
     config.log_every >= 1 || throw(ArgumentError("config.log_every must be >= 1"))
     return config

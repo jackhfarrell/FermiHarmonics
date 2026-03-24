@@ -83,7 +83,7 @@ function solve(
     initialize_live_dashboard!(monitor_state, ode.u0, semi, config, name)
 
     stepsize_callback = Trixi.StepsizeCallback(cfl=config.cfl)
-    steady_state_callback = Trixi.SteadyStateCallback(abstol=config.residual_tol, reltol=0.0)
+    steady_state_callback = Trixi.SteadyStateCallback(abstol=config.residual_tol, reltol=config.residual_reltol)
     monitor = solve_monitor_callback(config, semi, monitor_state)
 
     callbacks = Any[stepsize_callback, steady_state_callback, monitor]
@@ -113,10 +113,13 @@ function solve_status(sol, semi, config::SolverConfig; time_atol::Real=1e-10, st
     sol.prob.f(final_u_ode, sol.u[end], sol.prob.p, sol.t[end])
     final_du = Trixi.wrap_array(final_u_ode, semi)
     final_residual = Trixi.residual_steady_state(final_du, semi.equations)
-    converged = final_residual <= config.residual_tol
+    retcode = hasproperty(sol, :retcode) ? getproperty(sol, :retcode) : nothing
+    # Converged if abs tol satisfied, or if the SteadyStateCallback fired (covers reltol).
+    converged_abs      = final_residual <= config.residual_tol
+    converged_callback = !isnothing(retcode) && retcode == SciMLBase.ReturnCode.Terminated
+    converged          = converged_abs || converged_callback
     hit_final_time = isapprox(sol.t[end], config.tspan_end; atol=time_atol, rtol=0.0)
     stop_reason = isnothing(stop_reason_override) ? (converged ? :steady_state : (hit_final_time ? :final_time : :other)) : stop_reason_override
-    retcode = hasproperty(sol, :retcode) ? getproperty(sol, :retcode) : nothing
     successful = isnothing(retcode) ? true : SciMLBase.successful_retcode(retcode)
     return (
         stop_reason=stop_reason,
