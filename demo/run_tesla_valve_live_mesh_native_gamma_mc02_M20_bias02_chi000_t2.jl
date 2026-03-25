@@ -1,3 +1,4 @@
+using GLMakie
 using ElectronKinetics, Trixi
 
 function main()
@@ -15,8 +16,8 @@ function main()
     mass = reference.mass
     gamma_mr = reference.gamma_mr
     gamma_mc = 0.2
-    bias = 0.2
-    chi = 0.0
+    bias = 0.5
+    chi = 10.0
     max_harmonic = 20
     p_scatter = reference.p_scatter
 
@@ -36,7 +37,7 @@ function main()
         max_harmonic_auto=20,
     )
 
-    run_name = "tesla_valve_live_mesh_native_gamma_mc02_M20_bias02_chi000_poly3_t2"
+    run_name = "tesla_valve_live_mesh_native_gamma_mc02_M20_bias05_chi10_poly3_t2"
 
     @info "Running Tesla valve nonlinear live mesh-native case" mu0 mass gamma_mr gamma_mc bias chi max_harmonic polydeg=params.polydeg tspan_end=params.tspan_end residual_tol=params.residual_tol
 

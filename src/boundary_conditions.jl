@@ -272,7 +272,7 @@ function nonlinear_boundary_samples!(
         end
     end
 
-    apply_sample_to_harmonics_transform!(cache.real_scratch, cache.work_samples, face_data)
+    samples_to_harmonics!(cache.real_scratch, cache.work_samples, equations)
     @inbounds for i in eachindex(out)
         out[i] += cache.real_scratch[i]
     end
@@ -305,7 +305,7 @@ function nonlinear_boundary_flux!(
         )
     end
 
-    return apply_sample_to_harmonics_transform!(out_flux, cache.scratch_samples, face_data)
+    return samples_to_harmonics!(out_flux, cache.scratch_samples, equations)
 end
 
 function nonlinear_maxwell_wall!(
@@ -401,6 +401,96 @@ function nonlinear_ohmic_incoming_value(
     return (electrochemical_bias - equations.electrostatic_coupling * phi0_base) / denominator
 end
 
+@inline nonlinear_bc_scalar_weight(equations::FermiHarmonics2D) = 2.0 * pi / nonlinear_data(equations).theta_count
+@inline nonlinear_bc_scalar_weight(equations::FermiAngles2D) = nonlinear_data(equations).weight
+@inline nonlinear_flux_transform(phi::Real, equations::FermiHarmonics2D) = quadratic_shifted_flux(phi, equations)
+@inline nonlinear_flux_transform(phi::Real, equations::FermiAngles2D) = parabolic_shifted_flux(phi, equations)
+@inline nonlinear_current_min_incoming(::FermiHarmonics2D) = -Inf
+@inline nonlinear_current_min_incoming(equations::FermiAngles2D) = -equations.mu0 + 1.0e-12
+
+function nonlinear_outward_scalar_flux(
+    state_samples,
+    face_data::NonlinearBoundaryFaceData,
+    incoming_value::Float64,
+    specular_weight::Float64,
+    equations::Union{FermiHarmonics2D, FermiAngles2D},
+)
+    diffuse_weight = 1.0 - specular_weight
+    scalar_flux = 0.0
+    @inbounds for j in eachindex(state_samples)
+        phi_trace = real(state_samples[j])
+        if face_data.incoming_mask[j]
+            specular_value = specular_weight > 0.0 ? real(apply_specular_stencil(state_samples, face_data, j)) : 0.0
+            phi_trace = diffuse_weight * incoming_value + specular_weight * specular_value
+        end
+        scalar_flux += face_data.projections[j] * nonlinear_flux_transform(phi_trace, equations)
+    end
+    return scalar_flux * nonlinear_bc_scalar_weight(equations)
+end
+
+function nonlinear_current_incoming_value(
+    state_samples,
+    face_data::NonlinearBoundaryFaceData,
+    p_ohmic_absorb::Real,
+    target_outward_flux::Real,
+    equations::Union{FermiHarmonics2D, FermiAngles2D},
+)
+    specular_weight = 1.0 - Float64(p_ohmic_absorb)
+    target = Float64(target_outward_flux)
+    base_guess = sum(real, state_samples) / length(state_samples)
+    lower_bound = nonlinear_current_min_incoming(equations)
+    if base_guess <= lower_bound
+        base_guess = lower_bound + 1.0e-9
+    end
+
+    width = max(1.0e-6, abs(base_guess), abs(target), 0.1)
+    a = max(base_guess - width, lower_bound)
+    b = base_guess + width
+    if a == b
+        b = a + width
+    end
+
+    fa = nonlinear_outward_scalar_flux(state_samples, face_data, a, specular_weight, equations) - target
+    fb = nonlinear_outward_scalar_flux(state_samples, face_data, b, specular_weight, equations) - target
+    bracketed = signbit(fa) != signbit(fb)
+
+    for _ in 1:24
+        bracketed && break
+        width *= 2.0
+        a = max(base_guess - width, lower_bound)
+        b = base_guess + width
+        a == b && (b = a + width)
+        fa = nonlinear_outward_scalar_flux(state_samples, face_data, a, specular_weight, equations) - target
+        fb = nonlinear_outward_scalar_flux(state_samples, face_data, b, specular_weight, equations) - target
+        bracketed = signbit(fa) != signbit(fb)
+    end
+
+    if !bracketed
+        return abs(fa) <= abs(fb) ? a : b
+    end
+
+    left = a
+    right = b
+    f_left = fa
+    f_right = fb
+    for _ in 1:60
+        mid = 0.5 * (left + right)
+        f_mid = nonlinear_outward_scalar_flux(state_samples, face_data, mid, specular_weight, equations) - target
+        abs(f_mid) <= 1.0e-10 && return mid
+        if signbit(f_left) == signbit(f_mid)
+            left = mid
+            f_left = f_mid
+        else
+            right = mid
+            f_right = f_mid
+        end
+        if abs(right - left) <= 1.0e-10 * max(1.0, abs(mid))
+            return 0.5 * (left + right)
+        end
+    end
+    return 0.5 * (left + right)
+end
+
 function nonlinear_ohmic_incoming_value(
     state::AbstractVector{Float64},
     unit_normal::SVector{2, Float64},
@@ -458,6 +548,39 @@ function nonlinear_ohmic_contact!(
         record_nonlinear_timing!(:boundary, time_ns() - t0)
     end
     return result
+end
+
+function nonlinear_current_contact!(
+    out::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    unit_normal::SVector{2, Float64},
+    normal::SVector{2, Float64},
+    p_ohmic_absorb::Real,
+    target_outward_flux::Real,
+    target::AbstractVector{Float64},
+    equations::FermiHarmonics2D,
+    tol::Float64,
+    face_data::Union{Nothing, NonlinearBoundaryFaceData} = nothing,
+)
+    cache = get_nonlinear_cache(equations)
+    harmonic_state_to_samples!(cache.samples, state, equations)
+    local_face_data = isnothing(face_data) ? build_nonlinear_face_data(equations, unit_normal, tol) : face_data
+    incoming_value = nonlinear_current_incoming_value(
+        cache.samples,
+        local_face_data,
+        p_ohmic_absorb,
+        target_outward_flux,
+        equations,
+    )
+    return nonlinear_boundary_samples!(
+        out,
+        state,
+        cache.samples,
+        local_face_data,
+        incoming_value,
+        1.0 - Float64(p_ohmic_absorb),
+        equations,
+    )
 end
 
 function nonlinear_ohmic_contact_flux!(
@@ -530,11 +653,6 @@ function build_nonlinear_face_data(
     alpha = atan(unit_normal[2], unit_normal[1])
     dtheta = 2.0 * pi / theta_count
     incoming_weight = 0.0
-    nvars = length(get_nonlinear_cache(equations).real_work)
-    max_harmonic = (nvars - 1) ÷ 2
-    sample_to_harmonics = Matrix{Float64}(undef, nvars, theta_count)
-    inv_theta_count = 1.0 / theta_count
-
     @inbounds for j in 1:theta_count
         projection = unit_normal[1] * data.cos_theta[j] + unit_normal[2] * data.sin_theta[j]
         projections[j] = projection
@@ -546,11 +664,6 @@ function build_nonlinear_face_data(
         indices, weights = cubic_periodic_stencil(theta_ref, theta_count, dtheta)
         stencil_indices[:, j] .= indices
         stencil_weights[:, j] .= weights
-        sample_to_harmonics[1, j] = 2.0 * inv_theta_count
-        for m in 1:max_harmonic
-            sample_to_harmonics[cosine_index(m), j] = 2.0 * inv_theta_count * cos(m * data.theta[j])
-            sample_to_harmonics[sine_index(m), j] = 2.0 * inv_theta_count * sin(m * data.theta[j])
-        end
     end
 
     return NonlinearBoundaryFaceData(
@@ -560,7 +673,7 @@ function build_nonlinear_face_data(
         stencil_weights,
         projections,
         incoming_weight * dtheta,
-        sample_to_harmonics,
+        nothing,
     )
 end
 
@@ -762,6 +875,36 @@ function nonlinear_ohmic_contact!(
     )
 end
 
+function nonlinear_current_contact!(
+    out::AbstractVector{Float64},
+    state::AbstractVector{Float64},
+    unit_normal::SVector{2, Float64},
+    normal::SVector{2, Float64},
+    p_ohmic_absorb::Real,
+    target_outward_flux::Real,
+    target::AbstractVector{Float64},
+    equations::FermiAngles2D,
+    tol::Float64,
+    face_data::Union{Nothing, NonlinearBoundaryFaceData} = nothing,
+)
+    local_face_data = isnothing(face_data) ? build_nonlinear_face_data(equations, unit_normal, tol) : face_data
+    incoming_value = nonlinear_current_incoming_value(
+        state,
+        local_face_data,
+        p_ohmic_absorb,
+        target_outward_flux,
+        equations,
+    )
+    return nonlinear_boundary_samples!(
+        out,
+        state,
+        local_face_data,
+        incoming_value,
+        1.0 - Float64(p_ohmic_absorb),
+        equations,
+    )
+end
+
 @inline function (bc::MaxwellWallBC)(
     flux_inner,
     u_inner,
@@ -843,6 +986,71 @@ end
         max(bc.tol, 1.0e-12),
     )
     return out
+end
+
+@inline function (bc::CurrentContactBC)(
+    flux_inner,
+    u_inner,
+    normal_direction::AbstractVector,
+    x,
+    t,
+    operator_type::Trixi.Gradient,
+    equations_parabolic::ElectrostaticGradientEquation2D,
+)
+    equations = equations_parabolic.equations_hyperbolic
+    state = ensure_bc_state_vector(u_inner, bc.cache)
+    out = get_bc_thread_buffer!(bc.cache.out_buffers, length(state))
+    target = get_bc_thread_buffer!(bc.cache.target_buffers, length(state))
+    normal = SVector(Float64(normal_direction[1]), Float64(normal_direction[2]))
+    unit_n = unit_normal(normal)
+    nonlinear_current_contact!(
+        out,
+        state,
+        unit_n,
+        normal,
+        bc.p_ohmic_absorb,
+        bc.target_outward_flux,
+        target,
+        equations,
+        max(bc.tol, 1.0e-12),
+    )
+    return out
+end
+
+@inline function (bc::CurrentContactBC)(
+    flux_inner,
+    u_inner,
+    normal_direction::AbstractVector,
+    x,
+    t,
+    operator_type::Trixi.Divergence,
+    equations_parabolic::ElectrostaticGradientEquation2D,
+)
+    return flux_inner
+end
+
+@inline function (bc::CurrentContactBC)(
+    flux_inner,
+    u_inner,
+    normal_direction::AbstractVector,
+    x,
+    t,
+    operator_type::Trixi.Gradient,
+    equations_parabolic::MeanModeGradientEquation2D,
+)
+    return u_inner
+end
+
+@inline function (bc::CurrentContactBC)(
+    flux_inner,
+    u_inner,
+    normal_direction::AbstractVector,
+    x,
+    t,
+    operator_type::Trixi.Divergence,
+    equations_parabolic::MeanModeGradientEquation2D,
+)
+    return flux_inner
 end
 
 @inline function (bc::OhmicContactBC)(

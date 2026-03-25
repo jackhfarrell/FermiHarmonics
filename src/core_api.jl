@@ -845,9 +845,20 @@ end
 OhmicContactBC(bias::Real; p_ohmic_absorb::Real=1.0, tol::Real=0.0) =
     OhmicContactBC(Float64(p_ohmic_absorb), Float64(bias), Float64(tol), BCProjectorCache())
 
+mutable struct CurrentContactBC
+    p_ohmic_absorb::Float64
+    target_outward_flux::Float64
+    tol::Float64
+    cache::BCProjectorCache
+end
+
+CurrentContactBC(target_outward_flux::Real; p_ohmic_absorb::Real=1.0, tol::Real=0.0) =
+    CurrentContactBC(Float64(p_ohmic_absorb), Float64(target_outward_flux), Float64(tol), BCProjectorCache())
+
 boundary_condition_name(bc) = nameof(typeof(bc))
 boundary_condition_name(::MaxwellWallBC) = :maxwell_wall
 boundary_condition_name(::OhmicContactBC) = :ohmic_contact
+boundary_condition_name(::CurrentContactBC) = :current_contact
 
 @inline transport_symbol(::LinearBGKCollision) = :linear
 @inline transport_symbol(::QuadraticBGKCollision) = :parabolic_nonlinear

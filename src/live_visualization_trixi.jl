@@ -7,6 +7,58 @@ mutable struct SolveMonitorState
     window_closed::Bool
 end
 
+@inline function has_current_contact_boundary(semi)
+    for bc in semi.boundary_conditions.boundary_condition_types
+        if bc isa CurrentContactBC
+            return true
+        end
+    end
+    return false
+end
+
+function current_contact_target_summary(semi)
+    targets = Float64[]
+    for bc in semi.boundary_conditions.boundary_condition_types
+        if bc isa CurrentContactBC
+            push!(targets, bc.target_outward_flux)
+        end
+    end
+    isempty(targets) && return nothing
+    return (
+        sum = sum(targets),
+        abs_sum = sum(abs, targets),
+        max_abs = maximum(abs, targets),
+        count = length(targets),
+    )
+end
+
+function trapz_line(x_values::AbstractVector{<:Real}, y_values::AbstractVector{<:Real})
+    length(x_values) == length(y_values) || return 0.0
+    length(x_values) >= 2 || return 0.0
+    total = 0.0
+    @inbounds for i in 1:(length(x_values) - 1)
+        total += 0.5 * (Float64(x_values[i + 1]) - Float64(x_values[i])) *
+                 (Float64(y_values[i + 1]) + Float64(y_values[i]))
+    end
+    return total
+end
+
+function measure_midline_jy(solution_vector, semi; target_y::Float64=0.0, nvisnodes::Int=181)
+    grids = compute_analysis_grids(solution_vector, semi; nvisnodes=nvisnodes, log=false)
+    y_index = argmin(abs.(grids.y .- target_y))
+    line_mask = vec(grids.mask[:, y_index])
+    x_line = collect(grids.x[line_mask])
+    jy_line = collect(grids.jy[line_mask, y_index])
+    length(x_line) >= 2 || return (average=0.0, integrated=0.0, y=Float64(grids.y[y_index]), points=length(x_line))
+    order = sortperm(x_line)
+    x_sorted = x_line[order]
+    jy_sorted = jy_line[order]
+    integrated = trapz_line(x_sorted, jy_sorted)
+    span = Float64(maximum(x_sorted) - minimum(x_sorted))
+    average = iszero(span) ? Float64(jy_sorted[1]) : integrated / span
+    return (average=average, integrated=integrated, y=Float64(grids.y[y_index]), points=length(x_sorted))
+end
+
 function default_live_field(equations)
     if transport_is_nonlinear(equations) || equations isa FermiAngles2D
         return :current_magnitude
@@ -202,6 +254,11 @@ function solve_monitor_callback(config::SolverConfig, semi, state::SolveMonitorS
 
             if log_due
                 @info "Progress" iter=accepted_steps t=round(integrator.t, digits=4) dt=round(integrator.dt, digits=6) residual=round(residual, sigdigits=3) rel_residual=round(rel_residual, sigdigits=3) tolerance=config.residual_tol residual_progress=round(progress.residual_progress, digits=3) time_progress=round(progress.time_progress, digits=3) leading_stop_condition=progress.leading_stop_condition
+                if has_current_contact_boundary(semi)
+                    targets = current_contact_target_summary(semi)
+                    measured = measure_midline_jy(integrator.u, semi)
+                    @info "Current-drive progress" iter=accepted_steps target_outward_flux_sum=targets.sum target_outward_flux_abs_sum=targets.abs_sum target_outward_flux_max_abs=targets.max_abs target_contact_count=targets.count measured_midline_avg_jy=measured.average measured_midline_integrated_jy=measured.integrated measured_line_y=measured.y measured_points=measured.points
+                end
                 flush(stdout)
                 flush(stderr)
             end

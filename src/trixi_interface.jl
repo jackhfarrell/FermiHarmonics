@@ -220,8 +220,10 @@ end
 @inline function apply_bc!(bc_type::Symbol, out, state, unit_n, P_in, bc, target, equations)
     if bc_type === :maxwell
         maxwell_wall!(out, state, unit_n, P_in, bc.p_scatter, target, equations)
-    else
+    elseif bc_type === :ohmic
         ohmic_contact!(out, state, unit_n, P_in, bc.p_ohmic_absorb, bc.bias, target, equations)
+    else
+        throw(ArgumentError("CurrentContactBC is currently supported only for nonlinear transport"))
     end
     return out
 end
@@ -240,8 +242,10 @@ end
         face_data = boundary_index > 0 ? get(bc.cache.nonlinear_faces, boundary_index, nothing) : nothing
         if bc_type === :maxwell
             nonlinear_maxwell_wall!(out, state, unit_n, bc.p_scatter, target, equations, effective_tol, face_data)
-        else
+        elseif bc_type === :ohmic
             nonlinear_ohmic_contact!(out, state, unit_n, bc.p_ohmic_absorb, bc.bias, target, equations, effective_tol, face_data)
+        else
+            nonlinear_current_contact!(out, state, unit_n, normal, bc.p_ohmic_absorb, bc.target_outward_flux, target, equations, effective_tol, face_data)
         end
         return surface_flux_function(state, out, normal_direction, equations)
     elseif transport_is_nonlinear(equations)
@@ -249,8 +253,10 @@ end
         face_data = boundary_index > 0 ? get(bc.cache.nonlinear_faces, boundary_index, nothing) : nothing
         if bc_type === :maxwell
             nonlinear_maxwell_wall!(out, state, unit_n, bc.p_scatter, target, equations, effective_tol, face_data)
-        else
+        elseif bc_type === :ohmic
             nonlinear_ohmic_contact!(out, state, unit_n, bc.p_ohmic_absorb, bc.bias, target, equations, effective_tol, face_data)
+        else
+            nonlinear_current_contact!(out, state, unit_n, normal, bc.p_ohmic_absorb, bc.target_outward_flux, target, equations, effective_tol, face_data)
         end
         return surface_flux_function(state, out, normal_direction, equations)
     elseif bc.cache.initialized && boundary_index > 0 && haskey(bc.cache.projectors, boundary_index)
@@ -265,13 +271,14 @@ end
 
 @inline bc_type(::MaxwellWallBC) = :maxwell
 @inline bc_type(::OhmicContactBC) = :ohmic
+@inline bc_type(::CurrentContactBC) = :current
 
-@inline function (bc::Union{MaxwellWallBC, OhmicContactBC})(u_inner, normal_direction::AbstractVector, 
+@inline function (bc::Union{MaxwellWallBC, OhmicContactBC, CurrentContactBC})(u_inner, normal_direction::AbstractVector, 
                                                              x, t, surface_flux_function, equations)
     bc_callable(bc, bc_type(bc), u_inner, normal_direction, x, t, surface_flux_function, equations)
 end
 
-@inline function (bc::Union{MaxwellWallBC, OhmicContactBC})(u_inner, normal_direction::AbstractVector,
+@inline function (bc::Union{MaxwellWallBC, OhmicContactBC, CurrentContactBC})(u_inner, normal_direction::AbstractVector,
                                                              x, t, surface_flux_function, equations, 
                                                              boundary_index::Integer, node_index::Integer)
     bc_callable(bc, bc_type(bc), u_inner, normal_direction, x, t, surface_flux_function, equations,
@@ -291,7 +298,7 @@ end
 end
 
 @inline function Trixi.calc_boundary_flux!(surface_flux_values, t,
-                                           boundary_condition::Union{MaxwellWallBC, OhmicContactBC},
+                                           boundary_condition::Union{MaxwellWallBC, OhmicContactBC, CurrentContactBC},
                                            mesh::Trixi.UnstructuredMesh2D,
                                            have_nonconservative_terms::Trixi.False,
                                            equations::AbstractFermiTransportEquations2D,
@@ -308,7 +315,7 @@ end
 end
 
 @inline function Trixi.calc_boundary_flux!(surface_flux_values, t,
-                                           boundary_condition::Union{MaxwellWallBC, OhmicContactBC},
+                                           boundary_condition::Union{MaxwellWallBC, OhmicContactBC, CurrentContactBC},
                                            mesh::Trixi.P4estMesh{2},
                                            have_nonconservative_terms::Trixi.False,
                                            equations::AbstractFermiTransportEquations2D,
@@ -326,7 +333,7 @@ end
 end
 
 @inline function Trixi.calc_boundary_flux!(surface_flux_values, t,
-                                           boundary_condition::Union{MaxwellWallBC, OhmicContactBC},
+                                           boundary_condition::Union{MaxwellWallBC, OhmicContactBC, CurrentContactBC},
                                            mesh::Trixi.P4estMeshView{2},
                                            have_nonconservative_terms::Trixi.False,
                                            equations::AbstractFermiTransportEquations2D,
