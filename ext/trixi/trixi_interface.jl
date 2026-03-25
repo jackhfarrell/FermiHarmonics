@@ -57,12 +57,10 @@ function Trixi.varnames(::typeof(analysis_variables), equations::MultiBandFermiH
     return ("n", "jx", "jy")
 end
 
-function Trixi.varnames(::typeof(analysis_variables), equations::AbstractFermiTransportEquations2D)
-    if transport_is_nonlinear(equations)
-        return ("n", "jx", "jy")
-    end
-    return ("a0", "a1", "b1")
-end
+Trixi.varnames(::typeof(analysis_variables), ::Union{NonlinearFermiHarmonics2D, FermiAngles2D}) =
+    ("n", "jx", "jy")
+Trixi.varnames(::typeof(analysis_variables), ::LinearFermiHarmonics2D) =
+    ("a0", "a1", "b1")
 
 @inline Trixi.cons2prim(u, equations::AbstractFermiTransportEquations2D) = u
 
@@ -86,29 +84,31 @@ end
     return out
 end
 
-@inline function Trixi.flux(u, orientation::Integer, equations::AbstractFermiTransportEquations2D{NVARS}) where {NVARS}
+@inline function Trixi.flux(u, orientation::Integer, equations::Union{NonlinearFermiHarmonics2D{NVARS}, FermiAngles2D{NVARS}}) where {NVARS}
     normal = orientation == 1 ? SVector(1.0, 0.0) : SVector(0.0, 1.0)
     out = MVector{NVARS, Float64}(undef)
-    if transport_is_nonlinear(equations)
-        nonlinear_flux!(out, u, normal, equations)
-    elseif equations isa Union{FermiHarmonics2D, MultiBandFermiHarmonics2D}
-        linear_flux!(out, u, normal, equations)
-    else
-        harmonics_flux!(out, u, normal)
-    end
+    nonlinear_flux!(out, u, normal, equations)
     return SVector{NVARS, Float64}(out)
 end
 
-@inline function Trixi.flux(u, normal_direction::AbstractVector, equations::AbstractFermiTransportEquations2D{NVARS}) where {NVARS}
+@inline function Trixi.flux(u, orientation::Integer, equations::Union{LinearFermiHarmonics2D{NVARS}, MultiBandFermiHarmonics2D{NVARS}}) where {NVARS}
+    normal = orientation == 1 ? SVector(1.0, 0.0) : SVector(0.0, 1.0)
+    out = MVector{NVARS, Float64}(undef)
+    linear_flux!(out, u, normal, equations)
+    return SVector{NVARS, Float64}(out)
+end
+
+@inline function Trixi.flux(u, normal_direction::AbstractVector, equations::Union{NonlinearFermiHarmonics2D{NVARS}, FermiAngles2D{NVARS}}) where {NVARS}
     normal = SVector(normal_direction[1], normal_direction[2])
     out = MVector{NVARS, Float64}(undef)
-    if transport_is_nonlinear(equations)
-        nonlinear_flux!(out, u, normal, equations)
-    elseif equations isa Union{FermiHarmonics2D, MultiBandFermiHarmonics2D}
-        linear_flux!(out, u, normal, equations)
-    else
-        harmonics_flux!(out, u, normal)
-    end
+    nonlinear_flux!(out, u, normal, equations)
+    return SVector{NVARS, Float64}(out)
+end
+
+@inline function Trixi.flux(u, normal_direction::AbstractVector, equations::Union{LinearFermiHarmonics2D{NVARS}, MultiBandFermiHarmonics2D{NVARS}}) where {NVARS}
+    normal = SVector(normal_direction[1], normal_direction[2])
+    out = MVector{NVARS, Float64}(undef)
+    linear_flux!(out, u, normal, equations)
     return SVector{NVARS, Float64}(out)
 end
 
@@ -126,69 +126,75 @@ end
 end
 
 @inline function Trixi.max_abs_speed_naive(u_ll, u_rr, orientation::Integer,
-                                          equations::AbstractFermiTransportEquations2D)
-    if transport_is_nonlinear(equations)
-        if equations isa FermiHarmonics2D
-            if nonlinear_timing_enabled()
-                t0 = time_ns()
-                speed = equations.timestep_speed
-                record_nonlinear_timing!(:speed, time_ns() - t0)
-                return speed
-            end
-            return equations.timestep_speed
-        end
-        normal = orientation == 1 ? SVector(1.0, 0.0) : SVector(0.0, 1.0)
-        flux_speed = max(
-            nonlinear_max_abs_speed(u_ll, normal, equations),
-            nonlinear_max_abs_speed(u_rr, normal, equations),
-        )
-        return flux_speed
+                                          equations::NonlinearFermiHarmonics2D)
+    if nonlinear_timing_enabled()
+        t0 = time_ns()
+        speed = equations.timestep_speed
+        record_nonlinear_timing!(:speed, time_ns() - t0)
+        return speed
     end
+    return equations.timestep_speed
+end
+
+@inline function Trixi.max_abs_speed_naive(u_ll, u_rr, orientation::Integer,
+                                          equations::FermiAngles2D)
+    normal = orientation == 1 ? SVector(1.0, 0.0) : SVector(0.0, 1.0)
+    return max(
+        nonlinear_max_abs_speed(u_ll, normal, equations),
+        nonlinear_max_abs_speed(u_rr, normal, equations),
+    )
+end
+
+@inline function Trixi.max_abs_speed_naive(u_ll, u_rr, orientation::Integer,
+                                          equations::Union{LinearFermiHarmonics2D, MultiBandFermiHarmonics2D})
     return equations.max_speed
 end
 
 @inline function Trixi.max_abs_speed_naive(u_ll, u_rr, normal_direction::AbstractVector,
-                                          equations::AbstractFermiTransportEquations2D)
-    if transport_is_nonlinear(equations)
-        if equations isa FermiHarmonics2D
-            if nonlinear_timing_enabled()
-                t0 = time_ns()
-                speed = equations.timestep_speed * hypot(normal_direction[1], normal_direction[2])
-                record_nonlinear_timing!(:speed, time_ns() - t0)
-                return speed
-            end
-            return equations.timestep_speed * hypot(normal_direction[1], normal_direction[2])
-        end
-        normal = SVector(normal_direction[1], normal_direction[2])
-        flux_speed = max(
-            nonlinear_max_abs_speed(u_ll, normal, equations),
-            nonlinear_max_abs_speed(u_rr, normal, equations),
-        )
-        return flux_speed
+                                          equations::NonlinearFermiHarmonics2D)
+    if nonlinear_timing_enabled()
+        t0 = time_ns()
+        speed = equations.timestep_speed * hypot(normal_direction[1], normal_direction[2])
+        record_nonlinear_timing!(:speed, time_ns() - t0)
+        return speed
     end
-    nrm = hypot(normal_direction[1], normal_direction[2])
-    return equations.max_speed * nrm
+    return equations.timestep_speed * hypot(normal_direction[1], normal_direction[2])
 end
 
-@inline function Trixi.have_constant_speed(equations::AbstractFermiTransportEquations2D)
-    return equations isa FermiAngles2D ? Trixi.False() : Trixi.True()
+@inline function Trixi.max_abs_speed_naive(u_ll, u_rr, normal_direction::AbstractVector,
+                                          equations::FermiAngles2D)
+    normal = SVector(normal_direction[1], normal_direction[2])
+    return max(
+        nonlinear_max_abs_speed(u_ll, normal, equations),
+        nonlinear_max_abs_speed(u_rr, normal, equations),
+    )
 end
 
-@inline function Trixi.max_abs_speeds(u_or_eq::AbstractVector, equations::AbstractFermiTransportEquations2D)
-    if transport_is_nonlinear(equations)
-        equations isa FermiHarmonics2D && return (equations.timestep_speed, equations.timestep_speed)
-        return nonlinear_max_abs_speeds(u_or_eq, equations)
-    end
-    return (equations.max_speed, equations.max_speed)
+@inline function Trixi.max_abs_speed_naive(u_ll, u_rr, normal_direction::AbstractVector,
+                                          equations::Union{LinearFermiHarmonics2D, MultiBandFermiHarmonics2D})
+    return equations.max_speed * hypot(normal_direction[1], normal_direction[2])
 end
 
-@inline Trixi.max_abs_speeds(u_or_eq::Union{AbstractFermiTransportEquations2D, AbstractVector},
+@inline Trixi.have_constant_speed(::FermiAngles2D) = Trixi.False()
+@inline Trixi.have_constant_speed(::AbstractFermiTransportEquations2D) = Trixi.True()
+
+@inline Trixi.max_abs_speeds(::AbstractVector, equations::NonlinearFermiHarmonics2D) =
+    (equations.timestep_speed, equations.timestep_speed)
+@inline Trixi.max_abs_speeds(u::AbstractVector, equations::FermiAngles2D) =
+    nonlinear_max_abs_speeds(u, equations)
+@inline Trixi.max_abs_speeds(::AbstractVector, equations::Union{LinearFermiHarmonics2D, MultiBandFermiHarmonics2D}) =
+    (equations.max_speed, equations.max_speed)
+
+@inline Trixi.max_abs_speeds(equations::NonlinearFermiHarmonics2D) =
+    (equations.timestep_speed, equations.timestep_speed)
+@inline Trixi.max_abs_speeds(equations::FermiAngles2D) =
+    (equations.timestep_speed, equations.timestep_speed)
+@inline Trixi.max_abs_speeds(equations::Union{LinearFermiHarmonics2D, MultiBandFermiHarmonics2D}) =
+    (equations.max_speed, equations.max_speed)
+# Fallback for Trixi calling max_abs_speeds(equations_obj, equations)
+@inline Trixi.max_abs_speeds(::AbstractFermiTransportEquations2D,
                             equations::AbstractFermiTransportEquations2D) =
-    transport_is_nonlinear(equations) ? (equations.timestep_speed, equations.timestep_speed) :
-                                        (equations.max_speed, equations.max_speed)
-@inline Trixi.max_abs_speeds(equations::AbstractFermiTransportEquations2D) =
-    transport_is_nonlinear(equations) ? (equations.timestep_speed, equations.timestep_speed) :
-                                        (equations.max_speed, equations.max_speed)
+    Trixi.max_abs_speeds(equations)
 # ======================================================================================================================
 # Boundary Condition Interface
 # ======================================================================================================================
@@ -237,18 +243,7 @@ end
     nvars = length(state)
     target = get_thread_buffer!(bc.cache.target_buffers, nvars)
     out = get_thread_buffer!(bc.cache.out_buffers, nvars)
-    if equations isa FermiAngles2D
-        effective_tol = max(bc.tol, 1.0e-12)
-        face_data = boundary_index > 0 ? get(bc.cache.nonlinear_faces, boundary_index, nothing) : nothing
-        if bc_type === :maxwell
-            nonlinear_maxwell_wall!(out, state, unit_n, bc.p_scatter, target, equations, effective_tol, face_data)
-        elseif bc_type === :ohmic
-            nonlinear_ohmic_contact!(out, state, unit_n, bc.p_ohmic_absorb, bc.bias, target, equations, effective_tol, face_data)
-        else
-            nonlinear_current_contact!(out, state, unit_n, normal, bc.p_ohmic_absorb, bc.target_outward_flux, target, equations, effective_tol, face_data)
-        end
-        return surface_flux_function(state, out, normal_direction, equations)
-    elseif transport_is_nonlinear(equations)
+    if transport_is_nonlinear(equations)
         effective_tol = max(bc.tol, 1.0e-12)
         face_data = boundary_index > 0 ? get(bc.cache.nonlinear_faces, boundary_index, nothing) : nothing
         if bc_type === :maxwell

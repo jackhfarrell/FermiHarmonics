@@ -28,7 +28,7 @@ function solve(
     mesh = Trixi.P4estMesh{2}(resolved_mesh_path; boundary_symbols=boundary_symbols)
     mesh.current_filename = resolved_mesh_path
 
-    if equations isa FermiHarmonics2D && transport_is_nonlinear(equations)
+    if equations isa NonlinearFermiHarmonics2D
         semi = Trixi.SemidiscretizationHyperbolic(
             mesh, equations, (x, t, eq) -> zeros(SVector{nvars, Float64}), solver;
             boundary_conditions=boundary_conditions,

@@ -12,7 +12,9 @@ using NLsolve
 
 const ElectronKineticsExt = @__MODULE__
 
-import ElectronKinetics: solve,
+import ElectronKinetics: LinearTransport,
+                         NonlinearParabolicTransport,
+                         solve,
                          solve_status,
                          save_solution_custom,
                          save_for_analysis,

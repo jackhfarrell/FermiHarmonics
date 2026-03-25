@@ -1,6 +1,6 @@
 abstract type AbstractFermiTransportEquations2D{NVARS} <: Trixi.AbstractEquations{2, NVARS} end
 
-struct FermiHarmonics2D{NVARS, TNonlinear, TModel} <: AbstractFermiTransportEquations2D{NVARS}
+struct FermiHarmonics2D{NVARS, TTransport<:AbstractTransportMode, TData, TModel} <: AbstractFermiTransportEquations2D{NVARS}
     gamma_mr::Float64
     gamma_mc::Float64
     gamma3::Float64
@@ -12,9 +12,14 @@ struct FermiHarmonics2D{NVARS, TNonlinear, TModel} <: AbstractFermiTransportEqua
     mass::Float64
     electrostatic_coupling::Float64
     theta_oversample::Int
-    nonlinear_data::TNonlinear
+    nonlinear_data::TData
     model::TModel
 end
+
+const LinearFermiHarmonics2D{NVARS, TModel} =
+    FermiHarmonics2D{NVARS, LinearTransport, Nothing, TModel}
+const NonlinearFermiHarmonics2D{NVARS, TData, TModel} =
+    FermiHarmonics2D{NVARS, NonlinearParabolicTransport, TData, TModel}
 
 struct MultiBandFermiHarmonics2D{NVARS, TModel} <: AbstractFermiTransportEquations2D{NVARS}
     bands::Vector{Band}
@@ -96,10 +101,10 @@ function harmonic_equations(model::KineticModel2D, max_harmonic::Int)
     chi = collision isa QuadraticBGKCollision ? collision.electrostatic_coupling : 0.0
     theta_oversample = collision isa QuadraticBGKCollision ? collision.theta_oversample : 1
     nonlinear_data = collision isa QuadraticBGKCollision ? create_nonlinear_transport_data(max_harmonic, theta_oversample) : nothing
-    transport = transport_symbol(collision)
+    transport_type = collision isa QuadraticBGKCollision ? NonlinearParabolicTransport : LinearTransport
     timestep_speed = collision isa QuadraticBGKCollision ? nonlinear_timestep_speed(vF, chi) : vF
 
-    return FermiHarmonics2D{nvars, typeof(nonlinear_data), typeof(model)}(
+    return FermiHarmonics2D{nvars, transport_type, typeof(nonlinear_data), typeof(model)}(
         gamma_mr,
         gamma_mc,
         gamma3,

@@ -5,6 +5,21 @@ abstract type AbstractModeRateProfile end
 abstract type AbstractCollisionModel2D end
 
 """
+    AbstractTransportMode
+
+Phantom type used as a type parameter of `FermiHarmonics2D` to distinguish
+linear harmonic transport from nonlinear parabolic-band transport at the type
+level, enabling dispatch without runtime branches.
+"""
+abstract type AbstractTransportMode end
+
+"""Linear harmonic Boltzmann transport."""
+struct LinearTransport <: AbstractTransportMode end
+
+"""Nonlinear parabolic-band transport (quadratic flux, BGK collision)."""
+struct NonlinearParabolicTransport <: AbstractTransportMode end
+
+"""
     Band{S<:AbstractFermiSurface2D}
 
 Parameters for one carrier species in a multiband linear transport model.

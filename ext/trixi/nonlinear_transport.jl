@@ -13,26 +13,29 @@ end
 const NONLINEAR_GRADIENT_CACHE = IdDict{UInt, NonlinearGradientCacheEntry}()
 const NONLINEAR_MEAN_GRADIENT_CACHE = IdDict{UInt, NonlinearGradientCacheEntry}()
 
-@inline transport_is_nonlinear(equations::FermiHarmonics2D) = equations.nonlinear_data !== nothing
+@inline transport_is_nonlinear(::NonlinearFermiHarmonics2D) = true
+@inline transport_is_nonlinear(::LinearFermiHarmonics2D) = false
 @inline transport_is_nonlinear(::FermiAngles2D) = true
 @inline transport_is_nonlinear(::MultiBandFermiHarmonics2D) = false
-@inline nonlinear_data(equations::FermiHarmonics2D) = something(equations.nonlinear_data)
+@inline nonlinear_data(equations::NonlinearFermiHarmonics2D) = equations.nonlinear_data
 @inline nonlinear_data(equations::FermiAngles2D) = equations.nonlinear_data
 @inline nonlinear_collision_is_exact_bgk(::FermiHarmonics2D) = false
 @inline nonlinear_collision_is_exact_bgk(equations::FermiAngles2D) =
     equations.model.collision isa ExactAngleBGKCollision
 @inline nonlinear_collision_is_two_rate_bgk(equations::FermiAngles2D) =
     equations.model.collision isa TwoRateAngleBGKCollision
-@inline nonlinear_collision_is_quadratic_bgk(equations::FermiHarmonics2D) =
-    transport_is_nonlinear(equations)
+@inline nonlinear_collision_is_quadratic_bgk(::NonlinearFermiHarmonics2D) = true
+@inline nonlinear_collision_is_quadratic_bgk(::LinearFermiHarmonics2D) = false
 @inline nonlinear_collision_is_quadratic_bgk(::FermiAngles2D) = false
-@inline nonlinear_has_electrostatic_force(equations::FermiHarmonics2D) =
-    transport_is_nonlinear(equations) && equations.electrostatic_coupling != 0.0
+@inline nonlinear_has_electrostatic_force(equations::NonlinearFermiHarmonics2D) =
+    equations.electrostatic_coupling != 0.0
+@inline nonlinear_has_electrostatic_force(::LinearFermiHarmonics2D) = false
 @inline nonlinear_has_electrostatic_force(equations::FermiAngles2D) =
     equations.electrostatic_coupling != 0.0
 @inline nonlinear_has_electrostatic_force(::MultiBandFermiHarmonics2D) = false
-@inline nonlinear_uses_gradient_sources(equations::FermiHarmonics2D) =
-    transport_is_nonlinear(equations) && nonlinear_has_electrostatic_force(equations)
+@inline nonlinear_uses_gradient_sources(equations::NonlinearFermiHarmonics2D) =
+    nonlinear_has_electrostatic_force(equations)
+@inline nonlinear_uses_gradient_sources(::LinearFermiHarmonics2D) = false
 @inline nonlinear_uses_gradient_sources(::FermiAngles2D) = false
 @inline nonlinear_uses_gradient_sources(::MultiBandFermiHarmonics2D) = false
 
@@ -137,9 +140,8 @@ function validate_collision_model(transport::Symbol, collision_model::Union{Noth
     return model
 end
 
-@inline function get_nonlinear_cache(equations::FermiHarmonics2D)
-    data = nonlinear_data(equations)
-    return data.thread_caches[Threads.threadid()]
+@inline function get_nonlinear_cache(equations::NonlinearFermiHarmonics2D)
+    return equations.nonlinear_data.thread_caches[Threads.threadid()]
 end
 
 @inline function parabolic_argument(phi::Real, equations::AbstractFermiTransportEquations2D)
@@ -1227,13 +1229,13 @@ function Trixi.rhs!(
     return nothing
 end
 
-@inline function analysis_variables(u, equations::FermiHarmonics2D)
-    if transport_is_nonlinear(equations)
-        density = nonlinear_density(u, equations)
-        jx, jy = nonlinear_current(u, equations)
-        return SVector(density, jx, jy)
-    end
+@inline function analysis_variables(u, equations::NonlinearFermiHarmonics2D)
+    density = nonlinear_density(u, equations)
+    jx, jy = nonlinear_current(u, equations)
+    return SVector(density, jx, jy)
+end
 
+@inline function analysis_variables(u, equations::LinearFermiHarmonics2D)
     a1 = length(u) >= 2 ? u[2] : 0.0
     b1 = length(u) >= 3 ? u[3] : 0.0
     return SVector(u[1], a1, b1)

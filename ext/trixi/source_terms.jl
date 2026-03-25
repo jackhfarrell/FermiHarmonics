@@ -194,12 +194,12 @@ end
     return SVector(out)
 end
 
-function collision_sources!(out::AbstractVector{Float64}, u, equations::FermiHarmonics2D)
-    if transport_is_nonlinear(equations)
-        copyto!(out, nonlinear_bgk_sources(u, equations))
-        return out
-    end
+function collision_sources!(out::AbstractVector{Float64}, u, equations::NonlinearFermiHarmonics2D)
+    copyto!(out, nonlinear_bgk_sources(u, equations))
+    return out
+end
 
+function collision_sources!(out::AbstractVector{Float64}, u, equations::LinearFermiHarmonics2D)
     n = length(u)
     profile = mode_profile(equations.model.collision)
     @inbounds begin

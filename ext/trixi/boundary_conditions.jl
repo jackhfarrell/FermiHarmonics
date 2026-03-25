@@ -1462,7 +1462,7 @@ function init_projector_cache!(
         boundary_conditions.boundary_indices,
     )
         if !bc.cache.initialized
-            if transport_is_nonlinear(semi.equations) || semi.equations isa FermiAngles2D
+            if transport_is_nonlinear(semi.equations)
                 new_faces = build_nonlinear_faces(
                     semi.equations, bc.tol, semi.mesh, semi.solver, semi.cache, boundary_indexing
                 )
@@ -1510,7 +1510,7 @@ function init_projector_cache!(
         boundary_conditions.boundary_indices,
     )
         if !bc.cache.initialized
-            if transport_is_nonlinear(semi.equations) || semi.equations isa FermiAngles2D
+            if transport_is_nonlinear(semi.equations)
                 new_faces = build_nonlinear_faces(
                     semi.equations, bc.tol, semi.mesh, semi.solver, semi.cache, boundary_indexing
                 )

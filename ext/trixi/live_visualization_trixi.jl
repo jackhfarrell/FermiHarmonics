@@ -60,7 +60,7 @@ function measure_midline_jy(solution_vector, semi; target_y::Float64=0.0, nvisno
 end
 
 function default_live_field(equations)
-    if transport_is_nonlinear(equations) || equations isa FermiAngles2D
+    if transport_is_nonlinear(equations)
         return :current_magnitude
     elseif equations isa MultiBandFermiHarmonics2D
         return :n
