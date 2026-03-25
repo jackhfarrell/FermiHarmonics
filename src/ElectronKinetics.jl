@@ -1,6 +1,5 @@
 module ElectronKinetics
 
-using FFTW
 using LinearAlgebra
 using SparseArrays
 using StaticArrays
