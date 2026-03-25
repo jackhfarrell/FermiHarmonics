@@ -306,12 +306,7 @@ end
 
 function visualization_callback(params::SolveParams, semi, name::AbstractString; interval::Int=params.log_every, mode::Symbol=:cartesian)
     if transport_is_nonlinear(semi.equations)
-        output_path = "live_viz_$(name).png"
         analysis_path = mode === :mesh_native ? "live_viz_$(name)_mesh_native.h5" : "live_viz_$(name).h5"
-        project_root = normpath(joinpath(@__DIR__, ".."))
-        plot_script = mode === :mesh_native ?
-            joinpath(project_root, "demo", "plot_mesh_native_streamlines.py") :
-            joinpath(project_root, "demo", "plot_nonlinear_streamlines.py")
         nvisnodes = 120
 
         return SciMLBase.DiscreteCallback(
@@ -339,8 +334,7 @@ function visualization_callback(params::SolveParams, semi, name::AbstractString;
                 else
                     throw(ArgumentError("unsupported visualization_mode=$(mode); use :cartesian or :mesh_native"))
                 end
-                run(`python3 $plot_script $analysis_path --output $output_path`)
-                @info "Updated nonlinear live visualization" path=output_path t=round(integrator.t, digits=4)
+                @info "Updated nonlinear analysis snapshot" path=analysis_path t=round(integrator.t, digits=4)
                 nothing
             end;
             save_positions=(false, false),
