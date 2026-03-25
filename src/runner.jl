@@ -604,7 +604,7 @@ function monitor_callback(params, semi)
             residual = Trixi.residual_steady_state(du, semi.equations)
             u_norm   = Trixi.residual_steady_state(u,  semi.equations)
             rel_residual = u_norm > 0 ? residual / u_norm : Inf
-            @info "Progress" iter=integrator.stats.naccept t=round(integrator.t, digits=4) dt=round(integrator.dt, digits=6) residual=round(residual, sigdigits=3) rel_residual=round(rel_residual, sigdigits=3) abstol=params.residual_tol reltol=params.residual_reltol
+            println(stderr, "Progress: iter=$(integrator.stats.naccept) t=$(round(integrator.t, digits=4)) dt=$(round(integrator.dt, digits=6)) residual=$(round(residual, sigdigits=3)) rel_residual=$(round(rel_residual, sigdigits=3)) abstol=$(params.residual_tol) reltol=$(params.residual_reltol)")
             flush(stdout)
             flush(stderr)
             nothing

@@ -184,6 +184,12 @@ function solve_monitor_callback(config::SolverConfig, semi, state::SolveMonitorS
             end
 
             residual = compute_residual(integrator, semi)
+            du_ode = Trixi.get_du(integrator)
+            integrator.f(du_ode, integrator.u, integrator.p, integrator.t)
+            du = Trixi.wrap_array(du_ode, semi)
+            u = Trixi.wrap_array(integrator.u, semi)
+            u_norm = Trixi.residual_steady_state(u, semi.equations)
+            rel_residual = u_norm > 0 ? residual / u_norm : Inf
             progress = build_progress_snapshot(
                 accepted_steps,
                 integrator.t,
@@ -195,7 +201,7 @@ function solve_monitor_callback(config::SolverConfig, semi, state::SolveMonitorS
             )
 
             if log_due
-                @info "Progress" iter=accepted_steps t=round(integrator.t, digits=4) dt=round(integrator.dt, digits=6) residual=round(residual, sigdigits=3) tolerance=config.residual_tol residual_progress=round(progress.residual_progress, digits=3) time_progress=round(progress.time_progress, digits=3) leading_stop_condition=progress.leading_stop_condition
+                @info "Progress" iter=accepted_steps t=round(integrator.t, digits=4) dt=round(integrator.dt, digits=6) residual=round(residual, sigdigits=3) rel_residual=round(rel_residual, sigdigits=3) tolerance=config.residual_tol residual_progress=round(progress.residual_progress, digits=3) time_progress=round(progress.time_progress, digits=3) leading_stop_condition=progress.leading_stop_condition
                 flush(stdout)
                 flush(stderr)
             end
