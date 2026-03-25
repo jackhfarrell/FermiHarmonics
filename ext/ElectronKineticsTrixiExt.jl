@@ -64,8 +64,6 @@ import ElectronKinetics: solve,
                          collision_symbol,
                          collision_theta_oversample,
                          cosine_index,
-                         create_angle_transport_data,
-                         create_nonlinear_transport_data,
                          estimate_max_harmonic,
                          harmonics_flux!,
                          harmonic_state_nvars,
@@ -91,6 +89,7 @@ import ElectronKinetics: solve,
                          validate_nonlinear_warm_start,
                          zero_state_speed
 
+include("trixi/transport_data.jl")
 include("trixi/trixi_equations_internal.jl")
 include("trixi/nonlinear_transport.jl")
 include("trixi/source_terms.jl")
