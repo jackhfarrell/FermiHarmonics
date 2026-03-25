@@ -13,19 +13,18 @@ end
 const NONLINEAR_GRADIENT_CACHE = IdDict{UInt, NonlinearGradientCacheEntry}()
 const NONLINEAR_MEAN_GRADIENT_CACHE = IdDict{UInt, NonlinearGradientCacheEntry}()
 
-@inline transport_is_nonlinear(equations::FermiHarmonics2D) = equations.transport === :parabolic_nonlinear
+@inline transport_is_nonlinear(equations::FermiHarmonics2D) = equations.nonlinear_data !== nothing
 @inline transport_is_nonlinear(::FermiAngles2D) = true
 @inline transport_is_nonlinear(::MultiBandFermiHarmonics2D) = false
 @inline nonlinear_data(equations::FermiHarmonics2D) = something(equations.nonlinear_data)
 @inline nonlinear_data(equations::FermiAngles2D) = equations.nonlinear_data
-@inline nonlinear_collision_is_exact_bgk(equations::FermiHarmonics2D) =
-    false
+@inline nonlinear_collision_is_exact_bgk(::FermiHarmonics2D) = false
 @inline nonlinear_collision_is_exact_bgk(equations::FermiAngles2D) =
-    equations.collision_model === :exact_bgk
+    equations.model.collision isa ExactAngleBGKCollision
 @inline nonlinear_collision_is_two_rate_bgk(equations::FermiAngles2D) =
-    equations.collision_model === :two_rate_bgk
+    equations.model.collision isa TwoRateAngleBGKCollision
 @inline nonlinear_collision_is_quadratic_bgk(equations::FermiHarmonics2D) =
-    transport_is_nonlinear(equations) && equations.collision_model === :quadratic_bgk
+    transport_is_nonlinear(equations)
 @inline nonlinear_collision_is_quadratic_bgk(::FermiAngles2D) = false
 @inline nonlinear_has_electrostatic_force(equations::FermiHarmonics2D) =
     transport_is_nonlinear(equations) && equations.electrostatic_coupling != 0.0

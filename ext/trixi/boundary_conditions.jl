@@ -1435,8 +1435,8 @@ function init_projector_cache!(
     boundary_conditions = semi.boundary_conditions
     nvars = Trixi.nvariables(semi.equations)
     desired_signature = transport_is_nonlinear(semi.equations) ?
-        (semi.equations.transport, nvars, nonlinear_data(semi.equations).theta_count) :
-        (semi.equations.transport, nvars, 0)
+        (transport_symbol(semi.equations.model), nvars, nonlinear_data(semi.equations).theta_count) :
+        (transport_symbol(semi.equations.model), nvars, 0)
     
     # Reset caches if number of variables changed (e.g., adaptive harmonics in sweeps)
     for bc in boundary_conditions.boundary_condition_types
@@ -1486,8 +1486,8 @@ function init_projector_cache!(
     boundary_conditions = semi.boundary_conditions
     nvars = Trixi.nvariables(semi.equations)
     desired_signature = transport_is_nonlinear(semi.equations) ?
-        (semi.equations.transport, nvars, nonlinear_data(semi.equations).theta_count) :
-        (semi.equations.transport, nvars, 0)
+        (transport_symbol(semi.equations.model), nvars, nonlinear_data(semi.equations).theta_count) :
+        (transport_symbol(semi.equations.model), nvars, 0)
 
     for bc in boundary_conditions.boundary_condition_types
         if bc.cache.signature != desired_signature

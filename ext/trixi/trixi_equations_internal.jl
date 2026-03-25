@@ -8,8 +8,6 @@ struct FermiHarmonics2D{NVARS, TNonlinear, TModel} <: AbstractFermiTransportEqua
     timestep_speed::Float64
     Ax::Matrix{Float64}
     Ay::Matrix{Float64}
-    transport::Symbol
-    collision_model::Symbol
     mu0::Float64
     mass::Float64
     electrostatic_coupling::Float64
@@ -26,8 +24,6 @@ struct MultiBandFermiHarmonics2D{NVARS, TModel} <: AbstractFermiTransportEquatio
     timestep_speed::Float64
     Ax::Matrix{Float64}
     Ay::Matrix{Float64}
-    transport::Symbol
-    collision_model::Symbol
     model::TModel
 end
 
@@ -36,8 +32,6 @@ struct FermiAngles2D{NVARS, TData, TModel} <: AbstractFermiTransportEquations2D{
     gamma_mc::Float64
     max_speed::Float64
     timestep_speed::Float64
-    transport::Symbol
-    collision_model::Symbol
     mu0::Float64
     mass::Float64
     electrostatic_coupling::Float64
@@ -88,8 +82,6 @@ function harmonic_equations(model::KineticModel2D, max_harmonic::Int)
             max_speed,
             Ax,
             Ay,
-            :linear,
-            :linear_mrt,
             model,
         )
     end
@@ -115,8 +107,6 @@ function harmonic_equations(model::KineticModel2D, max_harmonic::Int)
         timestep_speed,
         Ax,
         Ay,
-        transport,
-        collision_symbol(collision),
         mu0_value,
         mass_value,
         chi,
@@ -141,8 +131,6 @@ function angle_equations(model::KineticModel2D)
         collision.gamma_mc,
         vF,
         nonlinear_timestep_speed(vF, collision.electrostatic_coupling),
-        :parabolic_nonlinear,
-        collision_symbol(collision),
         collision.mu0,
         collision.mass,
         collision.electrostatic_coupling,
