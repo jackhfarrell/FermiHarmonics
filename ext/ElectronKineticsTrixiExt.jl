@@ -91,14 +91,14 @@ import ElectronKinetics: solve,
                          validate_nonlinear_warm_start,
                          zero_state_speed
 
-include("../src/trixi_equations_internal.jl")
-include("../src/nonlinear_transport.jl")
-include("../src/source_terms.jl")
-include("../src/boundary_conditions.jl")
-include("../src/trixi_interface.jl")
-include("../src/io_utils.jl")
-include("../src/live_visualization_trixi.jl")
-include("../src/trixi_runner.jl")
+include("trixi/trixi_equations_internal.jl")
+include("trixi/nonlinear_transport.jl")
+include("trixi/source_terms.jl")
+include("trixi/boundary_conditions.jl")
+include("trixi/trixi_interface.jl")
+include("trixi/io_utils.jl")
+include("trixi/live_visualization_trixi.jl")
+include("trixi/trixi_runner.jl")
 
 function legacy_collision_model(
     gamma_mr::Real,
