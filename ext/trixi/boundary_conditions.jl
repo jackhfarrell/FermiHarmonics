@@ -214,7 +214,7 @@ function nonlinear_diffuse_incoming_value(
     @inbounds for j in eachindex(state_samples)
         projection = nx * data.cos_theta[j] + ny * data.sin_theta[j]
         if projection > tol
-            outgoing_flux += projection * parabolic_shifted_flux(real(state_samples[j]), equations)
+            outgoing_flux += projection * quadratic_shifted_flux(real(state_samples[j]), equations)
         elseif projection < -tol
             incoming_weight -= projection
         end
