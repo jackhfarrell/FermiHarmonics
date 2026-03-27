@@ -1293,6 +1293,30 @@ function derived_harmonics(
     return (2.0 * a0 * inv_ntheta, 2.0 * a1 * inv_ntheta, 2.0 * b1 * inv_ntheta)
 end
 
+@inline function anglegrid_moments(
+    state::AbstractVector{<:Real},
+    equations::FermiAngles2D,
+)
+    data = nonlinear_data(equations)
+    inv_ntheta = 1.0 / data.theta_count
+    sum_phi = 0.0
+    jx = 0.0
+    jy = 0.0
+    @inbounds for j in eachindex(state)
+        phi = Float64(state[j])
+        sum_phi += phi
+        flux_value = parabolic_shifted_flux(phi, equations)
+        jx += flux_value * data.cos_theta[j]
+        jy += flux_value * data.sin_theta[j]
+    end
+    mean_phi = sum_phi * inv_ntheta
+    scale = 2.0 * inv_ntheta
+    jx *= scale
+    jy *= scale
+    density = equations.mass * (equations.mu0 + mean_phi) / (2.0 * pi)
+    return density, jx, jy, mean_phi
+end
+
 function periodic_theta_derivative!(
     out::AbstractVector{Float64},
     state::AbstractVector{<:Real},
@@ -1362,20 +1386,13 @@ function nonlinear_max_abs_speeds(
 end
 
 @inline function nonlinear_density(state::AbstractVector{<:Real}, equations::FermiAngles2D)
-    return equations.mass * (equations.mu0 + angle_weighted_mean(state, equations)) / (2.0 * pi)
+    density, _, _, _ = anglegrid_moments(state, equations)
+    return density
 end
 
 function nonlinear_current(state::AbstractVector{<:Real}, equations::FermiAngles2D)
-    data = nonlinear_data(equations)
-    inv_ntheta = 1.0 / data.theta_count
-    jx = 0.0
-    jy = 0.0
-    @inbounds for j in eachindex(state)
-        flux_value = parabolic_shifted_flux(state[j], equations)
-        jx += flux_value * data.cos_theta[j]
-        jy += flux_value * data.sin_theta[j]
-    end
-    return (2.0 * jx * inv_ntheta, 2.0 * jy * inv_ntheta)
+    _, jx, jy, _ = anglegrid_moments(state, equations)
+    return (jx, jy)
 end
 
 @inline function admissible_drift_speed(mu::Real, equations::FermiAngles2D)
@@ -1455,26 +1472,32 @@ function match_local_equilibrium_moments(
 end
 
 function recover_mu_u_closed_form(state::AbstractVector{<:Real}, equations::FermiAngles2D)
-    density = nonlinear_density(state, equations)
+    density, jx, jy, _ = anglegrid_moments(state, equations)
     density > 0.0 || throw(DomainError(density, "recover_mu_u requires positive density"))
     mu = 2.0 * pi * density / equations.mass
-    jx, jy = nonlinear_current(state, equations)
-    current_scale = 0.25 * equations.mass * mu
-    current_scale > 0.0 || throw(DomainError(current_scale, "recover_mu_u requires positive current scale"))
-    return mu, SVector(jx / current_scale, jy / current_scale)
+    return mu, SVector(jx / density, jy / density)
 end
 
 function recover_mu_u(state::AbstractVector{<:Real}, equations::FermiAngles2D)
     mu, velocity = recover_mu_u_closed_form(state, equations)
-    if norm(velocity) <= admissible_drift_speed(mu, equations)
-        return mu, velocity
+    if norm(velocity) > admissible_drift_speed(mu, equations)
+        throw(DomainError(
+            norm(velocity),
+            "recover_mu_u requires |u| <= sqrt(2μ/m); got |u|=$(norm(velocity)) with μ=$mu",
+        ))
     end
-    return match_local_equilibrium_moments(state, equations)
+    return mu, velocity
 end
 
 function recover_mu_u_two_rate(state::AbstractVector{<:Real}, equations::FermiAngles2D)
     mu, velocity = recover_mu_u_closed_form(state, equations)
-    return mu, project_admissible_velocity(velocity, mu, equations)
+    if norm(velocity) > admissible_drift_speed(mu, equations)
+        throw(DomainError(
+            norm(velocity),
+            "recover_mu_u_two_rate requires |u| <= sqrt(2μ/m); got |u|=$(norm(velocity)) with μ=$mu",
+        ))
+    end
+    return mu, velocity
 end
 
 function isotropic_equilibrium_state!(
@@ -1565,7 +1588,6 @@ function electrostatic_force_sources!(
 end
 
 @inline function analysis_variables(u, equations::FermiAngles2D)
-    density = nonlinear_density(u, equations)
-    jx, jy = nonlinear_current(u, equations)
+    density, jx, jy, _ = anglegrid_moments(u, equations)
     return SVector(density, jx, jy)
 end

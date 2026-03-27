@@ -432,6 +432,41 @@ end
     @test snapshot.field === :current_magnitude
 end
 
+@testset "AngleGrid Moments" begin
+    config = SolverConfig(;
+        polydeg=1,
+        tspan_end=0.01,
+        residual_tol=1e-3,
+        cfl=0.2,
+        log_every=10_000,
+        min_harmonic=2,
+        max_harmonic_auto=4,
+    )
+    model = KineticModel2D(
+        Isotropic2DFermiSurface(; vF=1.0, nu=1.0, mass=2.0, charge=-1.0),
+        AngleGrid(16),
+        IsotropicAngleStreaming(),
+        ExactAngleBGKCollision(; gamma_mr=0.0, gamma_mc=0.1, mu0=1.0, mass=2.0, electrostatic_coupling=0.0),
+    )
+    equations, _ = TrixiExt.build_equations(model, config)
+    ntheta = Trixi.nvariables(equations)
+    state = fill(0.1, ntheta)
+
+    density = TrixiExt.nonlinear_density(state, equations)
+    jx, jy = TrixiExt.nonlinear_current(state, equations)
+
+    @test jx ≈ 0.0 atol=1e-12
+    @test jy ≈ 0.0 atol=1e-12
+    @test density ≈ equations.mass * (equations.mu0 + 0.1) / (2.0 * pi)
+
+    data = TrixiExt.nonlinear_data(equations)
+    @inbounds for j in eachindex(state)
+        state[j] = data.cos_theta[j] >= 0.0 ? 1.5 * equations.mu0 : -0.99 * equations.mu0
+    end
+
+    @test_throws DomainError TrixiExt.recover_mu_u(state, equations)
+end
+
 @testset "Multiband Snapshot Extraction" begin
     config = SolverConfig(;
         polydeg=1,

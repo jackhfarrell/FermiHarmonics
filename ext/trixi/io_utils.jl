@@ -247,9 +247,14 @@ function compute_mesh_native_analysis(solution_vector, semi; refine=6)
             interpolate_element_state!(state_buffer, basis_xi, basis_eta, element_u_values)
 
             if transport_is_nonlinear(equations)
-                density_value = nonlinear_density(state_buffer, equations)
-                _, a1_value, b1_value = derived_harmonics(state_buffer, equations)
-                jx_value, jy_value = nonlinear_current(state_buffer, equations)
+                if equations isa FermiAngles2D
+                    density_value, jx_value, jy_value, _ = anglegrid_moments(state_buffer, equations)
+                    _, a1_value, b1_value = derived_harmonics(state_buffer, equations)
+                else
+                    density_value = nonlinear_density(state_buffer, equations)
+                    _, a1_value, b1_value = derived_harmonics(state_buffer, equations)
+                    jx_value, jy_value = nonlinear_current(state_buffer, equations)
+                end
                 a1_points[point_index] = a1_value
                 b1_points[point_index] = b1_value
                 jx_points[point_index] = jx_value
@@ -686,9 +691,14 @@ function evaluate_analysis_observables(solution_vector, semi, x_target, y_target
 
     equations = semi.equations
     if transport_is_nonlinear(equations)
-        density_value = nonlinear_density(state_value, equations)
-        a0_value, a1_value, b1_value = derived_harmonics(state_value, equations)
-        jx_value, jy_value = nonlinear_current(state_value, equations)
+        if equations isa FermiAngles2D
+            density_value, jx_value, jy_value, _ = anglegrid_moments(state_value, equations)
+            _, a1_value, b1_value = derived_harmonics(state_value, equations)
+        else
+            density_value = nonlinear_density(state_value, equations)
+            _, a1_value, b1_value = derived_harmonics(state_value, equations)
+            jx_value, jy_value = nonlinear_current(state_value, equations)
+        end
         return density_value, a1_value, b1_value, jx_value, jy_value, (;), true
     elseif equations isa MultiBandFermiHarmonics2D
         obs = multiband_observables(state_value, equations)
