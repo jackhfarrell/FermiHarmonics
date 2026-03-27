@@ -145,10 +145,28 @@ end
     isotropic_equilibrium_state!(isotropic_equilibrium, mu, equations)
 
     gamma_mr = equations.gamma_mr
-    gamma_mc = equations.gamma_mc
+    if isnothing(equations.mode_rate_filter)
+        gamma_mc = equations.gamma_mc
+        @inbounds for i in 1:n
+            out[i] = -gamma_mr * (u[i] - isotropic_equilibrium[i]) -
+                     gamma_mc * (u[i] - drift_equilibrium[i])
+        end
+        return SVector(out)
+    end
+
+    cache = get_nonlinear_cache(equations)
     @inbounds for i in 1:n
-        out[i] = -gamma_mr * (u[i] - isotropic_equilibrium[i]) -
-                 gamma_mc * (u[i] - drift_equilibrium[i])
+        cache.spectrum[i] = ComplexF64(Float64(u[i]) - drift_equilibrium[i], 0.0)
+    end
+    mul!(cache.spectrum, cache.fft_plan, cache.spectrum)
+    filter = equations.mode_rate_filter
+    @inbounds for i in 1:n
+        cache.spectrum[i] *= filter[i]
+    end
+    mul!(cache.spectrum, cache.ifft_plan, cache.spectrum)
+    @inbounds for i in 1:n
+        out[i] = -gamma_mr * (Float64(u[i]) - isotropic_equilibrium[i]) -
+                 real(cache.spectrum[i])
     end
     return SVector(out)
 end

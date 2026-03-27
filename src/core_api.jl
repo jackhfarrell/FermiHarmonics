@@ -341,6 +341,50 @@ function TwoRateAngleBGKCollision(;
     )
 end
 
+struct AngleRateBGKCollision{P<:AbstractModeRateProfile} <: AbstractCollisionModel2D
+    gamma_mr::Float64
+    profile::P
+    mu0::Float64
+    mass::Float64
+    electrostatic_coupling::Float64
+    filter_tail_modes::Int
+    filter_max_multiplier::Float64
+    filter_shape::Symbol
+end
+
+function AngleRateBGKCollision(
+    gamma_mr::Real,
+    profile::AbstractModeRateProfile=OddQuarticRateProfile(0.0);
+    mu0::Real,
+    mass::Real,
+    electrostatic_coupling::Real=0.0,
+    filter_tail_modes::Integer=10,
+    filter_max_multiplier::Real=20.0,
+    filter_shape::Symbol=:cosine,
+)
+    gamma_mr_value = Float64(gamma_mr)
+    mu0_value = Float64(mu0)
+    mass_value = Float64(mass)
+    filter_tail_value = Int(filter_tail_modes)
+    filter_max_value = Float64(filter_max_multiplier)
+    gamma_mr_value >= 0.0 || throw(ArgumentError("gamma_mr must be >= 0"))
+    mu0_value > 0.0 || throw(ArgumentError("mu0 must be > 0"))
+    mass_value > 0.0 || throw(ArgumentError("mass must be > 0"))
+    filter_tail_value >= 0 || throw(ArgumentError("filter_tail_modes must be >= 0"))
+    filter_max_value >= 1.0 || throw(ArgumentError("filter_max_multiplier must be >= 1"))
+    filter_shape in (:cosine, :linear, :power) || throw(ArgumentError("filter_shape must be :cosine, :linear, or :power"))
+    return AngleRateBGKCollision{typeof(profile)}(
+        gamma_mr_value,
+        profile,
+        mu0_value,
+        mass_value,
+        Float64(electrostatic_coupling),
+        filter_tail_value,
+        filter_max_value,
+        filter_shape,
+    )
+end
+
 Base.@kwdef struct KineticModel2D{
     TS<:AbstractFermiSurface2D,
     TD<:AbstractAngularDiscretization2D,
@@ -378,8 +422,8 @@ function KineticModel2D(
     elseif discretization isa AngleGrid
         streaming isa IsotropicAngleStreaming ||
             throw(ArgumentError("AngleGrid currently requires IsotropicAngleStreaming"))
-        collision isa Union{ExactAngleBGKCollision, TwoRateAngleBGKCollision} ||
-            throw(ArgumentError("AngleGrid currently supports ExactAngleBGKCollision or TwoRateAngleBGKCollision"))
+        collision isa Union{ExactAngleBGKCollision, TwoRateAngleBGKCollision, AngleRateBGKCollision} ||
+            throw(ArgumentError("AngleGrid currently supports ExactAngleBGKCollision, TwoRateAngleBGKCollision, or AngleRateBGKCollision"))
     else
         throw(ArgumentError("unsupported angular discretization $(typeof(discretization))"))
     end
@@ -879,22 +923,26 @@ boundary_condition_name(::CurrentContactBC) = :current_contact
 @inline transport_symbol(::QuadraticBGKCollision) = :parabolic_nonlinear
 @inline transport_symbol(::ExactAngleBGKCollision) = :parabolic_nonlinear
 @inline transport_symbol(::TwoRateAngleBGKCollision) = :parabolic_nonlinear
+@inline transport_symbol(::AngleRateBGKCollision) = :parabolic_nonlinear
 @inline transport_symbol(model::KineticModel2D) = transport_symbol(model.collision)
 
 @inline collision_symbol(::LinearBGKCollision) = :linear_mrt
 @inline collision_symbol(::QuadraticBGKCollision) = :quadratic_bgk
 @inline collision_symbol(::ExactAngleBGKCollision) = :exact_bgk
 @inline collision_symbol(::TwoRateAngleBGKCollision) = :two_rate_bgk
+@inline collision_symbol(::AngleRateBGKCollision) = :angle_rate_bgk
 
 @inline harmonic_state_nvars(max_harmonic::Integer) = 1 + 2 * Int(max_harmonic)
 @inline band_momentum_weight(band::Band) =
     surface_density_of_states(band.surface) * surface_mass(band.surface) * surface_vF(band.surface)
 @inline mode_profile(collision::Union{LinearBGKCollision, QuadraticBGKCollision}) = collision.profile
-@inline collision_gamma_mr(collision::Union{LinearBGKCollision, QuadraticBGKCollision, ExactAngleBGKCollision, TwoRateAngleBGKCollision}) = collision.gamma_mr
+@inline mode_profile(collision::AngleRateBGKCollision) = collision.profile
+@inline collision_gamma_mr(collision::Union{LinearBGKCollision, QuadraticBGKCollision, ExactAngleBGKCollision, TwoRateAngleBGKCollision, AngleRateBGKCollision}) = collision.gamma_mr
 @inline collision_gamma_mc(collision::Union{ExactAngleBGKCollision, TwoRateAngleBGKCollision}) = collision.gamma_mc
-@inline collision_mu0(collision::Union{QuadraticBGKCollision, ExactAngleBGKCollision, TwoRateAngleBGKCollision}) = collision.mu0
-@inline collision_mass(collision::Union{QuadraticBGKCollision, ExactAngleBGKCollision, TwoRateAngleBGKCollision}) = collision.mass
-@inline collision_electrostatic_coupling(collision::Union{QuadraticBGKCollision, ExactAngleBGKCollision, TwoRateAngleBGKCollision}) = collision.electrostatic_coupling
+@inline collision_gamma_mc(collision::AngleRateBGKCollision) = profile_reference_rate(collision.profile)
+@inline collision_mu0(collision::Union{QuadraticBGKCollision, ExactAngleBGKCollision, TwoRateAngleBGKCollision, AngleRateBGKCollision}) = collision.mu0
+@inline collision_mass(collision::Union{QuadraticBGKCollision, ExactAngleBGKCollision, TwoRateAngleBGKCollision, AngleRateBGKCollision}) = collision.mass
+@inline collision_electrostatic_coupling(collision::Union{QuadraticBGKCollision, ExactAngleBGKCollision, TwoRateAngleBGKCollision, AngleRateBGKCollision}) = collision.electrostatic_coupling
 @inline collision_theta_oversample(collision::QuadraticBGKCollision) = collision.theta_oversample
 @inline profile_reference_rate(profile::AbstractModeRateProfile) = mode_rate(profile, 2)
 

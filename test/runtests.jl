@@ -467,6 +467,52 @@ end
     @test_throws DomainError TrixiExt.recover_mu_u(state, equations)
 end
 
+@testset "AngleGrid Mode-Rate Collision" begin
+    config = SolverConfig(;
+        polydeg=1,
+        tspan_end=0.01,
+        residual_tol=1e-3,
+        cfl=0.2,
+        log_every=10_000,
+        min_harmonic=2,
+        max_harmonic_auto=4,
+    )
+    model = KineticModel2D(
+        Isotropic2DFermiSurface(; vF=1.0, nu=1.0, mass=2.0, charge=-1.0),
+        AngleGrid(64),
+        IsotropicAngleStreaming(),
+        AngleRateBGKCollision(0.0, OddQuarticRateProfile(0.4, 0.01); mu0=1.0, mass=2.0),
+    )
+    equations, _ = TrixiExt.build_equations(model, config)
+    data = TrixiExt.nonlinear_data(equations)
+    ntheta = length(data.theta)
+
+    state = zeros(Float64, ntheta)
+    @inbounds for j in 1:ntheta
+        state[j] = cos(3.0 * data.theta[j])
+    end
+    out = similar(state)
+    TrixiExt.collision_sources!(out, state, equations)
+
+    gamma3 = min(0.4, 0.01 * 3^4)
+    @test maximum(abs.(out .+ gamma3 .* state)) < 1e-8
+
+    filter = equations.mode_rate_filter
+    max_m = ntheta ÷ 2
+    gamma_base = min(0.4, 0.01 * max_m^4)
+    @test isapprox(filter[max_m + 1], 20.0 * gamma_base; rtol=1e-12, atol=1e-12)
+    @test isapprox(filter[3 + 1], gamma3; rtol=1e-12, atol=1e-12)
+
+    @inbounds for j in 1:ntheta
+        state[j] = 0.1 + 0.2 * cos(data.theta[j]) + 0.3 * sin(data.theta[j]) + 0.4 * cos(4.0 * data.theta[j])
+    end
+    TrixiExt.collision_sources!(out, state, equations)
+    a0, a1, b1 = TrixiExt.derived_harmonics(out, equations)
+    @test abs(a0) < 1e-10
+    @test abs(a1) < 1e-10
+    @test abs(b1) < 1e-10
+end
+
 @testset "Multiband Snapshot Extraction" begin
     config = SolverConfig(;
         polydeg=1,

@@ -1,26 +1,27 @@
-using ElectronKinetics, Trixi
+using ElectronKinetics
+using Trixi
 using GLMakie
 
 function main()
-    project_root = normpath(joinpath(@__DIR__, "..", "..", ".."))
-    mesh_path = joinpath(project_root, "projects", "nonlinearities", "mesh", "tesla_valve.inp")
-    output_dir = joinpath(project_root, "projects", "nonlinear", "data")
+    project_root = normpath(joinpath(@__DIR__, ".."))
+    mesh_path = joinpath(project_root, "projects", "square_bells_ucsb", "mesh", "square_bells.inp")
+    output_dir = joinpath(@__DIR__, "data_square_bells_angle_rate")
     mkpath(output_dir)
 
-    reference = ElectronKinetics.blg_reference_setup()
+    reference = blg_reference_setup()
     mu0 = reference.mu0
     mass = reference.mass
     gamma_mr = 0.01
     gamma_mc = 0.1
-    bias = 0.1
+    bias = 0.2
     chi = 10.0
     n_angles = 80
     p_scatter = reference.p_scatter
 
     boundary_conditions = Dict(
         :walls => MaxwellWallBC(p_scatter),
-        :inlet => OhmicContactBC(bias / 2),
-        :outlet => OhmicContactBC(-bias / 2),
+        :contact_top => OhmicContactBC(-bias / 2),
+        :contact_bottom => OhmicContactBC(bias / 2),
     )
 
     params = SolveParams(;
@@ -33,12 +34,10 @@ function main()
         max_harmonic_auto=50,
     )
 
-    run_name = "tesla_valve_live_mesh_native_angle_rate_n50_bias01_chi10_gamma_mc01"
+    run_name = "square_bells_live_mesh_native_angle_rate_n80_bias02_chi10_gamma_mc01"
     live_h5_path = joinpath(project_root, "live_viz_$(run_name)_mesh_native.h5")
 
-    @info "Running Tesla valve angle-rate live mesh-native case" mu0 mass gamma_mr gamma_mc bias chi n_angles polydeg=params.polydeg tspan_end=params.tspan_end residual_tol=params.residual_tol
-
-    # Intentionally skip the Python live viewer to avoid matplotlib windows.
+    @info "Running square bells angle-rate live mesh-native case" mu0 mass gamma_mr gamma_mc bias chi n_angles polydeg=params.polydeg tspan_end=params.tspan_end residual_tol=params.residual_tol
 
     sol, semi = ElectronKinetics.solve(
         mesh_path,
@@ -62,7 +61,7 @@ function main()
     mesh_native_path = joinpath(output_dir, "$(run_name)_mesh_native.h5")
     ElectronKinetics.save_for_analysis(sol, semi, cartesian_path)
     ElectronKinetics.save_mesh_native_analysis(sol, semi, mesh_native_path; refine=6)
-    @info "Saved Tesla valve exact-angle analysis output" cartesian_path mesh_native_path final_time=sol.t[end]
+    @info "Saved square bells angle-rate analysis output" cartesian_path mesh_native_path final_time=sol.t[end]
 
     return nothing
 end

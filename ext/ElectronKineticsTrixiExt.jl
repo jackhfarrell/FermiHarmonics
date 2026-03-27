@@ -52,6 +52,7 @@ import ElectronKinetics: LinearTransport,
                          SolverConfig,
                          TrixiProblem,
                          TwoRateAngleBGKCollision,
+                         AngleRateBGKCollision,
                          TwoRateProfile,
                          AngleGrid,
                          Isotropic2DFermiSurface,
@@ -153,6 +154,17 @@ function legacy_collision_model(
             mass=mass,
             electrostatic_coupling=chi,
         )
+    elseif collision_symbol_value === :angle_rate_bgk
+        isnothing(mu0) && throw(ArgumentError("mu0 is required for collision_model=:angle_rate_bgk"))
+        isnothing(mass) && throw(ArgumentError("mass is required for collision_model=:angle_rate_bgk"))
+        profile = isnothing(gamma3) ? OddQuarticRateProfile(gamma_mc) : OddQuarticRateProfile(gamma_mc, gamma3)
+        return AngleRateBGKCollision(
+            gamma_mr,
+            profile;
+            mu0=mu0,
+            mass=mass,
+            electrostatic_coupling=chi,
+        )
     end
 
     throw(ArgumentError("unsupported collision_model=$(collision_symbol_value)"))
@@ -219,7 +231,7 @@ function solve(
         mass=mass,
         chi=chi,
     )
-    discretization = if collision isa Union{ExactAngleBGKCollision, TwoRateAngleBGKCollision}
+    discretization = if collision isa Union{ExactAngleBGKCollision, TwoRateAngleBGKCollision, AngleRateBGKCollision}
         isnothing(n_angles) && throw(ArgumentError("n_angles is required for collision_model=$(collision_symbol(collision))"))
         AngleGrid(n_angles)
     else

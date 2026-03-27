@@ -135,8 +135,8 @@ function validate_collision_model(transport::Symbol, collision_model::Union{Noth
         return model
     end
 
-    model in (:quadratic_bgk, :exact_bgk, :two_rate_bgk) ||
-        throw(ArgumentError("collision_model must be :quadratic_bgk, :exact_bgk, or :two_rate_bgk for :parabolic_nonlinear transport"))
+    model in (:quadratic_bgk, :exact_bgk, :two_rate_bgk, :angle_rate_bgk) ||
+        throw(ArgumentError("collision_model must be :quadratic_bgk, :exact_bgk, :two_rate_bgk, or :angle_rate_bgk for :parabolic_nonlinear transport"))
     return model
 end
 

@@ -41,6 +41,7 @@ struct FermiAngles2D{NVARS, TData, TModel} <: AbstractFermiTransportEquations2D{
     mass::Float64
     electrostatic_coupling::Float64
     nonlinear_data::TData
+    mode_rate_filter::Union{Nothing, Vector{Float64}}
     model::TModel
 end
 
@@ -121,25 +122,70 @@ function harmonic_equations(model::KineticModel2D, max_harmonic::Int)
     )
 end
 
+function build_angle_mode_rate_filter(
+    profile::AbstractModeRateProfile,
+    ntheta::Int;
+    filter_tail_modes::Int=0,
+    filter_max_multiplier::Float64=1.0,
+    filter_shape::Symbol=:cosine,
+)
+    filter = zeros(Float64, ntheta)
+    half_ntheta = ntheta ÷ 2
+    max_m = half_ntheta
+    tail = min(filter_tail_modes, max_m)
+    start_m = max(2, max_m - tail + 1)
+    @inbounds for mode in 0:(ntheta - 1)
+        wave_number = mode <= half_ntheta ? mode : mode - ntheta
+        m = abs(wave_number)
+        if m < 2
+            filter[mode + 1] = 0.0
+            continue
+        end
+        gamma_mode = mode_rate(profile, m)
+        if tail > 0 && m >= start_m
+            r = tail <= 1 ? 1.0 : (m - start_m) / (tail - 1)
+            ramp = if filter_shape === :cosine
+                0.5 * (1.0 - cos(pi * r))
+            elseif filter_shape === :linear
+                r
+            else
+                r^4
+            end
+            gamma_mode *= 1.0 + (filter_max_multiplier - 1.0) * ramp
+        end
+        filter[mode + 1] = gamma_mode
+    end
+    return filter
+end
+
 function angle_equations(model::KineticModel2D)
     discretization = model.discretization
     collision = model.collision
     discretization isa AngleGrid || throw(ArgumentError("angle_equations requires an AngleGrid discretization"))
-    collision isa Union{ExactAngleBGKCollision, TwoRateAngleBGKCollision} ||
+    collision isa Union{ExactAngleBGKCollision, TwoRateAngleBGKCollision, AngleRateBGKCollision} ||
         throw(ArgumentError("angle_equations requires an angle BGK collision model"))
 
     ntheta = discretization.theta_count
     data = create_angle_transport_data(ntheta)
     vF = zero_state_speed(collision.mu0, collision.mass)
+    mode_rate_filter = collision isa AngleRateBGKCollision ?
+        build_angle_mode_rate_filter(
+            collision.profile,
+            ntheta;
+            filter_tail_modes=collision.filter_tail_modes,
+            filter_max_multiplier=collision.filter_max_multiplier,
+            filter_shape=collision.filter_shape,
+        ) : nothing
     return FermiAngles2D{ntheta, typeof(data), typeof(model)}(
         collision.gamma_mr,
-        collision.gamma_mc,
+        collision_gamma_mc(collision),
         vF,
         nonlinear_timestep_speed(vF, collision.electrostatic_coupling),
         collision.mu0,
         collision.mass,
         collision.electrostatic_coupling,
         data,
+        mode_rate_filter,
         model,
     )
 end

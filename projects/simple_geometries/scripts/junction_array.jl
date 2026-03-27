@@ -18,8 +18,8 @@ project_root = normpath(joinpath(@__DIR__, ".."))
 main_project = normpath(joinpath(project_root, "..", ".."))
 mesh_path = joinpath(project_root, "meshes", "junction", "junction_coarse.inp")
 results_root = joinpath(project_root, "results")
-n_jobs = 125
-cases_per_job = 20
+n_jobs = 320
+cases_per_job = 5
 mkpath(results_root)
 
 bias = 1.0 # change in a0 to drive flow
@@ -38,8 +38,8 @@ sbatch = Dict(
 )
 
 # grid of parameters
-gamma_mr_vals = 10 .^ range(log10(1e-2), log10(1e2), length=50)
-gamma_mc_vals = 10 .^ range(log10(1e-2), log10(1e2), length=50)
+gamma_mr_vals = 10 .^ range(log10(0.05), log10(5e2), length=40)
+gamma_mc_vals = 10 .^ range(log10(0.05), log10(5e2), length=40)
 total_cases = length(gamma_mr_vals) * length(gamma_mc_vals)
 @assert length(gamma_mr_vals) * length(gamma_mc_vals) == n_jobs * cases_per_job
 
@@ -56,7 +56,7 @@ solve_params = SolveParams(;
     max_harmonic_auto = 100,
     polydeg = 3,
     tspan_end = 100.0, # end time for simulation (if not converged earlier)
-    residual_tol = 1e-5,
+    residual_tol = 5e-5,
     cfl = 0.5,
     log_every = 500,
 )
