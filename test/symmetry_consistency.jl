@@ -96,3 +96,28 @@ end
         @test norm((Matrix(P_in) * delta) - delta, Inf) <= 1e-11
     end
 end
+
+@testset "Linear Harmonic Magnetic Coupling" begin
+    M = 4
+    omega_c = 0.7
+    model = KineticModel2D(
+        Isotropic2DFermiSurface(),
+        HarmonicBasis(M),
+        IsotropicHarmonicStreaming(),
+        LinearBGKCollision(0.0, ConstantModeRateProfile(0.0));
+        magnetic_field=MagneticField2D(omega_c),
+    )
+    eq, _ = TrixiExt.build_equations(model, SolverConfig(; min_harmonic=M, max_harmonic_auto=M))
+    nvars = 1 + 2 * M
+    state = zeros(Float64, nvars)
+    state[ElectronKinetics.cosine_index(1)] = 1.0
+    out = similar(state)
+    ElectronKinetics.collision_sources!(out, state, eq)
+
+    @test out[ElectronKinetics.cosine_index(1)] ≈ 0.0
+    @test out[ElectronKinetics.sine_index(1)] ≈ -omega_c
+    for m in 2:M
+        @test out[ElectronKinetics.cosine_index(m)] ≈ 0.0
+        @test out[ElectronKinetics.sine_index(m)] ≈ 0.0
+    end
+end

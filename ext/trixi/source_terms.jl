@@ -238,6 +238,19 @@ function collision_sources!(out::AbstractVector{Float64}, u, equations::LinearFe
             end
         end
     end
+    magnetic_field = equations.model.magnetic_field
+    if !isnothing(magnetic_field)
+        omega_c = magnetic_field.omega_c
+        if omega_c != 0.0 && n >= 3
+            max_harmonic = (n - 1) ÷ 2
+            @inbounds for m in 1:max_harmonic
+                ci = cosine_index(m)
+                si = sine_index(m)
+                out[ci] += m * omega_c * Float64(u[si])
+                out[si] += -m * omega_c * Float64(u[ci])
+            end
+        end
+    end
     return out
 end
 

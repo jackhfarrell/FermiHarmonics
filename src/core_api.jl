@@ -3,6 +3,15 @@ abstract type AbstractAngularDiscretization2D end
 abstract type AbstractStreamingOperator2D end
 abstract type AbstractModeRateProfile end
 abstract type AbstractCollisionModel2D end
+struct MagneticField2D
+    omega_c::Float64
+end
+
+function MagneticField2D(omega_c::Real)
+    omega_value = Float64(omega_c)
+    isfinite(omega_value) || throw(ArgumentError("omega_c must be finite"))
+    return MagneticField2D(omega_value)
+end
 
 """
     AbstractTransportMode
@@ -398,6 +407,7 @@ Base.@kwdef struct KineticModel2D{
     collision::TCollision
     bands::TBands = Band[]
     gamma_drag::Float64 = 0.0
+    magnetic_field::Union{Nothing, MagneticField2D} = nothing
     reference = nothing
 end
 
@@ -408,6 +418,7 @@ function KineticModel2D(
     collision::AbstractCollisionModel2D;
     bands=Band[],
     gamma_drag::Real=0.0,
+    magnetic_field::Union{Nothing, MagneticField2D}=nothing,
     reference=nothing,
 )
     band_specs = Band[coerce_band(band) for band in bands]
@@ -438,6 +449,13 @@ function KineticModel2D(
         # No N-band limit — drag coupling supported for N=2; N≥3 uses mean-field formula
     end
 
+    if !isnothing(magnetic_field)
+        discretization isa HarmonicBasis &&
+            collision isa LinearBGKCollision &&
+            isempty(band_specs) ||
+            throw(ArgumentError("magnetic_field currently supported only for single-band linear harmonics"))
+    end
+
     return KineticModel2D(
         surface,
         discretization,
@@ -445,6 +463,7 @@ function KineticModel2D(
         collision,
         band_specs,
         gamma_drag_value,
+        magnetic_field,
         reference,
     )
 end

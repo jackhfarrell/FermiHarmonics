@@ -20,6 +20,7 @@ API.
 - `OddQuarticRateProfile`
 - `ConstantModeRateProfile`
 - `CustomModeRateProfile`
+- `MagneticField2D`
 - `LinearBGKCollision`
 - `QuadraticBGKCollision`
 - `ExactAngleBGKCollision`
@@ -41,6 +42,20 @@ model = KineticModel2D(
     streaming,
     collision;
     reference = blg_reference_setup(),
+)
+```
+
+To include a uniform perpendicular magnetic field in linear harmonic runs:
+
+```julia
+magnetic_field = MagneticField2D(0.2)
+
+model = KineticModel2D(
+    surface,
+    discretization,
+    streaming,
+    collision;
+    magnetic_field = magnetic_field,
 )
 ```
 
