@@ -120,14 +120,21 @@ using Trixi
     @test Base.get_extension(ElectronKinetics, :ElectronKineticsTrixiExt) !== nothing
 end
 
-using GLMakie
+const HAS_GLMAKIE = try
+    using GLMakie
+    true
+catch
+    false
+end
 
-@testset "Makie Extension Loads" begin
-    @test Base.get_extension(ElectronKinetics, :ElectronKineticsMakieExt) !== nothing
+if HAS_GLMAKIE
+    @testset "Makie Extension Loads" begin
+        @test Base.get_extension(ElectronKinetics, :ElectronKineticsMakieExt) !== nothing
+    end
 end
 
 const TrixiExt = Base.get_extension(ElectronKinetics, :ElectronKineticsTrixiExt)
-const MakieExt = Base.get_extension(ElectronKinetics, :ElectronKineticsMakieExt)
+const MakieExt = HAS_GLMAKIE ? Base.get_extension(ElectronKinetics, :ElectronKineticsMakieExt) : nothing
 
 const TESLA_MESH = normpath(joinpath(@__DIR__, "..", "projects", "nonlinearities", "mesh", "tesla_valve.inp"))
 const STRAIGHT_CHANNEL_GEO = normpath(joinpath(@__DIR__, "..", "demo", "mesh", "straight_channel.geo"))
@@ -210,41 +217,43 @@ end
     @test !TrixiExt.should_update_live_visualization(state, 4)
 end
 
-@testset "Makie Dashboard Updates In Place" begin
-    config = LiveVisualizationConfig(; geometry_mode=:cartesian, show_window=false)
-    snapshot0 = LiveVisualizationSnapshot(
-        LiveProgressSnapshot(0, 0.0, 1.0, 1.0, 1.0e-3, 0.0, 0.0, :steady_state, :running),
-        LiveFieldSnapshot(
-            :a0,
-            :cartesian,
-            "a0",
-            collect(range(-1.0, 1.0; length=8)),
-            collect(range(-1.0, 1.0; length=8)),
-            rand(8, 8),
-            trues(8, 8),
-            nothing,
-        ),
-    )
-    dashboard = ElectronKinetics.create_live_dashboard(config, snapshot0; name="dashboard_test")
-    original_plot = dashboard.field_plot
+if HAS_GLMAKIE
+    @testset "Makie Dashboard Updates In Place" begin
+        config = LiveVisualizationConfig(; geometry_mode=:cartesian, show_window=false)
+        snapshot0 = LiveVisualizationSnapshot(
+            LiveProgressSnapshot(0, 0.0, 1.0, 1.0, 1.0e-3, 0.0, 0.0, :steady_state, :running),
+            LiveFieldSnapshot(
+                :a0,
+                :cartesian,
+                "a0",
+                collect(range(-1.0, 1.0; length=8)),
+                collect(range(-1.0, 1.0; length=8)),
+                rand(8, 8),
+                trues(8, 8),
+                nothing,
+            ),
+        )
+        dashboard = ElectronKinetics.create_live_dashboard(config, snapshot0; name="dashboard_test")
+        original_plot = dashboard.field_plot
 
-    snapshot1 = LiveVisualizationSnapshot(
-        LiveProgressSnapshot(10, 0.5, 1.0, 1.0e-2, 1.0e-3, 0.5, 0.5, :steady_state, :running),
-        LiveFieldSnapshot(
-            :a0,
-            :cartesian,
-            "a0",
-            snapshot0.field.x,
-            snapshot0.field.y,
-            fill(2.0, 8, 8),
-            trues(8, 8),
-            nothing,
-        ),
-    )
-    ElectronKinetics.update_live_dashboard!(dashboard, snapshot1)
+        snapshot1 = LiveVisualizationSnapshot(
+            LiveProgressSnapshot(10, 0.5, 1.0, 1.0e-2, 1.0e-3, 0.5, 0.5, :steady_state, :running),
+            LiveFieldSnapshot(
+                :a0,
+                :cartesian,
+                "a0",
+                snapshot0.field.x,
+                snapshot0.field.y,
+                fill(2.0, 8, 8),
+                trues(8, 8),
+                nothing,
+            ),
+        )
+        ElectronKinetics.update_live_dashboard!(dashboard, snapshot1)
 
-    @test dashboard.field_plot === original_plot
-    @test all(dashboard.field_values[] .== 2.0)
+        @test dashboard.field_plot === original_plot
+        @test all(dashboard.field_values[] .== 2.0)
+    end
 end
 
 @testset "Linear Harmonic Solve" begin
