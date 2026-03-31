@@ -3,6 +3,34 @@ abstract type AbstractAngularDiscretization2D end
 abstract type AbstractStreamingOperator2D end
 abstract type AbstractModeRateProfile end
 abstract type AbstractCollisionModel2D end
+
+"""
+    AbstractLinearCollision <: AbstractCollisionModel2D
+
+Linear transport collision models for harmonic expansion basis.
+All subtypes have a `gamma_mr` field (momentum-relaxing scattering rate).
+Collision behavior: τ⁻¹_total = gamma_mr + gamma_ee(mode).
+
+Subtypes:
+- `LinearBGKCollision` — BGK collision with mode-dependent profile
+- `LinearCollisionMatrix` — User-supplied collision matrix
+"""
+abstract type AbstractLinearCollision <: AbstractCollisionModel2D end
+
+"""
+    AbstractNonlinearAngleCollision <: AbstractCollisionModel2D
+
+Nonlinear parabolic-band collision models for angle-grid discretization.
+All subtypes have: `gamma_mr`, `mu0`, `mass`, `electrostatic_coupling`.
+
+Subtypes:
+- `QuadraticBGKCollision` — Quadratic band BGK collision
+- `ExactAngleBGKCollision` — Exact angle-dependent BGK
+- `TwoRateAngleBGKCollision` — Two-rate angle BGK
+- `AngleRateBGKCollision` — Mode-rate filtered angle BGK
+"""
+abstract type AbstractNonlinearAngleCollision <: AbstractCollisionModel2D end
+
 struct MagneticField2D
     omega_c::Float64
 end
@@ -248,7 +276,7 @@ end
 @inline mode_rate(profile::ConstantModeRateProfile, m::Int) = m >= 2 ? profile.gamma : 0.0
 @inline mode_rate(profile::CustomModeRateProfile, m::Int) = m >= 2 ? Float64(profile.rate(m)) : 0.0
 
-struct LinearBGKCollision{P<:AbstractModeRateProfile} <: AbstractCollisionModel2D
+struct LinearBGKCollision{P<:AbstractModeRateProfile} <: AbstractLinearCollision
     gamma_mr::Float64
     profile::P
 end
@@ -257,7 +285,7 @@ function LinearBGKCollision(gamma_mr::Real, profile::AbstractModeRateProfile=Two
     return LinearBGKCollision{typeof(profile)}(_require_nonneg("gamma_mr", gamma_mr), profile)
 end
 
-struct LinearCollisionMatrix <: AbstractCollisionModel2D
+struct LinearCollisionMatrix <: AbstractLinearCollision
     gamma_mr::Float64
     gamma_ee::Float64
     gamma3::Float64
@@ -286,7 +314,7 @@ function LinearCollisionMatrix(
     )
 end
 
-struct QuadraticBGKCollision{P<:AbstractModeRateProfile} <: AbstractCollisionModel2D
+struct QuadraticBGKCollision{P<:AbstractModeRateProfile} <: AbstractNonlinearAngleCollision
     gamma_mr::Float64
     profile::P
     mu0::Float64
@@ -318,7 +346,7 @@ function QuadraticBGKCollision(
     )
 end
 
-struct ExactAngleBGKCollision <: AbstractCollisionModel2D
+struct ExactAngleBGKCollision <: AbstractNonlinearAngleCollision
     gamma_mr::Float64
     gamma_ee::Float64
     mu0::Float64
@@ -346,7 +374,7 @@ function ExactAngleBGKCollision(;
     )
 end
 
-struct TwoRateAngleBGKCollision <: AbstractCollisionModel2D
+struct TwoRateAngleBGKCollision <: AbstractNonlinearAngleCollision
     gamma_mr::Float64
     gamma_ee::Float64
     mu0::Float64
@@ -374,7 +402,7 @@ function TwoRateAngleBGKCollision(;
     )
 end
 
-struct AngleRateBGKCollision{P<:AbstractModeRateProfile} <: AbstractCollisionModel2D
+struct AngleRateBGKCollision{P<:AbstractModeRateProfile} <: AbstractNonlinearAngleCollision
     gamma_mr::Float64
     profile::P
     mu0::Float64
@@ -1001,16 +1029,53 @@ boundary_condition_name(::CurrentContactBC) = :current_contact
 @inline harmonic_state_nvars(max_harmonic::Integer) = 1 + 2 * Int(max_harmonic)
 @inline band_momentum_weight(band::Band) =
     surface_density_of_states(band.surface) * surface_mass(band.surface) * surface_vF(band.surface)
-@inline mode_profile(collision::Union{LinearBGKCollision, QuadraticBGKCollision}) = collision.profile
-@inline mode_profile(collision::AngleRateBGKCollision) = collision.profile
-@inline collision_gamma_mr(collision::Union{LinearBGKCollision, LinearCollisionMatrix, QuadraticBGKCollision, ExactAngleBGKCollision, TwoRateAngleBGKCollision, AngleRateBGKCollision}) = collision.gamma_mr
-@inline collision_gamma_ee(collision::Union{ExactAngleBGKCollision, TwoRateAngleBGKCollision}) = collision.gamma_ee
-@inline collision_gamma_ee(collision::AngleRateBGKCollision) = profile_reference_rate(collision.profile)
-@inline collision_gamma_ee(collision::LinearCollisionMatrix) = collision.gamma_ee
-@inline collision_mu0(collision::Union{QuadraticBGKCollision, ExactAngleBGKCollision, TwoRateAngleBGKCollision, AngleRateBGKCollision}) = collision.mu0
-@inline collision_mass(collision::Union{QuadraticBGKCollision, ExactAngleBGKCollision, TwoRateAngleBGKCollision, AngleRateBGKCollision}) = collision.mass
-@inline collision_electrostatic_coupling(collision::Union{QuadraticBGKCollision, ExactAngleBGKCollision, TwoRateAngleBGKCollision, AngleRateBGKCollision}) = collision.electrostatic_coupling
-@inline collision_theta_oversample(collision::QuadraticBGKCollision) = collision.theta_oversample
+# Mode rate profile accessor (works with LinearBGKCollision, QuadraticBGKCollision, AngleRateBGKCollision)
+@inline function mode_profile(collision::AbstractCollisionModel2D)
+    error("$(typeof(collision)) does not have a mode_profile. Only collisions with AbstractModeRateProfile have this.")
+end
+@inline mode_profile(c::LinearBGKCollision) = c.profile
+@inline mode_profile(c::QuadraticBGKCollision) = c.profile
+@inline mode_profile(c::AngleRateBGKCollision) = c.profile
+
+# Gamma_mr accessor — available for all collision types
+@inline function collision_gamma_mr(collision::AbstractCollisionModel2D)
+    error("$(typeof(collision)) does not implement collision_gamma_mr.")
+end
+@inline collision_gamma_mr(c::AbstractLinearCollision) = c.gamma_mr
+@inline collision_gamma_mr(c::AbstractNonlinearAngleCollision) = c.gamma_mr
+
+# Gamma_ee accessor — varies by collision type
+@inline function collision_gamma_ee(collision::AbstractCollisionModel2D)
+    error("gamma_ee query is complex and type-dependent. Use mode_rate(c.profile, m) for profiles.")
+end
+@inline collision_gamma_ee(c::ExactAngleBGKCollision) = c.gamma_ee
+@inline collision_gamma_ee(c::TwoRateAngleBGKCollision) = c.gamma_ee
+@inline collision_gamma_ee(c::LinearCollisionMatrix) = c.gamma_ee
+@inline collision_gamma_ee(c::AngleRateBGKCollision) = profile_reference_rate(c.profile)
+
+# mu0 accessor — for nonlinear angle collisions only
+@inline function collision_mu0(collision::AbstractCollisionModel2D)
+    error("$(typeof(collision)) does not have mu0. Only AbstractNonlinearAngleCollision models do.")
+end
+@inline collision_mu0(c::AbstractNonlinearAngleCollision) = c.mu0
+
+# mass accessor — for nonlinear angle collisions only
+@inline function collision_mass(collision::AbstractCollisionModel2D)
+    error("$(typeof(collision)) does not have mass. Only AbstractNonlinearAngleCollision models do.")
+end
+@inline collision_mass(c::AbstractNonlinearAngleCollision) = c.mass
+
+# electrostatic_coupling accessor — for nonlinear angle collisions only
+@inline function collision_electrostatic_coupling(collision::AbstractCollisionModel2D)
+    error("$(typeof(collision)) does not have electrostatic_coupling. Only AbstractNonlinearAngleCollision models do.")
+end
+@inline collision_electrostatic_coupling(c::AbstractNonlinearAngleCollision) = c.electrostatic_coupling
+
+# theta_oversample accessor — QuadraticBGKCollision only
+@inline function collision_theta_oversample(collision::AbstractCollisionModel2D)
+    error("$(typeof(collision)) does not have theta_oversample. Only QuadraticBGKCollision has this.")
+end
+@inline collision_theta_oversample(c::QuadraticBGKCollision) = c.theta_oversample
 @inline profile_reference_rate(profile::AbstractModeRateProfile) = mode_rate(profile, 2)
 
 @inline zero_state_speed(mu0::Real, mass::Real) = sqrt(2.0 * Float64(mu0) / Float64(mass))
