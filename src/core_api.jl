@@ -97,18 +97,72 @@ Subtypes:
 """
 abstract type AbstractNonlinearAngleCollision <: AbstractCollisionModel2D end
 
+# ============================================================================
+# Error Handling and Validation
+# ============================================================================
+
+"""
+    PhysicsError <: Exception
+
+Structured error type for physics validation issues.
+
+Fields:
+- `problem::String` — what went wrong
+- `details::String` — specific information (got what?)
+- `suggestion::String` — how to fix it
+- `context::String` — reference (where in docs?)
+"""
+struct PhysicsError <: Exception
+    problem::String
+    details::String
+    suggestion::String
+    context::String
+end
+
+PhysicsError(problem::String) = PhysicsError(problem, "", "", "")
+
+function Base.showerror(io::IO, e::PhysicsError)
+    print(io, "\n╔ PhysicsError: ", e.problem)
+    if !isempty(e.details)
+        print(io, "\n║\n║ Details: ", e.details)
+    end
+    if !isempty(e.suggestion)
+        print(io, "\n║ Suggestion: ", e.suggestion)
+    end
+    if !isempty(e.context)
+        print(io, "\n║ Reference: ", e.context)
+    end
+    print(io, "\n╚")
+end
+
 struct MagneticField2D
     omega_c::Float64
 end
 
-@inline function _require_nonneg(name::AbstractString, value::Real)
-    Float64(value) >= 0.0 || throw(ArgumentError("$name must be >= 0"))
-    return Float64(value)
+function _require_nonneg(name::AbstractString, value::Real)
+    val = Float64(value)
+    if !(val >= 0.0)
+        throw(PhysicsError(
+            "$name must be non-negative",
+            "got $value",
+            "use a non-negative value",
+            "physics constraint"
+        ))
+    end
+    return val
 end
 
-@inline function _require_pos(name::AbstractString, value::Real)
-    Float64(value) > 0.0 || throw(ArgumentError("$name must be > 0"))
-    return Float64(value)
+function _require_pos(name::AbstractString, value::Real)
+    val = Float64(value)
+    if !(val > 0.0)
+        throw(PhysicsError(
+            "$name must be positive",
+            "got $value",
+            "use a positive value (> 0)",
+            "physics constraint"
+        ))
+    end
+    return val
 end
 
 function MagneticField2D(omega_c::Real)
@@ -851,10 +905,22 @@ function _validate_model_compatibility(
     streaming::AbstractStreamingOperator2D,
     collision::AbstractCollisionModel2D
 )
-    streaming isa AbstractIsotropicStreaming ||
-        throw(ArgumentError("HarmonicBasis requires isotropic streaming operator (got $(typeof(streaming)))"))
-    collision isa AbstractLinearCollision ||
-        throw(ArgumentError("HarmonicBasis requires linear collision model (got $(typeof(collision)))"))
+    if !(streaming isa AbstractIsotropicStreaming)
+        throw(PhysicsError(
+            "HarmonicBasis requires isotropic streaming",
+            "got $(typeof(streaming))",
+            "use IsotropicHarmonicStreaming()",
+            ""
+        ))
+    end
+    if !(collision isa AbstractLinearCollision)
+        throw(PhysicsError(
+            "HarmonicBasis incompatible with collision model",
+            "got $(typeof(collision))",
+            "use LinearBGKCollision, LinearCollisionMatrix, or QuadraticBGKCollision",
+            "see @ref LinearBGKCollision"
+        ))
+    end
 end
 
 function _validate_model_compatibility(
@@ -862,10 +928,22 @@ function _validate_model_compatibility(
     streaming::AbstractStreamingOperator2D,
     collision::AbstractCollisionModel2D
 )
-    streaming isa AbstractIsotropicStreaming ||
-        throw(ArgumentError("AngleGrid requires isotropic streaming operator (got $(typeof(streaming)))"))
-    collision isa AbstractNonlinearAngleCollision ||
-        throw(ArgumentError("AngleGrid requires nonlinear collision model (got $(typeof(collision)))"))
+    if !(streaming isa AbstractIsotropicStreaming)
+        throw(PhysicsError(
+            "AngleGrid requires isotropic streaming",
+            "got $(typeof(streaming))",
+            "use IsotropicAngleStreaming()",
+            ""
+        ))
+    end
+    if !(collision isa AbstractNonlinearAngleCollision)
+        throw(PhysicsError(
+            "AngleGrid requires nonlinear collision model",
+            "got $(typeof(collision))",
+            "use QuadraticBGKCollision, ExactAngleBGKCollision, TwoRateAngleBGKCollision, or AngleRateBGKCollision",
+            "see @ref QuadraticBGKCollision"
+        ))
+    end
 end
 
 function KineticModel2D(

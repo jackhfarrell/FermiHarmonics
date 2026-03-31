@@ -201,6 +201,9 @@ const SolveParams = SolverConfig
 # Core Physics API — types and solvers users directly instantiate
 # ============================================================================
 export
+    # Error Handling
+    PhysicsError,
+
     # Fermi Surfaces
     Isotropic2DFermiSurface,
     EllipticFermiSurface2D,
