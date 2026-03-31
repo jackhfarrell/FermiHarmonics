@@ -67,12 +67,12 @@ function main()
     default_forward = joinpath(
         @__DIR__,
         "data_nonlinear",
-        "tesla_valve_live_mesh_native_gamma_mc02_M20_bias02_chi000_poly3_t2.h5",
+        "tesla_valve_live_mesh_native_gamma_ee02_M20_bias02_chi000_poly3_t2.h5",
     )
     default_backward = joinpath(
         @__DIR__,
         "data_nonlinear",
-        "tesla_valve_live_mesh_native_gamma_mc02_M20_bias02_reversed_chi000_poly3_t2.h5",
+        "tesla_valve_live_mesh_native_gamma_ee02_M20_bias02_reversed_chi000_poly3_t2.h5",
     )
 
     forward_path = length(ARGS) >= 1 ? ARGS[1] : get(ENV, "TESLA_FORWARD_FILE", default_forward)

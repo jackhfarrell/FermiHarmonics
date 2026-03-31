@@ -2,7 +2,7 @@ abstract type AbstractFermiTransportEquations2D{NVARS} <: Trixi.AbstractEquation
 
 struct FermiHarmonics2D{NVARS, TTransport<:AbstractTransportMode, TData, TModel} <: AbstractFermiTransportEquations2D{NVARS}
     gamma_mr::Float64
-    gamma_mc::Float64
+    gamma_ee::Float64
     gamma3::Float64
     max_speed::Float64
     timestep_speed::Float64
@@ -34,7 +34,7 @@ end
 
 struct FermiAngles2D{NVARS, TData, TModel} <: AbstractFermiTransportEquations2D{NVARS}
     gamma_mr::Float64
-    gamma_mc::Float64
+    gamma_ee::Float64
     max_speed::Float64
     timestep_speed::Float64
     mu0::Float64
@@ -73,10 +73,13 @@ end
 function harmonic_equations(model::KineticModel2D, max_harmonic::Int)
     collision = model.collision
     surface = model.surface
-    collision isa Union{LinearBGKCollision, QuadraticBGKCollision} ||
-        throw(ArgumentError("harmonic_equations requires a harmonic BGK collision model"))
+    collision isa Union{LinearBGKCollision, LinearCollisionMatrix, QuadraticBGKCollision} ||
+        throw(ArgumentError("harmonic_equations requires a harmonic BGK collision model or LinearCollisionMatrix"))
 
     nvars = harmonic_state_nvars(max_harmonic)
+    if collision isa LinearCollisionMatrix && collision.max_harmonic != max_harmonic
+        throw(ArgumentError("collision matrix expects max_harmonic=$(collision.max_harmonic) but got max_harmonic=$max_harmonic"))
+    end
     if !isempty(model.bands)
         Ax, Ay = block_streaming_matrices(model.bands, max_harmonic)
         max_speed = maximum(surface_max_speed(band.surface) for band in model.bands)
@@ -95,8 +98,9 @@ function harmonic_equations(model::KineticModel2D, max_harmonic::Int)
     vF = collision isa QuadraticBGKCollision ? zero_state_speed(collision.mu0, collision.mass) : surface_vF(surface)
     Ax, Ay = collision isa QuadraticBGKCollision ? streaming_matrices(max_harmonic, vF) : streaming_matrices(max_harmonic, surface)
     gamma_mr = collision_gamma_mr(collision)
-    gamma_mc = profile_reference_rate(mode_profile(collision))
-    gamma3 = mode_profile(collision) isa OddQuarticRateProfile ? mode_profile(collision).gamma3 : gamma_mc
+    gamma_ee = collision isa LinearCollisionMatrix ? collision.gamma_ee : profile_reference_rate(mode_profile(collision))
+    gamma3 = collision isa LinearCollisionMatrix ? collision.gamma3 :
+        (mode_profile(collision) isa OddQuarticRateProfile ? mode_profile(collision).gamma3 : gamma_ee)
     mu0_value = collision isa QuadraticBGKCollision ? collision.mu0 : NaN
     mass_value = collision isa QuadraticBGKCollision ? collision.mass : NaN
     chi = collision isa QuadraticBGKCollision ? collision.electrostatic_coupling : 0.0
@@ -107,7 +111,7 @@ function harmonic_equations(model::KineticModel2D, max_harmonic::Int)
 
     return FermiHarmonics2D{nvars, transport_type, typeof(nonlinear_data), typeof(model)}(
         gamma_mr,
-        gamma_mc,
+        gamma_ee,
         gamma3,
         vF,
         timestep_speed,
@@ -178,7 +182,7 @@ function angle_equations(model::KineticModel2D)
         ) : nothing
     return FermiAngles2D{ntheta, typeof(data), typeof(model)}(
         collision.gamma_mr,
-        collision_gamma_mc(collision),
+        collision_gamma_ee(collision),
         vF,
         nonlinear_timestep_speed(vF, collision.electrostatic_coupling),
         collision.mu0,
@@ -201,7 +205,7 @@ function build_equations(model::KineticModel2D, config::SolverConfig)
             max_harmonic_resolved = maximum(
                 estimate_max_harmonic(
                     band.gamma_mr,
-                    band.gamma_mc;
+                    band.gamma_ee;
                     min_harmonic=config.min_harmonic,
                     max_harmonic=config.max_harmonic_auto,
                 ) for band in model.bands
@@ -210,13 +214,16 @@ function build_equations(model::KineticModel2D, config::SolverConfig)
         end
 
         collision = model.collision
+        if collision isa LinearCollisionMatrix && !(model.discretization.max_harmonic isa Integer)
+            throw(ArgumentError("LinearCollisionMatrix requires an explicit max_harmonic"))
+        end
         gamma_mr = collision_gamma_mr(collision)
-        gamma_mc = profile_reference_rate(mode_profile(collision))
+        gamma_ee = collision isa LinearCollisionMatrix ? collision.gamma_ee : profile_reference_rate(mode_profile(collision))
         max_harmonic_resolved, harmonic_mode = resolve_max_harmonic(
             model.discretization.max_harmonic,
             config,
             gamma_mr,
-            gamma_mc,
+            gamma_ee,
         )
         return harmonic_equations(model, max_harmonic_resolved), harmonic_mode
     end

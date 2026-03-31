@@ -65,7 +65,7 @@ case is:
 - `vF = 1`
 - `mass = 2`
 - `gamma_mr = 0`
-- `gamma_mc = 0`
+- `gamma_ee = 0`
 - total channel length `L = 1`
 
 This convention is exposed through `ElectronKinetics.blg_reference_setup()`.

@@ -54,7 +54,7 @@ function write_reference_metadata(path::AbstractString, reference, geo_path::Abs
         "mass" => reference.mass,
         "vF" => reference.vF,
         "gamma_mr" => reference.gamma_mr,
-        "gamma_mc" => reference.gamma_mc,
+        "gamma_ee" => reference.gamma_ee,
         "p_scatter" => reference.p_scatter,
         "transport" => String(reference.transport),
         "probe_x" => reference.probe_x,
@@ -95,7 +95,7 @@ function main()
     mass = reference.mass
     p_scatter = reference.p_scatter
     gamma_mr = reference.gamma_mr
-    gamma_mc = reference.gamma_mc
+    gamma_ee = reference.gamma_ee
     probe_x = reference.probe_x
 
     bias_values = [
@@ -130,14 +130,14 @@ function main()
         )
 
         run_name = "reference_straight_channel_low_drive_" * replace(string(bias), "." => "p")
-        @info "Running low-drive fit case" bias gamma_mr gamma_mc residual_tol=params.residual_tol
+        @info "Running low-drive fit case" bias gamma_mr gamma_ee residual_tol=params.residual_tol
 
         sol, semi = ElectronKinetics.solve(
             mesh_path,
             boundary_conditions,
             params,
             gamma_mr,
-            gamma_mc;
+            gamma_ee;
             transport = :parabolic_nonlinear,
             max_harmonic = :auto,
             mu0 = mu0,

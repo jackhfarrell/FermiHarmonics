@@ -8,7 +8,7 @@
   generation.
 - `TrixiProblem` stores either a mesh path or a geometry path plus the
   boundary-condition map passed to the Trixi backend.
-- `estimate_max_harmonic(gamma_mr, gamma_mc; min_harmonic, max_harmonic)` is
+- `estimate_max_harmonic(gamma_mr, gamma_ee; min_harmonic, max_harmonic)` is
   the conservative helper used by `HarmonicBasis(:auto)`.
 - `solve(problem, model, config; kwargs...)` is provided by the Trixi extension.
 
@@ -65,7 +65,7 @@ model = KineticModel2D(
     Isotropic2DFermiSurface(; vF=1.0, nu=1.0, mass=2.0, charge=-1.0),
     AngleGrid(128),
     IsotropicAngleStreaming(),
-    ExactAngleBGKCollision(; gamma_mr=0.05, gamma_mc=0.40, mu0=1.0, mass=2.0),
+    ExactAngleBGKCollision(; gamma_mr=0.05, gamma_ee=0.40, mu0=1.0, mass=2.0),
 )
 
 sol, semi = solve(problem, model, config; name = "exact_bgk_case")
@@ -78,7 +78,7 @@ sol, semi = solve(problem, model, config; name = "exact_bgk_case")
 - Legacy `solve("mesh.geo", boundary_conditions, ...)` is supported and generates a temporary unique `.inp` automatically.
 - `SolverConfig` controls discretization order, CFL, end time, residual target, logging cadence, and auto-harmonic bounds.
 - `MeshBuildConfig()` defaults to temporary unique output paths under `SLURM_TMPDIR` / `TMPDIR` / `tempdir()`.
-- `HarmonicBasis(:auto)` resolves its working harmonic count from `estimate_max_harmonic(gamma_mr, gamma_mc; ...)`.
+- `HarmonicBasis(:auto)` resolves its working harmonic count from `estimate_max_harmonic(gamma_mr, gamma_ee; ...)`.
 - Linear harmonic closures use `LinearBGKCollision(gamma_mr, profile)`.
 - Nonlinear harmonic closures use `QuadraticBGKCollision(gamma_mr, profile; mu0, mass, ...)`.
 - Angle-grid reference runs use `ExactAngleBGKCollision` or `TwoRateAngleBGKCollision`.
@@ -100,9 +100,9 @@ then selects `M` using a conservative logarithmic rule:
 
 So with the default v1 settings:
 
-- `(\gamma_mr, \gamma_mc) = (0, 0)` gives `M = 100`
-- `(\gamma_mr, \gamma_mc) = (0, 50)` selects an intermediate `M`
-- `(\gamma_mr, \gamma_mc) = (0, 300)` gives `M = 4`
+- `(\gamma_mr, \gamma_ee) = (0, 0)` gives `M = 100`
+- `(\gamma_mr, \gamma_ee) = (0, 50)` selects an intermediate `M`
+- `(\gamma_mr, \gamma_ee) = (0, 300)` gives `M = 4`
 
 You can tune the auto selector through `SolverConfig(; min_harmonic=..., max_harmonic_auto=...)`
 without changing the model structure.

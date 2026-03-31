@@ -42,7 +42,7 @@ end
 Source terms from a BGK-type approximation to the collision integral.  We do not damp 
 ``a_0`` (density). The momentum modes ``a_1, b_1`` are damped at the momentum-relaxing rate 
 ``\\gamma_mr``, while higher harmonics are damped at the full scattering rate 
-``\\gamma_mr + \\gamma_mc``.
+``\\gamma_mr + \\gamma_ee``.
 """
 @inline function physical_sources(u, x, t, equations::AbstractFermiTransportEquations2D)::SVector
     n = length(u)
@@ -68,7 +68,7 @@ end
         end
 
         if M >= 2
-            gamma_hi = band.gamma_mr + band.gamma_mc
+            gamma_hi = band.gamma_mr + band.gamma_ee
             for m in 2:M
                 out[offset + cosine_index(m)] = -gamma_hi * Float64(u[offset + cosine_index(m)])
                 out[offset + sine_index(m)] = -gamma_hi * Float64(u[offset + sine_index(m)])
@@ -146,10 +146,10 @@ end
 
     gamma_mr = equations.gamma_mr
     if isnothing(equations.mode_rate_filter)
-        gamma_mc = equations.gamma_mc
+        gamma_ee = equations.gamma_ee
         @inbounds for i in 1:n
             out[i] = -gamma_mr * (u[i] - isotropic_equilibrium[i]) -
-                     gamma_mc * (u[i] - drift_equilibrium[i])
+                     gamma_ee * (u[i] - drift_equilibrium[i])
         end
         return SVector(out)
     end
@@ -218,23 +218,31 @@ function collision_sources!(out::AbstractVector{Float64}, u, equations::Nonlinea
 end
 
 function collision_sources!(out::AbstractVector{Float64}, u, equations::LinearFermiHarmonics2D)
-    n = length(u)
-    profile = mode_profile(equations.model.collision)
-    @inbounds begin
-        out[1] = 0.0
-        if n >= 3
-            gamma_mr = equations.gamma_mr
-            out[2] = -gamma_mr * Float64(u[2])
-            out[3] = -gamma_mr * Float64(u[3])
-        end
-        if n > 3
-            max_harmonic = (n - 1) ÷ 2
-            for m in 2:max_harmonic
-                gamma_mode = equations.gamma_mr + mode_rate(profile, m)
-                ci = cosine_index(m)
-                si = sine_index(m)
-                out[ci] = -gamma_mode * Float64(u[ci])
-                out[si] = -gamma_mode * Float64(u[si])
+    collision = equations.model.collision
+    used_matrix = false
+    if collision isa LinearCollisionMatrix
+        mul!(out, collision.matrix, u)
+        used_matrix = true
+    end
+    if !used_matrix
+        n = length(u)
+        profile = mode_profile(collision)
+        @inbounds begin
+            out[1] = 0.0
+            if n >= 3
+                gamma_mr = equations.gamma_mr
+                out[2] = -gamma_mr * Float64(u[2])
+                out[3] = -gamma_mr * Float64(u[3])
+            end
+            if n > 3
+                max_harmonic = (n - 1) ÷ 2
+                for m in 2:max_harmonic
+                    gamma_mode = equations.gamma_mr + mode_rate(profile, m)
+                    ci = cosine_index(m)
+                    si = sine_index(m)
+                    out[ci] = -gamma_mode * Float64(u[ci])
+                    out[si] = -gamma_mode * Float64(u[si])
+                end
             end
         end
     end

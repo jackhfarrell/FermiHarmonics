@@ -13,7 +13,7 @@ function main()
     mu0 = reference.mu0
     mass = reference.mass
     gamma_mr = 0.0
-    gamma_mc = 200.0
+    gamma_ee = 200.0
     bias = 0.1
     chi = 0.0
     max_harmonic = 5
@@ -35,16 +35,16 @@ function main()
         max_harmonic_auto=20,
     )
 
-    run_name = "square_bells_live_streamlines_gamma_mc200_M5_bias10_chi000_poly3_t2"
+    run_name = "square_bells_live_streamlines_gamma_ee200_M5_bias10_chi000_poly3_t2"
 
-    @info "Running square-bells nonlinear live streamline case" mu0 mass gamma_mr gamma_mc bias chi max_harmonic polydeg=params.polydeg tspan_end=params.tspan_end residual_tol=params.residual_tol
+    @info "Running square-bells nonlinear live streamline case" mu0 mass gamma_mr gamma_ee bias chi max_harmonic polydeg=params.polydeg tspan_end=params.tspan_end residual_tol=params.residual_tol
 
     sol, semi = ElectronKinetics.solve(
         mesh_path,
         boundary_conditions,
         params,
         gamma_mr,
-        gamma_mc;
+        gamma_ee;
         transport=:parabolic_nonlinear,
         max_harmonic=max_harmonic,
         mu0=mu0,

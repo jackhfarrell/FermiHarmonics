@@ -31,16 +31,16 @@ function main()
     )
 
     gamma_mr = reference.gamma_mr
-    gamma_mc = reference.gamma_mc
+    gamma_ee = reference.gamma_ee
     run_name = "reference_nonlinear_live_demo"
 
-    @info "Running nonlinear live demo" mu0 mass bias gamma_mr gamma_mc
+    @info "Running nonlinear live demo" mu0 mass bias gamma_mr gamma_ee
 
     model = KineticModel2D(
         Isotropic2DFermiSurface(; vF=1.0, nu=1.0, mass=mass, charge=-1.0),
         HarmonicBasis(:auto),
         IsotropicHarmonicStreaming(),
-        QuadraticBGKCollision(gamma_mr, OddQuarticRateProfile(gamma_mc); mu0=mu0, mass=mass),
+        QuadraticBGKCollision(gamma_mr, OddQuarticRateProfile(gamma_ee); mu0=mu0, mass=mass),
         reference = reference,
     )
 

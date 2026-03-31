@@ -76,10 +76,10 @@ def main():
     project_root = Path(__file__).resolve().parents[1]
     run_dirs = [
         project_root / "demo" / "data_straight_channel_linearity",
-        project_root / "demo" / "data_straight_channel_linearity_gamma_mc_1p0",
-        project_root / "demo" / "data_straight_channel_linearity_gamma_mc_100p0",
+        project_root / "demo" / "data_straight_channel_linearity_gamma_ee_1p0",
+        project_root / "demo" / "data_straight_channel_linearity_gamma_ee_100p0",
     ]
-    output_dir = project_root / "demo" / "data_straight_channel_linearity_gamma_mc_comparison"
+    output_dir = project_root / "demo" / "data_straight_channel_linearity_gamma_ee_comparison"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     loaded = [load_run(directory) for directory in run_dirs]
@@ -92,11 +92,11 @@ def main():
 
     fit_results = []
     for metadata, bias, current in loaded:
-        fit_results.append((float(metadata.get("sweep_gamma_mc", 0.0)), fit_residual(bias, current)))
+        fit_results.append((float(metadata.get("sweep_gamma_ee", 0.0)), fit_residual(bias, current)))
 
     overlay_fig, overlay_ax = plt.subplots(figsize=(7.8, 5.2))
     overlay_ax.axhline(0.0, color="black", linewidth=1.2, linestyle="--")
-    for (gamma_mc, fit), color, marker in zip(fit_results, COLORS, MARKERS):
+    for (gamma_ee, fit), color, marker in zip(fit_results, COLORS, MARKERS):
         overlay_ax.plot(
             reference_bias,
             fit["residual"],
@@ -104,7 +104,7 @@ def main():
             markersize=6,
             color=color,
             linestyle="none",
-            label=rf"data: $\gamma_{{mc}}={gamma_mc:g}$",
+            label=rf"data: $\gamma_{{ee}}={gamma_ee:g}$",
         )
         overlay_ax.plot(
             fit["fit_x"],
@@ -113,7 +113,7 @@ def main():
             linewidth=2,
             color=color,
             alpha=0.9,
-            label=rf"fit: $\gamma_{{mc}}={gamma_mc:g}$",
+            label=rf"fit: $\gamma_{{ee}}={gamma_ee:g}$",
         )
     overlay_ax.set_xlabel(r"applied bias ($\Delta\mu$)")
     overlay_ax.set_ylabel(r"$I - G_{0,2} x$")
@@ -128,7 +128,7 @@ def main():
     reference_gamma, reference_fit = fit_results[0]
     diff_fig, diff_ax = plt.subplots(figsize=(7.8, 5.2))
     diff_ax.axhline(0.0, color="black", linewidth=1.2, linestyle="--")
-    for (gamma_mc, fit), color, marker in zip(fit_results[1:], COLORS[1:], MARKERS[1:]):
+    for (gamma_ee, fit), color, marker in zip(fit_results[1:], COLORS[1:], MARKERS[1:]):
         residual_difference = fit["residual"] - reference_fit["residual"]
         diff_ax.plot(
             reference_bias,
@@ -137,7 +137,7 @@ def main():
             linewidth=2,
             markersize=6,
             color=color,
-            label=rf"$\gamma_{{mc}}={gamma_mc:g}$ minus $\gamma_{{mc}}={reference_gamma:g}$",
+            label=rf"$\gamma_{{ee}}={gamma_ee:g}$ minus $\gamma_{{ee}}={reference_gamma:g}$",
         )
     diff_ax.set_xlabel(r"applied bias ($\Delta\mu$)")
     diff_ax.set_ylabel(r"$\Delta[(I - G_{0,2}x)]$")
@@ -149,10 +149,10 @@ def main():
     diff_fig.savefig(diff_path, dpi=200)
     plt.close(diff_fig)
 
-    summary_path = output_dir / "straight_channel_first_two_residual_gamma_mc_comparison.txt"
+    summary_path = output_dir / "straight_channel_first_two_residual_gamma_ee_comparison.txt"
     with summary_path.open("w") as f:
-        for gamma_mc, fit in fit_results:
-            label = f"gamma_mc_{gamma_mc:g}".replace(".", "p")
+        for gamma_ee, fit in fit_results:
+            label = f"gamma_ee_{gamma_ee:g}".replace(".", "p")
             f.write(f"{label}_G0_2={fit['slope']}\n")
             f.write(f"{label}_a1={fit['a1']}\n")
             f.write(f"{label}_a3={fit['a3']}\n")

@@ -20,7 +20,7 @@ EXPECTED_REFERENCE_METADATA = {
     "mass": 2.0,
     "vF": 1.0,
     "gamma_mr": 0.0,
-    "gamma_mc": 0.0,
+    "gamma_ee": 0.0,
     "transport": "parabolic_nonlinear",
     "analysis_case": "reference",
 }
@@ -151,7 +151,7 @@ def fit_and_plot(drive, integrated_current, output_dir, stem, xlabel, title_driv
         f.write(f"mu0={metadata['mu0']}\n")
         f.write(f"mass={metadata['mass']}\n")
         f.write(f"gamma_mr={metadata['gamma_mr']}\n")
-        f.write(f"gamma_mc={metadata['gamma_mc']}\n")
+        f.write(f"gamma_ee={metadata['gamma_ee']}\n")
         f.write(f"c1={c1}\n")
         f.write(f"c3={c3}\n")
         f.write(f"r_squared={r_squared}\n")

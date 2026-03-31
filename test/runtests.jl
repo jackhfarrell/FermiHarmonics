@@ -29,12 +29,26 @@ using HDF5
     @test live_config.accepted_step_interval == 25
 end
 
+@testset "Linear Collision Matrix" begin
+    M = 2
+    C = build_collision_matrix(M; gamma_mr=0.3, gamma_ee=1.2)
+    @test size(C, 1) == 1 + 2 * M
+    @test C[1, 1] == 0.0
+    @test C[cosine_index(1), cosine_index(1)] ≈ -0.3
+    @test C[sine_index(1), sine_index(1)] ≈ -0.3
+    @test C[cosine_index(2), cosine_index(2)] ≈ -(0.3 + 1.2)
+    @test C[sine_index(2), sine_index(2)] ≈ -(0.3 + 1.2)
+
+    collision = LinearCollisionMatrix(C; gamma_mr=0.3, gamma_ee=1.2)
+    @test collision.max_harmonic == M
+end
+
 @testset "Core Multiband Bookkeeping" begin
     bands = [
         Band(Isotropic2DFermiSurface(; vF=1.0, nu=1.5, mass=1.0, charge=-1.0);
-             name=:light, gamma_mr=0.0, gamma_mc=0.2),
+             name=:light, gamma_mr=0.0, gamma_ee=0.2),
         Band(Isotropic2DFermiSurface(; vF=0.8, nu=2.0, mass=3.0, charge=1.0);
-             name=:heavy, gamma_mr=0.1, gamma_mc=0.4),
+             name=:heavy, gamma_mr=0.1, gamma_ee=0.4),
     ]
     model = KineticModel2D(
         Isotropic2DFermiSurface(),
@@ -89,7 +103,7 @@ end
 
 @testset "Band with EllipticFermiSurface2D" begin
     s = EllipticFermiSurface2D(; vF0=1.0, aspect=2.0, nu=1.5, mass=1.0, charge=-1.0)
-    b = Band(s; name=:electron, gamma_mr=0.1, gamma_mc=0.2)
+    b = Band(s; name=:electron, gamma_mr=0.1, gamma_ee=0.2)
     @test b.surface === s
     @test surface_vF(b.surface) ≈ 1.0
     @test surface_max_speed(b.surface) ≈ 2.0     # vF0 * aspect = 2.0
@@ -99,9 +113,9 @@ end
 
 @testset "3-band linear model" begin
     bands = [
-        Band(Isotropic2DFermiSurface(; vF=1.0, nu=1.0, mass=1.0, charge=-1.0); name=:a, gamma_mr=0.1, gamma_mc=0.2),
-        Band(Isotropic2DFermiSurface(; vF=0.8, nu=1.2, mass=1.5, charge=-1.0); name=:b, gamma_mr=0.1, gamma_mc=0.3),
-        Band(Isotropic2DFermiSurface(; vF=0.6, nu=0.9, mass=2.0, charge=-1.0); name=:c, gamma_mr=0.05, gamma_mc=0.1),
+        Band(Isotropic2DFermiSurface(; vF=1.0, nu=1.0, mass=1.0, charge=-1.0); name=:a, gamma_mr=0.1, gamma_ee=0.2),
+        Band(Isotropic2DFermiSurface(; vF=0.8, nu=1.2, mass=1.5, charge=-1.0); name=:b, gamma_mr=0.1, gamma_ee=0.3),
+        Band(Isotropic2DFermiSurface(; vF=0.6, nu=0.9, mass=2.0, charge=-1.0); name=:c, gamma_mr=0.05, gamma_ee=0.1),
     ]
     model = KineticModel2D(
         Isotropic2DFermiSurface(),
@@ -423,7 +437,7 @@ end
         Isotropic2DFermiSurface(; vF=1.0, nu=1.0, mass=2.0, charge=-1.0),
         AngleGrid(16),
         IsotropicAngleStreaming(),
-        ExactAngleBGKCollision(; gamma_mr=0.0, gamma_mc=0.5, mu0=1.0, mass=2.0, electrostatic_coupling=0.0),
+        ExactAngleBGKCollision(; gamma_mr=0.0, gamma_ee=0.5, mu0=1.0, mass=2.0, electrostatic_coupling=0.0),
     )
     sol, semi = solve(TrixiProblem(; mesh_path=TESLA_MESH, boundary_conditions=TESLA_BCS), model, config; name="test_exact_angle")
     snapshot = TrixiExt.build_live_field_snapshot(sol.u[end], semi, LiveVisualizationConfig(; geometry_mode=:mesh_native, show_window=false, refine=2))
@@ -446,7 +460,7 @@ end
         Isotropic2DFermiSurface(; vF=1.0, nu=1.0, mass=2.0, charge=-1.0),
         AngleGrid(16),
         IsotropicAngleStreaming(),
-        ExactAngleBGKCollision(; gamma_mr=0.0, gamma_mc=0.1, mu0=1.0, mass=2.0, electrostatic_coupling=0.0),
+        ExactAngleBGKCollision(; gamma_mr=0.0, gamma_ee=0.1, mu0=1.0, mass=2.0, electrostatic_coupling=0.0),
     )
     equations, _ = TrixiExt.build_equations(model, config)
     ntheta = Trixi.nvariables(equations)
@@ -524,8 +538,8 @@ end
         max_harmonic_auto=4,
     )
     bands = [
-        Band(Isotropic2DFermiSurface(; vF=1.0, nu=1.5, mass=1.0, charge=-1.0); name=:light, gamma_mr=0.0, gamma_mc=0.2),
-        Band(Isotropic2DFermiSurface(; vF=0.8, nu=2.0, mass=3.0, charge=1.0); name=:heavy, gamma_mr=0.1, gamma_mc=0.4),
+        Band(Isotropic2DFermiSurface(; vF=1.0, nu=1.5, mass=1.0, charge=-1.0); name=:light, gamma_mr=0.0, gamma_ee=0.2),
+        Band(Isotropic2DFermiSurface(; vF=0.8, nu=2.0, mass=3.0, charge=1.0); name=:heavy, gamma_mr=0.1, gamma_ee=0.4),
     ]
     model = KineticModel2D(
         Isotropic2DFermiSurface(),

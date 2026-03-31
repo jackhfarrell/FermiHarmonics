@@ -16,7 +16,7 @@ function main()
     mu0 = reference.mu0
     mass = reference.mass
     gamma_mr = env_float("FH_TIMING_GAMMA_MR", 0.01)
-    gamma_mc = env_float("FH_TIMING_GAMMA_MC", 0.01)
+    gamma_ee = env_float("FH_TIMING_GAMMA_MC", 0.01)
     bias = env_float("FH_TIMING_BIAS", 0.2)
     chi = env_float("FH_TIMING_CHI", 0.0)
     max_harmonic = env_int("FH_TIMING_MAX_HARMONIC", 50)
@@ -44,7 +44,7 @@ function main()
     println("Quadratic Tesla timing run")
     println("mesh_path         = ", mesh_path)
     println("gamma_mr         = ", gamma_mr)
-    println("gamma_mc         = ", gamma_mc)
+    println("gamma_ee         = ", gamma_ee)
     println("bias             = ", bias)
     println("chi              = ", chi)
     println("max_harmonic     = ", max_harmonic)
@@ -62,7 +62,7 @@ function main()
         boundary_conditions,
         params,
         gamma_mr,
-        gamma_mc;
+        gamma_ee;
         transport=:parabolic_nonlinear,
         max_harmonic=max_harmonic,
         mu0=mu0,

@@ -42,6 +42,7 @@ import ElectronKinetics: LinearTransport,
                          LiveVisualizationSnapshot,
                          live_dashboard_is_open,
                          LinearBGKCollision,
+                         LinearCollisionMatrix,
                          MeshBuildConfig,
                          MaxwellWallBC,
                          NonlinearBoundaryFaceData,
@@ -62,7 +63,7 @@ import ElectronKinetics: LinearTransport,
                          boundary_condition_name,
                          coerce_band,
                          collision_electrostatic_coupling,
-                         collision_gamma_mc,
+                         collision_gamma_ee,
                          collision_gamma_mr,
                          collision_mass,
                          collision_mu0,
@@ -74,6 +75,7 @@ import ElectronKinetics: LinearTransport,
                          harmonic_state_nvars,
                          mode_profile,
                          mode_rate,
+                         build_collision_matrix,
                          nonlinear_timestep_speed,
                          nonlinear_timing_enabled,
                          profile_reference_rate,
@@ -105,7 +107,7 @@ include("trixi/trixi_runner.jl")
 
 function legacy_collision_model(
     gamma_mr::Real,
-    gamma_mc::Real;
+    gamma_ee::Real;
     transport::Symbol,
     collision_model::Union{Nothing, Symbol},
     gamma3::Union{Nothing, Real},
@@ -116,7 +118,7 @@ function legacy_collision_model(
     if transport === :linear
         isnothing(collision_model) || collision_model in (:linear, :linear_mrt) ||
             throw(ArgumentError("transport=:linear supports only collision_model=:linear_mrt"))
-        return LinearBGKCollision(gamma_mr, TwoRateProfile(gamma_mc))
+        return LinearBGKCollision(gamma_mr, TwoRateProfile(gamma_ee))
     end
 
     transport === :parabolic_nonlinear ||
@@ -126,7 +128,7 @@ function legacy_collision_model(
     if collision_symbol_value === :quadratic_bgk
         isnothing(mu0) && throw(ArgumentError("mu0 is required for collision_model=:quadratic_bgk"))
         isnothing(mass) && throw(ArgumentError("mass is required for collision_model=:quadratic_bgk"))
-        profile = isnothing(gamma3) ? OddQuarticRateProfile(gamma_mc) : OddQuarticRateProfile(gamma_mc, gamma3)
+        profile = isnothing(gamma3) ? OddQuarticRateProfile(gamma_ee) : OddQuarticRateProfile(gamma_ee, gamma3)
         return QuadraticBGKCollision(
             gamma_mr,
             profile;
@@ -139,7 +141,7 @@ function legacy_collision_model(
         isnothing(mass) && throw(ArgumentError("mass is required for collision_model=:exact_bgk"))
         return ExactAngleBGKCollision(;
             gamma_mr=gamma_mr,
-            gamma_mc=gamma_mc,
+            gamma_ee=gamma_ee,
             mu0=mu0,
             mass=mass,
             electrostatic_coupling=chi,
@@ -149,7 +151,7 @@ function legacy_collision_model(
         isnothing(mass) && throw(ArgumentError("mass is required for collision_model=:two_rate_bgk"))
         return TwoRateAngleBGKCollision(;
             gamma_mr=gamma_mr,
-            gamma_mc=gamma_mc,
+            gamma_ee=gamma_ee,
             mu0=mu0,
             mass=mass,
             electrostatic_coupling=chi,
@@ -157,7 +159,7 @@ function legacy_collision_model(
     elseif collision_symbol_value === :angle_rate_bgk
         isnothing(mu0) && throw(ArgumentError("mu0 is required for collision_model=:angle_rate_bgk"))
         isnothing(mass) && throw(ArgumentError("mass is required for collision_model=:angle_rate_bgk"))
-        profile = isnothing(gamma3) ? OddQuarticRateProfile(gamma_mc) : OddQuarticRateProfile(gamma_mc, gamma3)
+        profile = isnothing(gamma3) ? OddQuarticRateProfile(gamma_ee) : OddQuarticRateProfile(gamma_ee, gamma3)
         return AngleRateBGKCollision(
             gamma_mr,
             profile;
@@ -202,7 +204,7 @@ function solve(
     boundary_conditions::Dict{Symbol, Any},
     params::SolveParams,
     gamma_mr::Real,
-    gamma_mc::Real;
+    gamma_ee::Real;
     max_harmonic::Union{Integer, Symbol, Nothing}=:auto,
     n_angles::Union{Nothing, Integer}=nothing,
     transport::Symbol=:linear,
@@ -223,7 +225,7 @@ function solve(
     validate(params)
     collision = legacy_collision_model(
         gamma_mr,
-        gamma_mc;
+        gamma_ee;
         transport=transport,
         collision_model=collision_model,
         gamma3=gamma3,

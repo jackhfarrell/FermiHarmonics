@@ -39,7 +39,7 @@ function write_probe_table(path::AbstractString, rows)
 end
 
 function write_reference_metadata(path::AbstractString, reference, geo_path::AbstractString, mesh_path::AbstractString;
-                                  analysis_case::AbstractString, gamma_mc::Float64)
+                                  analysis_case::AbstractString, gamma_ee::Float64)
     metadata = Dict(
         "convention_name" => reference.convention_name,
         "convention_version" => reference.convention_version,
@@ -49,7 +49,7 @@ function write_reference_metadata(path::AbstractString, reference, geo_path::Abs
         "mass" => reference.mass,
         "vF" => reference.vF,
         "gamma_mr" => reference.gamma_mr,
-        "gamma_mc" => reference.gamma_mc,
+        "gamma_ee" => reference.gamma_ee,
         "p_scatter" => reference.p_scatter,
         "transport" => String(reference.transport),
         "probe_x" => reference.probe_x,
@@ -59,7 +59,7 @@ function write_reference_metadata(path::AbstractString, reference, geo_path::Abs
         "mesh_geo" => basename(geo_path),
         "mesh_file" => basename(mesh_path),
         "analysis_case" => analysis_case,
-        "sweep_gamma_mc" => gamma_mc,
+        "sweep_gamma_ee" => gamma_ee,
     )
     open(path, "w") do io
         TOML.print(io, metadata)
@@ -149,15 +149,15 @@ function main()
     mass = reference.mass
     p_scatter = reference.p_scatter
     gamma_mr = reference.gamma_mr
-    gamma_mc = get_env_float("STRAIGHT_CHANNEL_GAMMA_MC", reference.gamma_mc)
+    gamma_ee = get_env_float("STRAIGHT_CHANNEL_GAMMA_MC", reference.gamma_ee)
     probe_x = reference.probe_x
     probe_y = reference.probe_y
     left_probe_x = reference.left_probe_x
     right_probe_x = reference.right_probe_x
-    analysis_case = iszero(gamma_mc - reference.gamma_mc) ? "reference" : "comparison"
+    analysis_case = iszero(gamma_ee - reference.gamma_ee) ? "reference" : "comparison"
     output_dir_default = analysis_case == "reference" ?
         joinpath(project_root, "demo", "data_straight_channel_linearity") :
-        joinpath(project_root, "demo", "data_straight_channel_linearity_gamma_mc_" * gamma_label(gamma_mc))
+        joinpath(project_root, "demo", "data_straight_channel_linearity_gamma_ee_" * gamma_label(gamma_ee))
     output_dir = get(ENV, "STRAIGHT_CHANNEL_OUTPUT_DIR", output_dir_default)
     mkpath(output_dir)
 
@@ -184,16 +184,16 @@ function main()
         )
 
         run_prefix = analysis_case == "reference" ? "reference_straight_channel_bias_" :
-            "comparison_gamma_mc_" * gamma_label(gamma_mc) * "_bias_"
+            "comparison_gamma_ee_" * gamma_label(gamma_ee) * "_bias_"
         run_name = run_prefix * replace(string(round(bias; sigdigits=4)), "." => "p")
-        @info "Running straight-channel sweep case" bias gamma_mr gamma_mc mu0 mass
+        @info "Running straight-channel sweep case" bias gamma_mr gamma_ee mu0 mass
 
         sol, semi = ElectronKinetics.solve(
             mesh_path,
             boundary_conditions,
             params,
             gamma_mr,
-            gamma_mc;
+            gamma_ee;
             transport = :parabolic_nonlinear,
             max_harmonic = :auto,
             mu0 = mu0,
@@ -232,7 +232,7 @@ function main()
     metadata_path = joinpath(output_dir, "probe_sweep_metadata.toml")
     write_probe_table(csv_path, rows)
     write_reference_metadata(metadata_path, reference, geo_path, mesh_path;
-                             analysis_case=analysis_case, gamma_mc=gamma_mc)
+                             analysis_case=analysis_case, gamma_ee=gamma_ee)
 
     baseline = rows[1].jx_over_bias
     fig = plot(
@@ -246,7 +246,7 @@ function main()
         label = "probe at (0, 0)",
         title = analysis_case == "reference" ?
             "Reference straight-channel linearity breakdown" :
-            "Comparison straight-channel linearity breakdown (gamma_mc = $(round(gamma_mc; sigdigits=4)))",
+            "Comparison straight-channel linearity breakdown (gamma_ee = $(round(gamma_ee; sigdigits=4)))",
         legend = :topright,
     )
     hline!(
@@ -274,7 +274,7 @@ function main()
         label = "cross-section current at x = 0",
         title = analysis_case == "reference" ?
             "Reference straight-channel integrated current breakdown" :
-            "Comparison straight-channel integrated current breakdown (gamma_mc = $(round(gamma_mc; sigdigits=4)))",
+            "Comparison straight-channel integrated current breakdown (gamma_ee = $(round(gamma_ee; sigdigits=4)))",
         legend = :topright,
     )
     hline!(
@@ -306,7 +306,7 @@ function main()
         label = "cross-section current at x = 0",
         title = analysis_case == "reference" ?
             "Reference straight-channel current vs measured average drop" :
-            "Comparison straight-channel current vs measured average drop (gamma_mc = $(round(gamma_mc; sigdigits=4)))",
+            "Comparison straight-channel current vs measured average drop (gamma_ee = $(round(gamma_ee; sigdigits=4)))",
         legend = :topright,
     )
     hline!(
@@ -336,7 +336,7 @@ function main()
         label = "low-drive data",
         title = analysis_case == "reference" ?
             "Reference straight-channel low-drive cubic-fit check" :
-            "Comparison straight-channel low-drive cubic-fit check (gamma_mc = $(round(gamma_mc; sigdigits=4)))",
+            "Comparison straight-channel low-drive cubic-fit check (gamma_ee = $(round(gamma_ee; sigdigits=4)))",
         legend = :topright,
     )
     plot!(

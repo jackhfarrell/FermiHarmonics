@@ -90,7 +90,7 @@ dimensionless:
 - `vF = 1`
 - `mass = 2`
 - `gamma_mr = 0`
-- `gamma_mc = 0`
+- `gamma_ee = 0`
 - straight-channel total length `L = 1`
 
 These values are available through `ElectronKinetics.blg_reference_setup()`.

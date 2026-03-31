@@ -1,24 +1,19 @@
-using GLMakie
 using ElectronKinetics, Trixi
 
 function main()
-    project_root = normpath(joinpath(@__DIR__, ".."))
-    geo_path = joinpath(project_root, "projects", "nonlinearities", "mesh", "tesla_valve.geo")
-    mesh_path = ElectronKinetics.generate_mesh_from_geo(
-        geo_path;
-        config=MeshBuildConfig(output_mode=:persistent),
-    )
-    output_dir = joinpath(@__DIR__, "data_nonlinear")
+    project_root = normpath(joinpath(@__DIR__, "..", "..", ".."))
+    mesh_path = joinpath(project_root, "projects", "nonlinearities", "mesh", "tesla_valve.inp")
+    output_dir = joinpath(project_root, "projects", "nonlinear", "data")
     mkpath(output_dir)
 
     reference = ElectronKinetics.blg_reference_setup()
     mu0 = reference.mu0
     mass = reference.mass
-    gamma_mr = reference.gamma_mr
-    gamma_mc = 0.2
-    bias = 0.5
-    chi = 10.0
-    max_harmonic = 20
+    gamma_mr = 0.01
+    gamma_ee = 0.01
+    bias = 0.2
+    chi = 0.0
+    max_harmonic = 50
     p_scatter = reference.p_scatter
 
     boundary_conditions = Dict(
@@ -33,20 +28,27 @@ function main()
         residual_tol=1e-3,
         cfl=0.8,
         log_every=200,
-        min_harmonic=4,
-        max_harmonic_auto=20,
+        min_harmonic=8,
+        max_harmonic_auto=50,
     )
 
-    run_name = "tesla_valve_live_mesh_native_gamma_mc02_M20_bias05_chi10_poly3_t2"
+    run_name = "tesla_valve_live_mesh_native_gamma_ee001_M50_bias02_chi000_poly3_t2"
+    live_h5_path = joinpath(project_root, "live_viz_$(run_name)_mesh_native.h5")
+    watcher_script = joinpath(project_root, "projects", "nonlinear", "scripts", "watch_mesh_native_live.py")
 
-    @info "Running Tesla valve nonlinear live mesh-native case" mu0 mass gamma_mr gamma_mc bias chi max_harmonic polydeg=params.polydeg tspan_end=params.tspan_end residual_tol=params.residual_tol
+    @info "Running Tesla valve nonlinear live mesh-native case" mu0 mass gamma_mr gamma_ee bias chi max_harmonic polydeg=params.polydeg tspan_end=params.tspan_end residual_tol=params.residual_tol
+
+    if isfile(watcher_script)
+        run(Cmd(["python3", watcher_script, live_h5_path]); wait=false)
+        @info "Started live viewer window" watcher_script live_h5_path
+    end
 
     sol, semi = ElectronKinetics.solve(
         mesh_path,
         boundary_conditions,
         params,
         gamma_mr,
-        gamma_mc;
+        gamma_ee;
         transport=:parabolic_nonlinear,
         max_harmonic=max_harmonic,
         mu0=mu0,

@@ -13,7 +13,7 @@ function main()
     mu0 = reference.mu0
     mass = reference.mass
     gamma_mr = reference.gamma_mr
-    gamma_mc = 100.0
+    gamma_ee = 100.0
     bias = 0.2
     chi = 10.0
     max_harmonic = 10
@@ -35,16 +35,16 @@ function main()
         max_harmonic_auto = 20,
     )
 
-    run_name = "nonlinear_live_gamma_mc100_M10_bias20_chi100_poly3_t2"
+    run_name = "nonlinear_live_gamma_ee100_M10_bias20_chi100_poly3_t2"
 
-    @info "Running nonlinear live visualization case" mu0 mass gamma_mr gamma_mc bias chi max_harmonic polydeg=params.polydeg tspan_end=params.tspan_end residual_tol=params.residual_tol
+    @info "Running nonlinear live visualization case" mu0 mass gamma_mr gamma_ee bias chi max_harmonic polydeg=params.polydeg tspan_end=params.tspan_end residual_tol=params.residual_tol
 
     sol, semi = ElectronKinetics.solve(
         mesh_path,
         boundary_conditions,
         params,
         gamma_mr,
-        gamma_mc;
+        gamma_ee;
         transport = :parabolic_nonlinear,
         max_harmonic = max_harmonic,
         mu0 = mu0,

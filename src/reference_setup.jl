@@ -10,7 +10,7 @@ function blg_reference_setup(; half_height::Real=0.25, p_scatter::Real=1.0)
     mu0 = 1.0
     mass = 2.0
     gamma_mr = 0.0
-    gamma_mc = 0.0
+    gamma_ee = 0.0
     vF = zero_state_speed(mu0, mass)
     probe_x = 0.0
     probe_y = 0.0
@@ -27,7 +27,7 @@ function blg_reference_setup(; half_height::Real=0.25, p_scatter::Real=1.0)
         mass = mass,
         vF = vF,
         gamma_mr = gamma_mr,
-        gamma_mc = gamma_mc,
+        gamma_ee = gamma_ee,
         p_scatter = Float64(p_scatter),
         transport = :parabolic_nonlinear,
         probe_x = probe_x,

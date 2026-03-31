@@ -211,19 +211,19 @@ end
 
 
 """
-    ordered_case_indices(gamma_mr_vals, gamma_mc_vals)
+    ordered_case_indices(gamma_mr_vals, gamma_ee_vals)
 
 Return global case indices ordered from hardest to easiest expected solves,
-using descending `(gamma_mr + gamma_mc, gamma_mr, gamma_mc)`.
+using descending `(gamma_mr + gamma_ee, gamma_mr, gamma_ee)`.
 """
-function ordered_case_indices(gamma_mr_vals, gamma_mc_vals)
-    total_cases = length(gamma_mr_vals) * length(gamma_mc_vals)
+function ordered_case_indices(gamma_mr_vals, gamma_ee_vals)
+    total_cases = length(gamma_mr_vals) * length(gamma_ee_vals)
     indices = collect(1:total_cases)
     sort!(
         indices;
         by = index_global -> begin
-            gamma_mr, gamma_mc = grid_lookup(gamma_mr_vals, gamma_mc_vals, index_global)
-            (gamma_mr + gamma_mc, gamma_mr, gamma_mc)
+            gamma_mr, gamma_ee = grid_lookup(gamma_mr_vals, gamma_ee_vals, index_global)
+            (gamma_mr + gamma_ee, gamma_mr, gamma_ee)
         end,
         rev = true,
     )

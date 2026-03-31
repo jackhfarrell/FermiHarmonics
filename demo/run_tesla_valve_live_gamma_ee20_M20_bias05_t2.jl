@@ -14,7 +14,7 @@ function main()
     mu0 = reference.mu0
     mass = reference.mass
     gamma_mr = reference.gamma_mr
-    gamma_mc = 20.0
+    gamma_ee = 20.0
     bias = 0.5
     chi = 1.0
     max_harmonic = 20
@@ -36,16 +36,16 @@ function main()
         max_harmonic_auto = 20,
     )
 
-    run_name = "tesla_valve_live_gamma_mc20_M20_bias05_chi10_poly3_t2"
+    run_name = "tesla_valve_live_gamma_ee20_M20_bias05_chi10_poly3_t2"
 
-    @info "Running Tesla valve nonlinear batch case" mu0 mass gamma_mr gamma_mc bias chi max_harmonic polydeg=params.polydeg tspan_end=params.tspan_end residual_tol=params.residual_tol
+    @info "Running Tesla valve nonlinear batch case" mu0 mass gamma_mr gamma_ee bias chi max_harmonic polydeg=params.polydeg tspan_end=params.tspan_end residual_tol=params.residual_tol
 
     sol, semi = ElectronKinetics.solve(
         mesh_path,
         boundary_conditions,
         params,
         gamma_mr,
-        gamma_mc;
+        gamma_ee;
         transport = :parabolic_nonlinear,
         max_harmonic = max_harmonic,
         mu0 = mu0,

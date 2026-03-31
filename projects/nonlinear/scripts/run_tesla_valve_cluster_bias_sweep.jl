@@ -26,7 +26,7 @@ function tesla_cluster_bias_label(bias::Real)
 end
 
 function tesla_cluster_run_name(direction::AbstractString, bias::Real)
-    return "tesla_valve_cluster_$(tesla_cluster_direction_label(direction))_gamma_mc100_M10_bias$(tesla_cluster_bias_label(bias))_chi000_poly3_t2"
+    return "tesla_valve_cluster_$(tesla_cluster_direction_label(direction))_gamma_ee100_M10_bias$(tesla_cluster_bias_label(bias))_chi000_poly3_t2"
 end
 
 function run_tesla_valve_cluster_bias_sweep(; direction::AbstractString=get(ENV, "TESLA_DIRECTION", "forward"),
@@ -45,7 +45,7 @@ function run_tesla_valve_cluster_bias_sweep(; direction::AbstractString=get(ENV,
     mass = reference.mass
     p_scatter = reference.p_scatter
     gamma_mr = 0.0
-    gamma_mc = 100.0
+    gamma_ee = 100.0
     chi = 0.0
     max_harmonic = 10
     biases = tesla_cluster_bias_values()
@@ -63,7 +63,7 @@ function run_tesla_valve_cluster_bias_sweep(; direction::AbstractString=get(ENV,
         max_harmonic_auto=20,
     )
 
-    @info "Running Tesla valve cluster bias sweep" direction=direction_label gamma_mr gamma_mc chi max_harmonic nbias=length(biases) output_dir
+    @info "Running Tesla valve cluster bias sweep" direction=direction_label gamma_mr gamma_ee chi max_harmonic nbias=length(biases) output_dir
 
     u0 = nothing
     for (bias_index, bias) in enumerate(biases)
@@ -77,7 +77,7 @@ function run_tesla_valve_cluster_bias_sweep(; direction::AbstractString=get(ENV,
             boundary_conditions,
             params,
             gamma_mr,
-            gamma_mc;
+            gamma_ee;
             transport=:parabolic_nonlinear,
             max_harmonic=max_harmonic,
             mu0=mu0,

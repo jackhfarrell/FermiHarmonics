@@ -22,11 +22,13 @@ API.
 - `CustomModeRateProfile`
 - `MagneticField2D`
 - `LinearBGKCollision`
+- `LinearCollisionMatrix`
 - `QuadraticBGKCollision`
 - `ExactAngleBGKCollision`
 - `TwoRateAngleBGKCollision`
+- `AngleRateBGKCollision`
 - `KineticModel2D`
-- `BandSpec`
+- `Band`
 
 ## Example
 
@@ -59,6 +61,6 @@ model = KineticModel2D(
 )
 ```
 
-Multiband linear models are constructed by passing a `bands=[BandSpec(...), ...]`
+Multiband linear models are constructed by passing a `bands=[Band(...), ...]`
 vector to `KineticModel2D`. In v1, multiband support is intentionally limited to
 the existing two-band linear harmonic workflow.

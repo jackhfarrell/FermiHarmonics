@@ -21,9 +21,9 @@ function main()
     reference = blg_reference_setup()
     bias = 1.0
     gamma_mr = 0.0
-    gamma_mc = 100.0
+    gamma_ee = 100.0
     run_stamp = Dates.format(now(), "yyyy-mm-dd_HHMMSS")
-    run_name = "square_bells_linear_live_gamma_mc100_Mauto_" * run_stamp
+    run_name = "square_bells_linear_live_gamma_ee100_Mauto_" * run_stamp
 
     boundary_conditions = Dict(
         :walls => MaxwellWallBC(reference.p_scatter),
@@ -35,7 +35,7 @@ function main()
         Isotropic2DFermiSurface(; vF=reference.vF, nu=1.0, mass=reference.mass, charge=-1.0),
         HarmonicBasis(:auto),
         IsotropicHarmonicStreaming(),
-        LinearBGKCollision(gamma_mr, TwoRateProfile(gamma_mc)),
+        LinearBGKCollision(gamma_mr, TwoRateProfile(gamma_ee)),
         reference=reference,
     )
 
@@ -58,7 +58,7 @@ function main()
         show_window=true,
     )
 
-    @info "Running square-bells linear live demo" mesh_path gamma_mr gamma_mc harmonic_mode=:auto bias run_name
+    @info "Running square-bells linear live demo" mesh_path gamma_mr gamma_ee harmonic_mode=:auto bias run_name
     @info "Close the live window to stop the solve and save the current state" output_dir
 
     sol, semi = ElectronKinetics.solve(

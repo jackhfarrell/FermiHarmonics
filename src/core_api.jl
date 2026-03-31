@@ -7,6 +7,16 @@ struct MagneticField2D
     omega_c::Float64
 end
 
+@inline function _require_nonneg(name::AbstractString, value::Real)
+    Float64(value) >= 0.0 || throw(ArgumentError("$name must be >= 0"))
+    return Float64(value)
+end
+
+@inline function _require_pos(name::AbstractString, value::Real)
+    Float64(value) > 0.0 || throw(ArgumentError("$name must be > 0"))
+    return Float64(value)
+end
+
 function MagneticField2D(omega_c::Real)
     omega_value = Float64(omega_c)
     isfinite(omega_value) || throw(ArgumentError("omega_c must be finite"))
@@ -39,13 +49,16 @@ struct Band{S<:AbstractFermiSurface2D}
     name    :: Symbol
     surface :: S
     gamma_mr :: Float64
-    gamma_mc :: Float64
+    gamma_ee :: Float64
 end
 
-function Band(surface::S; name, gamma_mr::Real, gamma_mc::Real) where {S<:AbstractFermiSurface2D}
-    gamma_mr >= 0 || throw(ArgumentError("gamma_mr must be >= 0"))
-    gamma_mc >= 0 || throw(ArgumentError("gamma_mc must be >= 0"))
-    return Band{S}(Symbol(name), surface, Float64(gamma_mr), Float64(gamma_mc))
+function Band(surface::S; name, gamma_mr::Real, gamma_ee::Real) where {S<:AbstractFermiSurface2D}
+    return Band{S}(
+        Symbol(name),
+        surface,
+        _require_nonneg("gamma_mr", gamma_mr),
+        _require_nonneg("gamma_ee", gamma_ee),
+    )
 end
 
 @inline coerce_band(band::Band) = band
@@ -198,26 +211,23 @@ struct IsotropicHarmonicStreaming <: AbstractStreamingOperator2D end
 struct IsotropicAngleStreaming <: AbstractStreamingOperator2D end
 
 struct TwoRateProfile <: AbstractModeRateProfile
-    gamma_mc::Float64
+    gamma_ee::Float64
 end
 
-TwoRateProfile(gamma_mc::Real) = begin
-    gamma_value = Float64(gamma_mc)
-    gamma_value >= 0.0 || throw(ArgumentError("gamma_mc must be >= 0"))
-    TwoRateProfile(gamma_value)
+TwoRateProfile(gamma_ee::Real) = begin
+    TwoRateProfile(_require_nonneg("gamma_ee", gamma_ee))
 end
 
 struct OddQuarticRateProfile <: AbstractModeRateProfile
-    gamma_mc::Float64
+    gamma_ee::Float64
     gamma3::Float64
 end
 
-function OddQuarticRateProfile(gamma_mc::Real, gamma3::Real=gamma_mc)
-    gamma_mc_value = Float64(gamma_mc)
-    gamma3_value = Float64(gamma3)
-    gamma_mc_value >= 0.0 || throw(ArgumentError("gamma_mc must be >= 0"))
-    gamma3_value >= 0.0 || throw(ArgumentError("gamma3 must be >= 0"))
-    return OddQuarticRateProfile(gamma_mc_value, gamma3_value)
+function OddQuarticRateProfile(gamma_ee::Real, gamma3::Real=gamma_ee)
+    return OddQuarticRateProfile(
+        _require_nonneg("gamma_ee", gamma_ee),
+        _require_nonneg("gamma3", gamma3),
+    )
 end
 
 struct ConstantModeRateProfile <: AbstractModeRateProfile
@@ -225,18 +235,16 @@ struct ConstantModeRateProfile <: AbstractModeRateProfile
 end
 
 function ConstantModeRateProfile(gamma::Real)
-    gamma_value = Float64(gamma)
-    gamma_value >= 0.0 || throw(ArgumentError("gamma must be >= 0"))
-    return ConstantModeRateProfile(gamma_value)
+    return ConstantModeRateProfile(_require_nonneg("gamma", gamma))
 end
 
 struct CustomModeRateProfile{F} <: AbstractModeRateProfile
     rate::F
 end
 
-@inline mode_rate(profile::TwoRateProfile, m::Int) = m >= 2 ? profile.gamma_mc : 0.0
+@inline mode_rate(profile::TwoRateProfile, m::Int) = m >= 2 ? profile.gamma_ee : 0.0
 @inline mode_rate(profile::OddQuarticRateProfile, m::Int) =
-    m < 2 ? 0.0 : (iseven(m) ? profile.gamma_mc : min(profile.gamma_mc, profile.gamma3 * m^4))
+    m < 2 ? 0.0 : (iseven(m) ? profile.gamma_ee : min(profile.gamma_ee, profile.gamma3 * m^4))
 @inline mode_rate(profile::ConstantModeRateProfile, m::Int) = m >= 2 ? profile.gamma : 0.0
 @inline mode_rate(profile::CustomModeRateProfile, m::Int) = m >= 2 ? Float64(profile.rate(m)) : 0.0
 
@@ -246,9 +254,36 @@ struct LinearBGKCollision{P<:AbstractModeRateProfile} <: AbstractCollisionModel2
 end
 
 function LinearBGKCollision(gamma_mr::Real, profile::AbstractModeRateProfile=TwoRateProfile(0.0))
-    gamma_mr_value = Float64(gamma_mr)
-    gamma_mr_value >= 0.0 || throw(ArgumentError("gamma_mr must be >= 0"))
-    return LinearBGKCollision{typeof(profile)}(gamma_mr_value, profile)
+    return LinearBGKCollision{typeof(profile)}(_require_nonneg("gamma_mr", gamma_mr), profile)
+end
+
+struct LinearCollisionMatrix <: AbstractCollisionModel2D
+    gamma_mr::Float64
+    gamma_ee::Float64
+    gamma3::Float64
+    max_harmonic::Int
+    matrix::Matrix{Float64}
+end
+
+function LinearCollisionMatrix(
+    matrix::AbstractMatrix{<:Real};
+    gamma_mr::Real=0.0,
+    gamma_ee::Real=0.0,
+    gamma3::Real=gamma_ee,
+)
+    size(matrix, 1) == size(matrix, 2) ||
+        throw(ArgumentError("collision matrix must be square"))
+    n = size(matrix, 1)
+    isodd(n) || throw(ArgumentError("collision matrix size must be odd (n = 1 + 2*M)"))
+    max_harmonic = (n - 1) ÷ 2
+    max_harmonic >= 1 || throw(ArgumentError("collision matrix size must be >= 3"))
+    return LinearCollisionMatrix(
+        _require_nonneg("gamma_mr", gamma_mr),
+        _require_nonneg("gamma_ee", gamma_ee),
+        _require_nonneg("gamma3", gamma3),
+        Int(max_harmonic),
+        Matrix{Float64}(matrix),
+    )
 end
 
 struct QuadraticBGKCollision{P<:AbstractModeRateProfile} <: AbstractCollisionModel2D
@@ -268,13 +303,10 @@ function QuadraticBGKCollision(
     electrostatic_coupling::Real=0.0,
     theta_oversample::Integer=1,
 )
-    gamma_mr_value = Float64(gamma_mr)
-    mu0_value = Float64(mu0)
-    mass_value = Float64(mass)
+    gamma_mr_value = _require_nonneg("gamma_mr", gamma_mr)
+    mu0_value = _require_pos("mu0", mu0)
+    mass_value = _require_pos("mass", mass)
     theta_oversample_value = Int(theta_oversample)
-    gamma_mr_value >= 0.0 || throw(ArgumentError("gamma_mr must be >= 0"))
-    mu0_value > 0.0 || throw(ArgumentError("mu0 must be > 0"))
-    mass_value > 0.0 || throw(ArgumentError("mass must be > 0"))
     theta_oversample_value >= 1 || throw(ArgumentError("theta_oversample must be >= 1"))
     return QuadraticBGKCollision{typeof(profile)}(
         gamma_mr_value,
@@ -288,7 +320,7 @@ end
 
 struct ExactAngleBGKCollision <: AbstractCollisionModel2D
     gamma_mr::Float64
-    gamma_mc::Float64
+    gamma_ee::Float64
     mu0::Float64
     mass::Float64
     electrostatic_coupling::Float64
@@ -296,22 +328,18 @@ end
 
 function ExactAngleBGKCollision(;
     gamma_mr::Real,
-    gamma_mc::Real,
+    gamma_ee::Real,
     mu0::Real,
     mass::Real,
     electrostatic_coupling::Real=0.0,
 )
-    gamma_mr_value = Float64(gamma_mr)
-    gamma_mc_value = Float64(gamma_mc)
-    mu0_value = Float64(mu0)
-    mass_value = Float64(mass)
-    gamma_mr_value >= 0.0 || throw(ArgumentError("gamma_mr must be >= 0"))
-    gamma_mc_value >= 0.0 || throw(ArgumentError("gamma_mc must be >= 0"))
-    mu0_value > 0.0 || throw(ArgumentError("mu0 must be > 0"))
-    mass_value > 0.0 || throw(ArgumentError("mass must be > 0"))
+    gamma_mr_value = _require_nonneg("gamma_mr", gamma_mr)
+    gamma_ee_value = _require_nonneg("gamma_ee", gamma_ee)
+    mu0_value = _require_pos("mu0", mu0)
+    mass_value = _require_pos("mass", mass)
     return ExactAngleBGKCollision(
         gamma_mr_value,
-        gamma_mc_value,
+        gamma_ee_value,
         mu0_value,
         mass_value,
         Float64(electrostatic_coupling),
@@ -320,7 +348,7 @@ end
 
 struct TwoRateAngleBGKCollision <: AbstractCollisionModel2D
     gamma_mr::Float64
-    gamma_mc::Float64
+    gamma_ee::Float64
     mu0::Float64
     mass::Float64
     electrostatic_coupling::Float64
@@ -328,22 +356,18 @@ end
 
 function TwoRateAngleBGKCollision(;
     gamma_mr::Real,
-    gamma_mc::Real,
+    gamma_ee::Real,
     mu0::Real,
     mass::Real,
     electrostatic_coupling::Real=0.0,
 )
-    gamma_mr_value = Float64(gamma_mr)
-    gamma_mc_value = Float64(gamma_mc)
-    mu0_value = Float64(mu0)
-    mass_value = Float64(mass)
-    gamma_mr_value >= 0.0 || throw(ArgumentError("gamma_mr must be >= 0"))
-    gamma_mc_value >= 0.0 || throw(ArgumentError("gamma_mc must be >= 0"))
-    mu0_value > 0.0 || throw(ArgumentError("mu0 must be > 0"))
-    mass_value > 0.0 || throw(ArgumentError("mass must be > 0"))
+    gamma_mr_value = _require_nonneg("gamma_mr", gamma_mr)
+    gamma_ee_value = _require_nonneg("gamma_ee", gamma_ee)
+    mu0_value = _require_pos("mu0", mu0)
+    mass_value = _require_pos("mass", mass)
     return TwoRateAngleBGKCollision(
         gamma_mr_value,
-        gamma_mc_value,
+        gamma_ee_value,
         mu0_value,
         mass_value,
         Float64(electrostatic_coupling),
@@ -371,14 +395,11 @@ function AngleRateBGKCollision(
     filter_max_multiplier::Real=20.0,
     filter_shape::Symbol=:cosine,
 )
-    gamma_mr_value = Float64(gamma_mr)
-    mu0_value = Float64(mu0)
-    mass_value = Float64(mass)
+    gamma_mr_value = _require_nonneg("gamma_mr", gamma_mr)
+    mu0_value = _require_pos("mu0", mu0)
+    mass_value = _require_pos("mass", mass)
     filter_tail_value = Int(filter_tail_modes)
     filter_max_value = Float64(filter_max_multiplier)
-    gamma_mr_value >= 0.0 || throw(ArgumentError("gamma_mr must be >= 0"))
-    mu0_value > 0.0 || throw(ArgumentError("mu0 must be > 0"))
-    mass_value > 0.0 || throw(ArgumentError("mass must be > 0"))
     filter_tail_value >= 0 || throw(ArgumentError("filter_tail_modes must be >= 0"))
     filter_max_value >= 1.0 || throw(ArgumentError("filter_max_multiplier must be >= 1"))
     filter_shape in (:cosine, :linear, :power) || throw(ArgumentError("filter_shape must be :cosine, :linear, or :power"))
@@ -411,6 +432,36 @@ Base.@kwdef struct KineticModel2D{
     reference = nothing
 end
 
+function build_collision_matrix(
+    max_harmonic::Integer;
+    gamma_mr::Real,
+    gamma_ee::Real,
+    gamma3::Real=gamma_ee,
+    profile::Union{Nothing, AbstractModeRateProfile}=nothing,
+)
+    M = Int(max_harmonic)
+    M >= 1 || throw(ArgumentError("max_harmonic must be >= 1"))
+    gamma_mr_value = _require_nonneg("gamma_mr", gamma_mr)
+    gamma_ee_value = _require_nonneg("gamma_ee", gamma_ee)
+    gamma3_value = _require_nonneg("gamma3", gamma3)
+    rate_profile = isnothing(profile) ? OddQuarticRateProfile(gamma_ee_value, gamma3_value) : profile
+    n = 1 + 2 * M
+    C = zeros(Float64, n, n)
+    @inbounds begin
+        C[1, 1] = 0.0
+        if n >= 3
+            C[cosine_index(1), cosine_index(1)] = -gamma_mr_value
+            C[sine_index(1), sine_index(1)] = -gamma_mr_value
+        end
+        for m in 2:M
+            gamma_mode = gamma_mr_value + mode_rate(rate_profile, m)
+            C[cosine_index(m), cosine_index(m)] = -gamma_mode
+            C[sine_index(m), sine_index(m)] = -gamma_mode
+        end
+    end
+    return C
+end
+
 function KineticModel2D(
     surface::AbstractFermiSurface2D,
     discretization::AbstractAngularDiscretization2D,
@@ -428,8 +479,8 @@ function KineticModel2D(
     if discretization isa HarmonicBasis
         streaming isa IsotropicHarmonicStreaming ||
             throw(ArgumentError("HarmonicBasis currently requires IsotropicHarmonicStreaming"))
-        collision isa Union{LinearBGKCollision, QuadraticBGKCollision} ||
-            throw(ArgumentError("HarmonicBasis currently supports LinearBGKCollision or QuadraticBGKCollision"))
+        collision isa Union{LinearBGKCollision, QuadraticBGKCollision, LinearCollisionMatrix} ||
+            throw(ArgumentError("HarmonicBasis currently supports LinearBGKCollision, LinearCollisionMatrix, or QuadraticBGKCollision"))
     elseif discretization isa AngleGrid
         streaming isa IsotropicAngleStreaming ||
             throw(ArgumentError("AngleGrid currently requires IsotropicAngleStreaming"))
@@ -550,19 +601,19 @@ const AUTO_HARMONIC_GAMMA_HIGH = 300.0
 
 function estimate_max_harmonic(
     gamma_mr::Real,
-    gamma_mc::Real;
+    gamma_ee::Real;
     min_harmonic::Integer = 4,
     max_harmonic::Integer = 100,
 )::Int
     gamma_mr < 0 && throw(ArgumentError("gamma_mr must be >= 0"))
-    gamma_mc < 0 && throw(ArgumentError("gamma_mc must be >= 0"))
+    gamma_ee < 0 && throw(ArgumentError("gamma_ee must be >= 0"))
 
     min_h = Int(min_harmonic)
     max_h = Int(max_harmonic)
     min_h >= 1 || throw(ArgumentError("min_harmonic must be >= 1"))
     max_h >= min_h || throw(ArgumentError("max_harmonic must be >= min_harmonic"))
 
-    gamma_total = Float64(gamma_mr) + Float64(gamma_mc)
+    gamma_total = Float64(gamma_mr) + Float64(gamma_ee)
     gamma_total <= 0 && return max_h
     gamma_total >= AUTO_HARMONIC_GAMMA_HIGH && return min_h
 
@@ -571,7 +622,7 @@ function estimate_max_harmonic(
     return clamp(ceil(Int, estimate), min_h, max_h)
 end
 
-function resolve_max_harmonic(max_harmonic_kw, config::SolverConfig, gamma_mr::Real, gamma_mc::Real)
+function resolve_max_harmonic(max_harmonic_kw, config::SolverConfig, gamma_mr::Real, gamma_ee::Real)
     if max_harmonic_kw isa Integer
         M = Int(max_harmonic_kw)
         M >= 1 || throw(ArgumentError("max_harmonic must be >= 1"))
@@ -581,7 +632,7 @@ function resolve_max_harmonic(max_harmonic_kw, config::SolverConfig, gamma_mr::R
     if max_harmonic_kw === :auto || isnothing(max_harmonic_kw)
         M = estimate_max_harmonic(
             gamma_mr,
-            gamma_mc;
+            gamma_ee;
             min_harmonic=config.min_harmonic,
             max_harmonic=config.max_harmonic_auto,
         )
@@ -589,6 +640,15 @@ function resolve_max_harmonic(max_harmonic_kw, config::SolverConfig, gamma_mr::R
     end
 
     throw(ArgumentError("max_harmonic must be an Integer, :auto, or nothing"))
+end
+
+@inline function _warm_start_same(u0_override::AbstractVector, target_nvars::Integer)
+    return (
+        u0 = collect(Float64, u0_override),
+        mode = :same,
+        source_nvars = Int(target_nvars),
+        target_nvars = Int(target_nvars),
+    )
 end
 
 function resize_warm_start(
@@ -604,12 +664,7 @@ function resize_warm_start(
     source_len = length(u0_override)
 
     if source_len == target_len
-        return (
-            u0 = collect(Float64, u0_override),
-            mode = :same,
-            source_nvars = target_nvars_int,
-            target_nvars = target_nvars_int,
-        )
+        return _warm_start_same(u0_override, target_nvars_int)
     end
 
     if source_len % target_block == 0
@@ -649,12 +704,7 @@ function validate_nonlinear_warm_start(
     source_len == target_len || throw(ArgumentError(
         "nonlinear warm start length $source_len does not match target length $target_len for n_angles=$(Int(target_nvars))",
     ))
-    return (
-        u0 = collect(Float64, u0_override),
-        mode = :same,
-        source_nvars = Int(target_nvars),
-        target_nvars = Int(target_nvars),
-    )
+    return _warm_start_same(u0_override, target_nvars)
 end
 
 function resize_multiband_warm_start(
@@ -671,12 +721,7 @@ function resize_multiband_warm_start(
     source_len = length(u0_override)
 
     if source_len == target_len
-        return (
-            u0 = collect(Float64, u0_override),
-            mode = :same,
-            source_nvars = target_nvars,
-            target_nvars = target_nvars,
-        )
+        return _warm_start_same(u0_override, target_nvars)
     end
 
     source_len % target_block == 0 || throw(ArgumentError(
@@ -939,6 +984,7 @@ boundary_condition_name(::OhmicContactBC) = :ohmic_contact
 boundary_condition_name(::CurrentContactBC) = :current_contact
 
 @inline transport_symbol(::LinearBGKCollision) = :linear
+@inline transport_symbol(::LinearCollisionMatrix) = :linear
 @inline transport_symbol(::QuadraticBGKCollision) = :parabolic_nonlinear
 @inline transport_symbol(::ExactAngleBGKCollision) = :parabolic_nonlinear
 @inline transport_symbol(::TwoRateAngleBGKCollision) = :parabolic_nonlinear
@@ -946,6 +992,7 @@ boundary_condition_name(::CurrentContactBC) = :current_contact
 @inline transport_symbol(model::KineticModel2D) = transport_symbol(model.collision)
 
 @inline collision_symbol(::LinearBGKCollision) = :linear_mrt
+@inline collision_symbol(::LinearCollisionMatrix) = :linear_matrix
 @inline collision_symbol(::QuadraticBGKCollision) = :quadratic_bgk
 @inline collision_symbol(::ExactAngleBGKCollision) = :exact_bgk
 @inline collision_symbol(::TwoRateAngleBGKCollision) = :two_rate_bgk
@@ -956,9 +1003,10 @@ boundary_condition_name(::CurrentContactBC) = :current_contact
     surface_density_of_states(band.surface) * surface_mass(band.surface) * surface_vF(band.surface)
 @inline mode_profile(collision::Union{LinearBGKCollision, QuadraticBGKCollision}) = collision.profile
 @inline mode_profile(collision::AngleRateBGKCollision) = collision.profile
-@inline collision_gamma_mr(collision::Union{LinearBGKCollision, QuadraticBGKCollision, ExactAngleBGKCollision, TwoRateAngleBGKCollision, AngleRateBGKCollision}) = collision.gamma_mr
-@inline collision_gamma_mc(collision::Union{ExactAngleBGKCollision, TwoRateAngleBGKCollision}) = collision.gamma_mc
-@inline collision_gamma_mc(collision::AngleRateBGKCollision) = profile_reference_rate(collision.profile)
+@inline collision_gamma_mr(collision::Union{LinearBGKCollision, LinearCollisionMatrix, QuadraticBGKCollision, ExactAngleBGKCollision, TwoRateAngleBGKCollision, AngleRateBGKCollision}) = collision.gamma_mr
+@inline collision_gamma_ee(collision::Union{ExactAngleBGKCollision, TwoRateAngleBGKCollision}) = collision.gamma_ee
+@inline collision_gamma_ee(collision::AngleRateBGKCollision) = profile_reference_rate(collision.profile)
+@inline collision_gamma_ee(collision::LinearCollisionMatrix) = collision.gamma_ee
 @inline collision_mu0(collision::Union{QuadraticBGKCollision, ExactAngleBGKCollision, TwoRateAngleBGKCollision, AngleRateBGKCollision}) = collision.mu0
 @inline collision_mass(collision::Union{QuadraticBGKCollision, ExactAngleBGKCollision, TwoRateAngleBGKCollision, AngleRateBGKCollision}) = collision.mass
 @inline collision_electrostatic_coupling(collision::Union{QuadraticBGKCollision, ExactAngleBGKCollision, TwoRateAngleBGKCollision, AngleRateBGKCollision}) = collision.electrostatic_coupling
@@ -1124,8 +1172,8 @@ Normalization convention matches `streaming_matrices(M, vF::Float64)`:
 For constant vF, the result is identical to the analytic tridiagonal formula.
 """
 function _anisotropic_streaming_matrices(M::Int, vF_func)
-    n = 1 + 2M
-    N_quad = max(4n, 128)
+    n = 1 + 2 * M
+    N_quad = max(4 * n, 128)
     θ    = range(0.0, 2π; length = N_quad + 1)[1:N_quad]
     dθ   = 2π / N_quad
     vF_v = vF_func.(θ)

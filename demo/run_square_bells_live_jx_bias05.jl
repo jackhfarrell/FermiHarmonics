@@ -35,7 +35,7 @@ function main()
     mu0       = reference.mu0
     mass      = reference.mass
     gamma_mr  = reference.gamma_mr
-    gamma_mc  = 100.0
+    gamma_ee  = 100.0
     target_current = 1.0
     chi       = 10.0
     p_scatter = reference.p_scatter
@@ -61,7 +61,7 @@ function main()
         boundary_conditions,
         params,
         gamma_mr,
-        gamma_mc;
+        gamma_ee;
         transport          = :parabolic_nonlinear,
         max_harmonic       = :auto,
         mu0                = mu0,

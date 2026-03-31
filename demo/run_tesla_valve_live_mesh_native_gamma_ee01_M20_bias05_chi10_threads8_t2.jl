@@ -21,7 +21,7 @@ function main()
     mu0 = reference.mu0
     mass = reference.mass
     gamma_mr = reference.gamma_mr
-    gamma_mc = 0.1
+    gamma_ee = 0.1
     bias = 0.5
     chi = 10.0
     max_harmonic = 20
@@ -43,16 +43,16 @@ function main()
         max_harmonic_auto=max_harmonic,
     )
 
-    run_name = "tesla_valve_live_mesh_native_gamma_mc01_M20_bias05_chi10_poly3_t2_threads8"
+    run_name = "tesla_valve_live_mesh_native_gamma_ee01_M20_bias05_chi10_poly3_t2_threads8"
 
-    @info "Running Tesla valve nonlinear live mesh-native case" mu0 mass gamma_mr gamma_mc bias chi max_harmonic polydeg=params.polydeg tspan_end=params.tspan_end residual_tol=params.residual_tol threads=actual_threads
+    @info "Running Tesla valve nonlinear live mesh-native case" mu0 mass gamma_mr gamma_ee bias chi max_harmonic polydeg=params.polydeg tspan_end=params.tspan_end residual_tol=params.residual_tol threads=actual_threads
 
     sol, semi = ElectronKinetics.solve(
         mesh_path,
         boundary_conditions,
         params,
         gamma_mr,
-        gamma_mc;
+        gamma_ee;
         transport=:parabolic_nonlinear,
         max_harmonic=max_harmonic,
         mu0=mu0,
