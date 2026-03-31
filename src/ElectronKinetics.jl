@@ -91,32 +91,86 @@ model = KineticModel2D(
 )
 ```
 
-# Extensibility
+# Extensibility Guide
 
-The type hierarchy enables adding new physics:
+The type hierarchy enables adding custom physics without modifying core code.
 
-**New collision model?** Just inherit from appropriate abstract type:
+## Adding a Custom Collision Model
+
+For linear harmonic transport:
 ```julia
-struct MyCollision <: AbstractLinearCollision
+struct MyLinearCollision <: AbstractLinearCollision
     gamma_mr::Float64
-    profile::AbstractModeRateProfile
+    # Add your custom parameters here
+end
+
+# Constructor with validation
+function MyLinearCollision(gamma_mr::Real; my_param::Real)
+    return MyLinearCollision(
+        Float64(gamma_mr) >= 0 ? Float64(gamma_mr) : error("gamma_mr must be ≥ 0")
+    )
 end
 ```
 
-**New Fermi surface?** Implement the surface interface:
+For nonlinear angle transport:
 ```julia
-struct MySurface <: AbstractAnalyticSurface
-    # ... fields ...
+struct MyNonlinearCollision <: AbstractNonlinearAngleCollision
+    gamma_mr::Float64
+    mu0::Float64
+    mass::Float64
+    electrostatic_coupling::Float64
 end
-surface_vF(s::MySurface) = s.vF
-surface_vF_angle(s::MySurface, θ) = ...
-# ... etc
 ```
 
-**New BC?** Add to appropriate abstract class:
+## Adding a Custom Fermi Surface
+
+For analytic surfaces with known formulas:
 ```julia
-mutable struct MyBC <: AbstractWallBC
+struct MyAnalyticSurface <: AbstractAnalyticSurface
+    vF0::Float64
+    anisotropy_param::Float64
+    nu::Float64
+    mass::Float64
+    charge::Float64
+end
+
+# Implement the required interface (6 methods):
+surface_vF(s::MyAnalyticSurface) = s.vF0
+surface_max_speed(s::MyAnalyticSurface) = compute_max_speed(s)
+surface_vF_angle(s::MyAnalyticSurface, θ) = s.vF0 * my_formula(θ, s.anisotropy_param)
+surface_density_of_states(s::MyAnalyticSurface) = s.nu
+surface_mass(s::MyAnalyticSurface) = s.mass
+surface_charge(s::MyAnalyticSurface) = s.charge
+```
+
+For user-defined functions:
+```julia
+struct MyCustomSurface <: AbstractUserDefinedSurface
+    vF_func::Function  # θ -> vF
+    max_vF::Float64    # CFL bound
+    nu::Float64
+    mass::Float64
+    charge::Float64
+end
+```
+
+## Adding a Custom Boundary Condition
+
+For wall-type boundaries:
+```julia
+mutable struct MyWallBC <: AbstractWallBC
     p_scatter::Float64
+    my_parameter::Float64
+    tol::Float64
+    cache::BCProjectorCache
+end
+```
+
+For contact-type boundaries:
+```julia
+mutable struct MyContactBC <: AbstractContactBC
+    p_ohmic_absorb::Float64
+    my_control_param::Float64
     tol::Float64
     cache::BCProjectorCache
 end
@@ -143,95 +197,145 @@ include("slurm_utils.jl")
 
 const SolveParams = SolverConfig
 
-export AbstractFermiSurface2D,
-       AbstractAnalyticSurface,
-       AbstractUserDefinedSurface,
-       AbstractAngularDiscretization2D,
-       AbstractHarmonicDiscretization,
-       AbstractGridDiscretization,
-       AbstractStreamingOperator2D,
-       AbstractIsotropicStreaming,
-       AbstractModeRateProfile,
-       AbstractBuiltInProfile,
-       AbstractUserProfile,
-       AbstractCollisionModel2D,
-       AbstractLinearCollision,
-       AbstractNonlinearAngleCollision,
-       AbstractBoundaryCondition,
-       AbstractWallBC,
-       AbstractContactBC,
-       AbstractTransportMode,
-       LinearTransport,
-       NonlinearParabolicTransport,
-       Band,
-       Isotropic2DFermiSurface,
-       EllipticFermiSurface2D,
-       GeneralFermiSurface2D,
-       HarmonicBasis,
-       AngleGrid,
-       IsotropicHarmonicStreaming,
-       IsotropicAngleStreaming,
-       TwoRateProfile,
-       OddQuarticRateProfile,
-       ConstantModeRateProfile,
-       CustomModeRateProfile,
-       MagneticField2D,
-       LinearBGKCollision,
-       LinearCollisionMatrix,
-       QuadraticBGKCollision,
-       ExactAngleBGKCollision,
-       TwoRateAngleBGKCollision,
-       AngleRateBGKCollision,
-       KineticModel2D,
-       SolverConfig,
-       SolveParams,
-       LiveVisualizationConfig,
-       LiveProgressSnapshot,
-       LiveFieldSnapshot,
-       LiveVisualizationSnapshot,
-       MeshBuildConfig,
-       TrixiProblem,
-       MaxwellWallBC,
-       OhmicContactBC,
-       CurrentContactBC,
-       blg_reference_setup,
-       estimate_max_harmonic,
-       save_solution_custom,
-       save_for_analysis,
-       save_mesh_native_analysis,
-       evaluate_solution,
-       evaluate_observables,
-       enable_nonlinear_timing!,
-       disable_nonlinear_timing!,
-       reset_nonlinear_timing!,
-       nonlinear_timing_snapshot,
-       print_nonlinear_timing_summary,
-       solve_status,
-       solve,
-       mode_rate,
-       build_collision_matrix,
-       collision_sources!,
-       generate_mesh_from_geo,
-       harmonic_state_nvars,
-       band_momentum_weight,
-       surface_vF,
-       surface_max_speed,
-       surface_vF_angle,
-       surface_density_of_states,
-       surface_mass,
-       surface_charge,
-       streaming_matrices,
-       cosine_index,
-       sine_index,
-       residual_progress_fraction,
-       mesh_provenance_attributes,
-       resolve_mesh_path,
-       submit_sweep!,
-       write_sweep_metadata!,
-       archive_mesh!,
-       copy_mesh_to_scratch,
-       select_cases,
-       grid_lookup,
-       ordered_case_indices
+# ============================================================================
+# Core Physics API — types and solvers users directly instantiate
+# ============================================================================
+export
+    # Fermi Surfaces
+    Isotropic2DFermiSurface,
+    EllipticFermiSurface2D,
+    GeneralFermiSurface2D,
+
+    # Angular Discretizations
+    HarmonicBasis,
+    AngleGrid,
+
+    # Streaming Operators
+    IsotropicHarmonicStreaming,
+    IsotropicAngleStreaming,
+
+    # Collision Models (Linear)
+    LinearBGKCollision,
+    LinearCollisionMatrix,
+
+    # Collision Models (Nonlinear)
+    QuadraticBGKCollision,
+    ExactAngleBGKCollision,
+    TwoRateAngleBGKCollision,
+    AngleRateBGKCollision,
+
+    # Mode Rate Profiles
+    TwoRateProfile,
+    OddQuarticRateProfile,
+    ConstantModeRateProfile,
+    CustomModeRateProfile,
+
+    # Boundary Conditions
+    MaxwellWallBC,
+    OhmicContactBC,
+    CurrentContactBC,
+
+    # Core Models
+    Band,
+    KineticModel2D,
+    MagneticField2D,
+
+    # Configuration
+    SolverConfig,
+    SolveParams,
+    LiveVisualizationConfig,
+    MeshBuildConfig,
+    TrixiProblem,
+
+    # Main Solver Interface
+    solve,
+    solve_status
+
+# ============================================================================
+# Reference Utilities
+# ============================================================================
+export
+    blg_reference_setup
+
+# ============================================================================
+# Analysis and Output
+# ============================================================================
+export
+    save_solution_custom,
+    save_for_analysis,
+    save_mesh_native_analysis,
+    evaluate_solution,
+    evaluate_observables,
+    LiveProgressSnapshot,
+    LiveFieldSnapshot,
+    LiveVisualizationSnapshot
+
+# ============================================================================
+# Mesh Generation
+# ============================================================================
+export
+    generate_mesh_from_geo,
+    mesh_provenance_attributes,
+    resolve_mesh_path
+
+# ============================================================================
+# HPC/Sweep Utilities
+# ============================================================================
+export
+    submit_sweep!,
+    write_sweep_metadata!,
+    archive_mesh!,
+    copy_mesh_to_scratch,
+    select_cases,
+    grid_lookup,
+    ordered_case_indices
+
+# ============================================================================
+# Advanced API — For custom implementations and extensions
+# ============================================================================
+export
+    # Abstract types for extensibility
+    AbstractFermiSurface2D,
+    AbstractAnalyticSurface,
+    AbstractUserDefinedSurface,
+    AbstractAngularDiscretization2D,
+    AbstractHarmonicDiscretization,
+    AbstractGridDiscretization,
+    AbstractStreamingOperator2D,
+    AbstractIsotropicStreaming,
+    AbstractModeRateProfile,
+    AbstractBuiltInProfile,
+    AbstractUserProfile,
+    AbstractCollisionModel2D,
+    AbstractLinearCollision,
+    AbstractNonlinearAngleCollision,
+    AbstractBoundaryCondition,
+    AbstractWallBC,
+    AbstractContactBC,
+    AbstractTransportMode,
+    LinearTransport,
+    NonlinearParabolicTransport,
+
+    # Advanced helper functions (for custom implementations)
+    mode_rate,
+    build_collision_matrix,
+    estimate_max_harmonic,
+    streaming_matrices,
+    harmonic_state_nvars,
+    band_momentum_weight,
+
+    # Surface interface (implement these for custom surfaces)
+    surface_vF,
+    surface_max_speed,
+    surface_vF_angle,
+    surface_density_of_states,
+    surface_mass,
+    surface_charge,
+
+    # Low-level utilities
+    cosine_index,
+    sine_index,
+    residual_progress_fraction,
+    collision_sources!
 
 end

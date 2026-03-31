@@ -15,6 +15,32 @@ Subtypes:
 - `AbstractAnalyticSurface` — analytic formula (isotropic, elliptic)
 - `AbstractUserDefinedSurface` — user-supplied function
 """
+"""
+    AbstractFermiSurface2D
+
+Fermi surface representation for 2D kinetic transport.
+
+All subtypes must implement the surface interface:
+- `surface_vF(s)` — reference Fermi velocity
+- `surface_max_speed(s)` — maximum velocity (for CFL stability)
+- `surface_vF_angle(s, θ)` — velocity at angle θ
+- `surface_density_of_states(s)` — density of states
+- `surface_mass(s)` — effective mass
+- `surface_charge(s)` — carrier charge
+
+# Subtypes
+- `AbstractAnalyticSurface` — analytic formula (isotropic, elliptic)
+- `AbstractUserDefinedSurface` — user-supplied function
+
+# Example
+```julia
+# Isotropic Fermi surface (constant velocity)
+surface = Isotropic2DFermiSurface(vF=1.0, nu=1.0, mass=1.0)
+
+# Elliptic anisotropy
+surface = EllipticFermiSurface2D(vF0=1.0, aspect=2.0, nu=1.0, mass=1.0)
+```
+"""
 abstract type AbstractFermiSurface2D end
 
 """
@@ -23,7 +49,7 @@ abstract type AbstractFermiSurface2D end
 Fermi surfaces with known analytic formulas.
 These can use optimized streaming matrix computation.
 
-Subtypes:
+# Subtypes
 - `Isotropic2DFermiSurface` — constant velocity
 - `EllipticFermiSurface2D` — elliptic anisotropy
 """
@@ -131,6 +157,41 @@ end
 
 @inline coerce_band(band::Band) = band
 
+"""
+    Isotropic2DFermiSurface
+
+Isotropic Fermi surface with constant velocity in all directions.
+
+# Parameters
+- `vF::Float64` — Fermi velocity (must be > 0)
+- `nu::Float64` — density of states (must be > 0)
+- `mass::Float64` — effective mass (must be > 0)
+- `charge::Float64` — carrier charge (default: -1.0 for electrons)
+
+# When to use
+- Systems without directional anisotropy (e.g., graphene, conventional metals)
+- Testing and development (simplest case)
+- As reference for comparing with anisotropic surfaces
+
+# Comparison
+- `IsotropicFermiSurface` — constant vF (simplest)
+- `EllipticFermiSurface2D` — elliptic anisotropy (vF depends on angle)
+- `GeneralFermiSurface2D` — arbitrary custom function
+
+# Example
+```julia
+# Electrons in graphene (dimensionless units)
+surface = Isotropic2DFermiSurface(
+    vF = 1.0,           # Fermi velocity
+    nu = 1.0,           # density of states
+    mass = 1.0,         # effective mass (relative to electron)
+    charge = -1.0       # electron charge
+)
+
+# Use in model
+model = KineticModel2D(surface, HarmonicBasis(:auto), ...)
+```
+"""
 struct Isotropic2DFermiSurface <: AbstractAnalyticSurface
     name::Symbol
     vF::Float64
@@ -284,27 +345,104 @@ Characteristics:
 """
 abstract type AbstractGridDiscretization <: AbstractAngularDiscretization2D end
 
+"""
+    HarmonicBasis
+
+Fourier harmonic basis expansion for angular dependence.
+
+# Parameters
+- `max_harmonic::Union{Int, Symbol, Nothing}` — Maximum harmonic mode
+  - Integer: explicit mode count (1, 2, 3, ...)
+  - `:auto`: auto-estimate from collision parameters
+  - `nothing`: not yet determined
+
+# When to use
+- Linear response regime (small perturbations)
+- Efficient representation (memory-proportional to max_harmonic)
+- Harmonic basis is fastest for weak damping
+- **Recommended default** for most applications
+
+# Comparison
+- `HarmonicBasis(:auto)` — Auto-estimate modes (recommended)
+- `HarmonicBasis(10)` — Fixed 10 modes
+- `AngleGrid(32)` — Direct angle sampling (for nonlinear)
+
+# Example
+```julia
+# Auto-estimate based on collision rates
+basis = HarmonicBasis(:auto)
+
+# Or manually specify
+basis = HarmonicBasis(20)  # Use 20 harmonic modes
+
+# In model
+model = KineticModel2D(
+    surface,
+    HarmonicBasis(:auto),
+    IsotropicHarmonicStreaming(),
+    LinearBGKCollision(0.1)
+)
+```
+"""
 struct HarmonicBasis <: AbstractHarmonicDiscretization
     max_harmonic::Union{Int, Symbol, Nothing}
 end
 
 function HarmonicBasis(max_harmonic::Union{Integer, Symbol, Nothing})
     if max_harmonic isa Integer
-        Int(max_harmonic) >= 1 || throw(ArgumentError("max_harmonic must be >= 1"))
-    elseif !(max_harmonic === :auto || isnothing(max_harmonic))
-        throw(ArgumentError("HarmonicBasis expects an integer, :auto, or nothing"))
+        max_harmonic_int = Int(max_harmonic)
+        max_harmonic_int >= 1 || throw(ArgumentError("max_harmonic must be >= 1"))
+        return HarmonicBasis(max_harmonic_int)
+    elseif max_harmonic === :auto || isnothing(max_harmonic)
+        return HarmonicBasis(max_harmonic)
+    else
+        throw(ArgumentError("HarmonicBasis expects an integer, :auto, or nothing (got $(repr(max_harmonic)))"))
     end
-    return HarmonicBasis(max_harmonic isa Integer ? Int(max_harmonic) : max_harmonic)
 end
 
+"""
+    AngleGrid
+
+Direct angle discretization with N equally-spaced samples.
+
+# Parameters
+- `theta_count::Int` — Number of angle points (must be even, ≥ 8)
+
+# When to use
+- Nonlinear transport regime (essential for nonlinear collision models)
+- Need exact angular resolution (not harmonic expansion)
+- Working with QuadraticBGKCollision or angle-dependent models
+
+# Comparison
+- `HarmonicBasis(:auto)` — Fourier modes (for linear)
+- `AngleGrid(32)` — 32 direct angles (for nonlinear)
+
+# Example
+```julia
+# 32 equally-spaced angles on [0, 2π)
+basis = AngleGrid(32)
+
+# In nonlinear model
+model = KineticModel2D(
+    surface,
+    AngleGrid(64),  # 64 angles for high accuracy
+    IsotropicAngleStreaming(),
+    QuadraticBGKCollision(0.1; mu0=1.0, mass=1.0)
+)
+```
+"""
 struct AngleGrid <: AbstractGridDiscretization
     theta_count::Int
 end
 
 function AngleGrid(theta_count::Integer)
     ntheta = Int(theta_count)
-    ntheta >= 8 || throw(ArgumentError("n_angles must be >= 8"))
-    iseven(ntheta) || throw(ArgumentError("n_angles must be even"))
+    if ntheta < 8
+        throw(ArgumentError("AngleGrid requires at least 8 angles (got $ntheta)"))
+    end
+    if !iseven(ntheta)
+        throw(ArgumentError("AngleGrid requires even number of angles (got $ntheta)"))
+    end
     return AngleGrid(ntheta)
 end
 
@@ -386,13 +524,55 @@ end
 @inline mode_rate(profile::ConstantModeRateProfile, m::Int) = m >= 2 ? profile.gamma : 0.0
 @inline mode_rate(profile::CustomModeRateProfile, m::Int) = m >= 2 ? Float64(profile.rate(m)) : 0.0
 
+"""
+    LinearBGKCollision
+
+Linear BGK collision model for harmonic basis transport.
+
+# Description
+Relaxation-time approximation (RTA) collision operator with mode-dependent scattering rates:
+- Monopole (ρ) and dipole (v) modes: damped at γ_mr
+- Higher harmonics: damped at γ_mr + γ_ee(m) where m is harmonic order
+
+# Parameters
+- `gamma_mr::Float64` — momentum-relaxing scattering rate
+- `profile::AbstractModeRateProfile` — mode-dependent e-e scattering (default: zero)
+
+# When to use
+- Linear response regime (small perturbations around equilibrium)
+- Harmonic basis discretization (efficient expansion)
+- Single-band or multi-band systems
+- Need analytic or efficient solutions
+
+# When NOT to use
+- Nonlinear transport regime → use QuadraticBGKCollision
+- Very low damping with need for exact angle dependence → use ExactAngleBGKCollision
+
+# Example
+```julia
+# Simple momentum-relaxing only
+collision = LinearBGKCollision(0.1)
+
+# With e-e scattering (different for even/odd modes)
+collision = LinearBGKCollision(0.1, OddQuarticRateProfile(0.4, 0.1))
+
+# As part of kinetic model
+model = KineticModel2D(
+    surface,
+    HarmonicBasis(:auto),
+    IsotropicHarmonicStreaming(),
+    collision
+)
+```
+"""
 struct LinearBGKCollision{P<:AbstractModeRateProfile} <: AbstractLinearCollision
     gamma_mr::Float64
     profile::P
 end
 
 function LinearBGKCollision(gamma_mr::Real, profile::AbstractModeRateProfile=TwoRateProfile(0.0))
-    return LinearBGKCollision{typeof(profile)}(_require_nonneg("gamma_mr", gamma_mr), profile)
+    gamma_mr_value = _require_nonneg("gamma_mr", gamma_mr)
+    return LinearBGKCollision{typeof(profile)}(gamma_mr_value, profile)
 end
 
 struct LinearCollisionMatrix <: AbstractLinearCollision
@@ -553,6 +733,71 @@ function AngleRateBGKCollision(
     )
 end
 
+"""
+    KineticModel2D
+
+Kinetic transport model assembling all physics components.
+
+# Parameters
+- `surface::AbstractFermiSurface2D` — Fermi surface properties
+- `discretization::AbstractAngularDiscretization2D` — Angular basis (HarmonicBasis or AngleGrid)
+- `streaming::AbstractStreamingOperator2D` — Streaming operator
+- `collision::AbstractCollisionModel2D` — Collision model
+- `bands::Vector{Band}` — Multi-band specs (default: single band)
+- `gamma_drag::Float64` — Inter-band drag coupling (default: 0.0)
+- `magnetic_field::Union{Nothing, MagneticField2D}` — Magnetic field (default: none)
+
+# Validation
+The constructor validates compatibility:
+- HarmonicBasis requires linear collision + isotropic streaming
+- AngleGrid requires nonlinear collision + isotropic streaming
+- Multiband requires HarmonicBasis + LinearBGKCollision
+- Magnetic field requires single-band linear harmonic model
+
+# Example: Linear Transport
+```julia
+# Single-band linear transport
+model = KineticModel2D(
+    surface = Isotropic2DFermiSurface(vF=1.0),
+    discretization = HarmonicBasis(:auto),
+    streaming = IsotropicHarmonicStreaming(),
+    collision = LinearBGKCollision(0.1, TwoRateProfile(0.4))
+)
+
+sol = solve(problem, model, SolverConfig())
+```
+
+# Example: Nonlinear Transport
+```julia
+# Nonlinear parabolic band transport
+model = KineticModel2D(
+    surface = Isotropic2DFermiSurface(vF=1.0),
+    discretization = AngleGrid(32),  # 32 angles
+    streaming = IsotropicAngleStreaming(),
+    collision = QuadraticBGKCollision(0.1; mu0=1.0, mass=1.0)
+)
+
+sol = solve(problem, model, SolverConfig())
+```
+
+# Example: Multi-band Transport
+```julia
+# Two-carrier system (electrons and holes)
+bands = [
+    Band(Isotropic2DFermiSurface(vF=1.0); name=:electrons, gamma_mr=0.1, gamma_ee=0.2),
+    Band(Isotropic2DFermiSurface(vF=0.8); name=:holes, gamma_mr=0.1, gamma_ee=0.3)
+]
+
+model = KineticModel2D(
+    surface = Isotropic2DFermiSurface(),  # Reference surface
+    discretization = HarmonicBasis(:auto),
+    streaming = IsotropicHarmonicStreaming(),
+    collision = LinearBGKCollision(0.1),
+    bands = bands,
+    gamma_drag = 0.05  # Drag coupling
+)
+```
+"""
 Base.@kwdef struct KineticModel2D{
     TS<:AbstractFermiSurface2D,
     TD<:AbstractAngularDiscretization2D,
