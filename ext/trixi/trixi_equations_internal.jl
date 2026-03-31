@@ -194,39 +194,54 @@ function angle_equations(model::KineticModel2D)
     )
 end
 
+# Dispatch-based equation building for cleaner composition
 function build_equations(model::KineticModel2D, config::SolverConfig)
     validate(config)
-    if model.discretization isa HarmonicBasis
-        if !isempty(model.bands)
-            max_harmonic_value = model.discretization.max_harmonic
-            if max_harmonic_value isa Integer
-                return harmonic_equations(model, max_harmonic_value), :manual
-            end
-            max_harmonic_resolved = maximum(
-                estimate_max_harmonic(
-                    band.gamma_mr,
-                    band.gamma_ee;
-                    min_harmonic=config.min_harmonic,
-                    max_harmonic=config.max_harmonic_auto,
-                ) for band in model.bands
-            )
-            return harmonic_equations(model, max_harmonic_resolved), :auto
-        end
+    return _build_equations_dispatch(model.discretization, model, config)
+end
 
-        collision = model.collision
-        if collision isa LinearCollisionMatrix && !(model.discretization.max_harmonic isa Integer)
-            throw(ArgumentError("LinearCollisionMatrix requires an explicit max_harmonic"))
+# Harmonic basis path (linear transport)
+function _build_equations_dispatch(
+    discretization::AbstractHarmonicDiscretization,
+    model::KineticModel2D,
+    config::SolverConfig
+)
+    if !isempty(model.bands)
+        max_harmonic_value = model.discretization.max_harmonic
+        if max_harmonic_value isa Integer
+            return harmonic_equations(model, max_harmonic_value), :manual
         end
-        gamma_mr = collision_gamma_mr(collision)
-        gamma_ee = collision isa LinearCollisionMatrix ? collision.gamma_ee : profile_reference_rate(mode_profile(collision))
-        max_harmonic_resolved, harmonic_mode = resolve_max_harmonic(
-            model.discretization.max_harmonic,
-            config,
-            gamma_mr,
-            gamma_ee,
+        max_harmonic_resolved = maximum(
+            estimate_max_harmonic(
+                band.gamma_mr,
+                band.gamma_ee;
+                min_harmonic=config.min_harmonic,
+                max_harmonic=config.max_harmonic_auto,
+            ) for band in model.bands
         )
-        return harmonic_equations(model, max_harmonic_resolved), harmonic_mode
+        return harmonic_equations(model, max_harmonic_resolved), :auto
     end
 
+    collision = model.collision
+    if collision isa LinearCollisionMatrix && !(model.discretization.max_harmonic isa Integer)
+        throw(ArgumentError("LinearCollisionMatrix requires an explicit max_harmonic"))
+    end
+    gamma_mr = collision_gamma_mr(collision)
+    gamma_ee = collision isa LinearCollisionMatrix ? collision.gamma_ee : profile_reference_rate(mode_profile(collision))
+    max_harmonic_resolved, harmonic_mode = resolve_max_harmonic(
+        model.discretization.max_harmonic,
+        config,
+        gamma_mr,
+        gamma_ee,
+    )
+    return harmonic_equations(model, max_harmonic_resolved), harmonic_mode
+end
+
+# Angle grid path (nonlinear transport)
+function _build_equations_dispatch(
+    discretization::AbstractGridDiscretization,
+    model::KineticModel2D,
+    config::SolverConfig
+)
     return angle_equations(model), :angles
 end

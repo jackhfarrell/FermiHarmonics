@@ -600,6 +600,29 @@ function build_collision_matrix(
     return C
 end
 
+# Validation dispatch for model compatibility
+function _validate_model_compatibility(
+    discretization::AbstractHarmonicDiscretization,
+    streaming::AbstractStreamingOperator2D,
+    collision::AbstractCollisionModel2D
+)
+    streaming isa AbstractIsotropicStreaming ||
+        throw(ArgumentError("HarmonicBasis requires isotropic streaming operator (got $(typeof(streaming)))"))
+    collision isa AbstractLinearCollision ||
+        throw(ArgumentError("HarmonicBasis requires linear collision model (got $(typeof(collision)))"))
+end
+
+function _validate_model_compatibility(
+    discretization::AbstractGridDiscretization,
+    streaming::AbstractStreamingOperator2D,
+    collision::AbstractCollisionModel2D
+)
+    streaming isa AbstractIsotropicStreaming ||
+        throw(ArgumentError("AngleGrid requires isotropic streaming operator (got $(typeof(streaming)))"))
+    collision isa AbstractNonlinearAngleCollision ||
+        throw(ArgumentError("AngleGrid requires nonlinear collision model (got $(typeof(collision)))"))
+end
+
 function KineticModel2D(
     surface::AbstractFermiSurface2D,
     discretization::AbstractAngularDiscretization2D,
@@ -614,33 +637,22 @@ function KineticModel2D(
     gamma_drag_value = Float64(gamma_drag)
     gamma_drag_value >= 0.0 || throw(ArgumentError("gamma_drag must be >= 0"))
 
-    if discretization isa HarmonicBasis
-        streaming isa IsotropicHarmonicStreaming ||
-            throw(ArgumentError("HarmonicBasis currently requires IsotropicHarmonicStreaming"))
-        collision isa Union{LinearBGKCollision, QuadraticBGKCollision, LinearCollisionMatrix} ||
-            throw(ArgumentError("HarmonicBasis currently supports LinearBGKCollision, LinearCollisionMatrix, or QuadraticBGKCollision"))
-    elseif discretization isa AngleGrid
-        streaming isa IsotropicAngleStreaming ||
-            throw(ArgumentError("AngleGrid currently requires IsotropicAngleStreaming"))
-        collision isa Union{ExactAngleBGKCollision, TwoRateAngleBGKCollision, AngleRateBGKCollision} ||
-            throw(ArgumentError("AngleGrid currently supports ExactAngleBGKCollision, TwoRateAngleBGKCollision, or AngleRateBGKCollision"))
-    else
-        throw(ArgumentError("unsupported angular discretization $(typeof(discretization))"))
-    end
+    # Dispatch-based validation replaces explicit type checks
+    _validate_model_compatibility(discretization, streaming, collision)
 
     if !isempty(band_specs)
-        collision isa LinearBGKCollision ||
-            throw(ArgumentError("multiband support currently requires LinearBGKCollision"))
-        discretization isa HarmonicBasis ||
-            throw(ArgumentError("multiband support currently requires HarmonicBasis"))
+        collision isa AbstractLinearCollision ||
+            throw(ArgumentError("multiband support requires linear collision (got $(typeof(collision)))"))
+        discretization isa AbstractHarmonicDiscretization ||
+            throw(ArgumentError("multiband support requires harmonic basis discretization"))
         length(unique(b.name for b in band_specs)) == length(band_specs) ||
             throw(ArgumentError("band names must be unique"))
         # No N-band limit — drag coupling supported for N=2; N≥3 uses mean-field formula
     end
 
     if !isnothing(magnetic_field)
-        discretization isa HarmonicBasis &&
-            collision isa LinearBGKCollision &&
+        discretization isa AbstractHarmonicDiscretization &&
+            collision isa AbstractLinearCollision &&
             isempty(band_specs) ||
             throw(ArgumentError("magnetic_field currently supported only for single-band linear harmonics"))
     end
@@ -1387,19 +1399,25 @@ end
 # Surface-dispatch overloads for streaming_matrices
 # ------------------------------------------------------------------
 
-# Isotropic: delegate to the analytic tridiagonal formula above
+# Optimized path for analytic surfaces: use direct formula (zero quadrature overhead)
 @inline streaming_matrices(M::Int, s::Isotropic2DFermiSurface) = streaming_matrices(M, s.vF)
 
-# Elliptic / General: numerical quadrature via surface_vF_angle
-streaming_matrices(M::Int, s::EllipticFermiSurface2D) =
+function streaming_matrices(M::Int, s::AbstractAnalyticSurface)
+    # All analytic surfaces can use the numerical quadrature path that's optimized
+    # for smooth vF_angle functions. For isotropic, the dispatch above will be used.
     _anisotropic_streaming_matrices(M, θ -> surface_vF_angle(s, θ))
+end
 
-streaming_matrices(M::Int, s::GeneralFermiSurface2D) =
+# General path for user-defined surfaces: use numerical quadrature
+function streaming_matrices(M::Int, s::AbstractUserDefinedSurface)
     _anisotropic_streaming_matrices(M, θ -> surface_vF_angle(s, θ))
+end
 
-# Generic fallback for any future AbstractFermiSurface2D subtype implementing surface_vF_angle
-streaming_matrices(M::Int, s::AbstractFermiSurface2D) =
-    _anisotropic_streaming_matrices(M, θ -> surface_vF_angle(s, θ))
+# Fallback with helpful error for unknown surface types
+function streaming_matrices(M::Int, s::AbstractFermiSurface2D)
+    error("streaming_matrices: unsupported surface type $(typeof(s)). " *
+          "Implement surface_vF_angle(s::$(typeof(s)), θ) to support this surface type.")
+end
 
 """
     _anisotropic_streaming_matrices(M, vF_func)
