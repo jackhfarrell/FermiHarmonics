@@ -1,4 +1,44 @@
+"""
+    AbstractFermiSurface2D
+
+Fermi surface representation for 2D kinetic transport.
+
+All subtypes must implement the surface interface:
+- `surface_vF(s)` — reference Fermi velocity
+- `surface_max_speed(s)` — maximum velocity (for CFL stability)
+- `surface_vF_angle(s, θ)` — velocity at angle θ
+- `surface_density_of_states(s)` — density of states
+- `surface_mass(s)` — effective mass
+- `surface_charge(s)` — carrier charge
+
+Subtypes:
+- `AbstractAnalyticSurface` — analytic formula (isotropic, elliptic)
+- `AbstractUserDefinedSurface` — user-supplied function
+"""
 abstract type AbstractFermiSurface2D end
+
+"""
+    AbstractAnalyticSurface <: AbstractFermiSurface2D
+
+Fermi surfaces with known analytic formulas.
+These can use optimized streaming matrix computation.
+
+Subtypes:
+- `Isotropic2DFermiSurface` — constant velocity
+- `EllipticFermiSurface2D` — elliptic anisotropy
+"""
+abstract type AbstractAnalyticSurface <: AbstractFermiSurface2D end
+
+"""
+    AbstractUserDefinedSurface <: AbstractFermiSurface2D
+
+Fermi surfaces defined by user-supplied functions.
+These require numerical quadrature for streaming matrices.
+
+Subtypes:
+- `GeneralFermiSurface2D` — arbitrary vF(θ) function
+"""
+abstract type AbstractUserDefinedSurface <: AbstractFermiSurface2D end
 abstract type AbstractAngularDiscretization2D end
 abstract type AbstractStreamingOperator2D end
 abstract type AbstractModeRateProfile end
@@ -91,7 +131,7 @@ end
 
 @inline coerce_band(band::Band) = band
 
-struct Isotropic2DFermiSurface <: AbstractFermiSurface2D
+struct Isotropic2DFermiSurface <: AbstractAnalyticSurface
     name::Symbol
     vF::Float64
     nu::Float64
@@ -131,7 +171,7 @@ end
 #   vF(θ) = vF0 / sqrt(cos²θ + sin²θ / aspect²)
 #   aspect = b/a ratio; 1.0 → isotropic; <1 → compressed along y
 # ------------------------------------------------------------------
-struct EllipticFermiSurface2D <: AbstractFermiSurface2D
+struct EllipticFermiSurface2D <: AbstractAnalyticSurface
     name    :: Symbol
     vF0     :: Float64   # speed at θ=0 (x-axis semi-axis)
     aspect  :: Float64   # b/a
@@ -175,7 +215,7 @@ end
 # GeneralFermiSurface2D{F} — user-supplied vF(θ) function
 #   max_vF is required (upper bound on |vF(θ)| for CFL)
 # ------------------------------------------------------------------
-struct GeneralFermiSurface2D{F} <: AbstractFermiSurface2D
+struct GeneralFermiSurface2D{F} <: AbstractUserDefinedSurface
     name    :: Symbol
     vF_func :: F         # vF_func(θ::Float64)::Float64
     max_vF  :: Float64   # user-supplied CFL bound
@@ -238,7 +278,30 @@ end
 struct IsotropicHarmonicStreaming <: AbstractStreamingOperator2D end
 struct IsotropicAngleStreaming <: AbstractStreamingOperator2D end
 
-struct TwoRateProfile <: AbstractModeRateProfile
+"""
+    AbstractBuiltInProfile <: AbstractModeRateProfile
+
+Built-in mode-dependent scattering rate profiles.
+These have parameters determined at construction time.
+
+Subtypes:
+- `TwoRateProfile` — step function (γ=0 for m<2, γ=γ_ee for m≥2)
+- `OddQuarticRateProfile` — quartic rate for odd modes
+- `ConstantModeRateProfile` — constant rate for all m≥2
+"""
+abstract type AbstractBuiltInProfile <: AbstractModeRateProfile end
+
+"""
+    AbstractUserProfile <: AbstractModeRateProfile
+
+User-defined mode-dependent scattering rate profiles.
+
+Subtypes:
+- `CustomModeRateProfile` — arbitrary rate function mode_rate(m)
+"""
+abstract type AbstractUserProfile <: AbstractModeRateProfile end
+
+struct TwoRateProfile <: AbstractBuiltInProfile
     gamma_ee::Float64
 end
 
@@ -246,7 +309,7 @@ TwoRateProfile(gamma_ee::Real) = begin
     TwoRateProfile(_require_nonneg("gamma_ee", gamma_ee))
 end
 
-struct OddQuarticRateProfile <: AbstractModeRateProfile
+struct OddQuarticRateProfile <: AbstractBuiltInProfile
     gamma_ee::Float64
     gamma3::Float64
 end
@@ -258,7 +321,7 @@ function OddQuarticRateProfile(gamma_ee::Real, gamma3::Real=gamma_ee)
     )
 end
 
-struct ConstantModeRateProfile <: AbstractModeRateProfile
+struct ConstantModeRateProfile <: AbstractBuiltInProfile
     gamma::Float64
 end
 
@@ -266,7 +329,7 @@ function ConstantModeRateProfile(gamma::Real)
     return ConstantModeRateProfile(_require_nonneg("gamma", gamma))
 end
 
-struct CustomModeRateProfile{F} <: AbstractModeRateProfile
+struct CustomModeRateProfile{F} <: AbstractUserProfile
     rate::F
 end
 
@@ -977,7 +1040,46 @@ struct NonlinearBoundaryFaceData
     sample_to_harmonics::Union{Nothing, Matrix{Float64}}
 end
 
-mutable struct MaxwellWallBC
+"""
+    AbstractBoundaryCondition
+
+Abstract type for boundary conditions in kinetic transport.
+
+All boundary condition subtypes must implement:
+- A `cache::BCProjectorCache` field for thread-safe workspace
+- A `tol::Float64` field for numerical tolerance
+
+Subtypes:
+- `AbstractWallBC` — Wall-type boundaries (specular/diffuse reflection)
+- `AbstractContactBC` — Contact-type boundaries (carrier injection/extraction)
+"""
+abstract type AbstractBoundaryCondition end
+
+"""
+    AbstractWallBC <: AbstractBoundaryCondition
+
+Wall-type boundary conditions. All subtypes have:
+- `p_scatter::Float64` — scattering probability
+
+Subtypes:
+- `MaxwellWallBC` — specular + diffuse reflection
+"""
+abstract type AbstractWallBC <: AbstractBoundaryCondition end
+
+"""
+    AbstractContactBC <: AbstractBoundaryCondition
+
+Contact-type boundary conditions. All subtypes have:
+- `p_ohmic_absorb::Float64` — absorption probability at contact
+- `bias::Float64` (OhmicContactBC) or `target_outward_flux::Float64` (CurrentContactBC)
+
+Subtypes:
+- `OhmicContactBC` — voltage-controlled contact
+- `CurrentContactBC` — current-controlled contact
+"""
+abstract type AbstractContactBC <: AbstractBoundaryCondition end
+
+mutable struct MaxwellWallBC <: AbstractWallBC
     p_scatter::Float64
     tol::Float64
     cache::BCProjectorCache
@@ -986,7 +1088,7 @@ end
 MaxwellWallBC(p_scatter::Real; tol::Real=0.0) =
     MaxwellWallBC(Float64(p_scatter), Float64(tol), BCProjectorCache())
 
-mutable struct OhmicContactBC
+mutable struct OhmicContactBC <: AbstractContactBC
     p_ohmic_absorb::Float64
     bias::Float64
     tol::Float64
@@ -996,7 +1098,7 @@ end
 OhmicContactBC(bias::Real; p_ohmic_absorb::Real=1.0, tol::Real=0.0) =
     OhmicContactBC(Float64(p_ohmic_absorb), Float64(bias), Float64(tol), BCProjectorCache())
 
-mutable struct CurrentContactBC
+mutable struct CurrentContactBC <: AbstractContactBC
     p_ohmic_absorb::Float64
     target_outward_flux::Float64
     tol::Float64
@@ -1006,10 +1108,37 @@ end
 CurrentContactBC(target_outward_flux::Real; p_ohmic_absorb::Real=1.0, tol::Real=0.0) =
     CurrentContactBC(Float64(p_ohmic_absorb), Float64(target_outward_flux), Float64(tol), BCProjectorCache())
 
-boundary_condition_name(bc) = nameof(typeof(bc))
+# Boundary condition name dispatch (safe accessors)
+function boundary_condition_name(bc::AbstractBoundaryCondition)
+    error("$(typeof(bc)) does not implement boundary_condition_name.")
+end
 boundary_condition_name(::MaxwellWallBC) = :maxwell_wall
 boundary_condition_name(::OhmicContactBC) = :ohmic_contact
 boundary_condition_name(::CurrentContactBC) = :current_contact
+
+# Scatter probability accessor (wall-type BCs only)
+function bc_scatter_probability(bc::AbstractBoundaryCondition)
+    error("$(typeof(bc)) does not have scatter probability. Only AbstractWallBC types do.")
+end
+@inline bc_scatter_probability(bc::AbstractWallBC) = bc.p_scatter
+
+# Absorption probability accessor (contact-type BCs only)
+function bc_absorption_probability(bc::AbstractBoundaryCondition)
+    error("$(typeof(bc)) does not have absorption probability. Only AbstractContactBC types do.")
+end
+@inline bc_absorption_probability(bc::AbstractContactBC) = bc.p_ohmic_absorb
+
+# Bias voltage accessor (OhmicContactBC only)
+function bc_bias(bc::AbstractBoundaryCondition)
+    error("$(typeof(bc)) does not have a bias voltage. Only OhmicContactBC does.")
+end
+@inline bc_bias(bc::OhmicContactBC) = bc.bias
+
+# Target flux accessor (CurrentContactBC only)
+function bc_target_flux(bc::AbstractBoundaryCondition)
+    error("$(typeof(bc)) does not have target flux. Only CurrentContactBC does.")
+end
+@inline bc_target_flux(bc::CurrentContactBC) = bc.target_outward_flux
 
 @inline transport_symbol(::LinearBGKCollision) = :linear
 @inline transport_symbol(::LinearCollisionMatrix) = :linear
