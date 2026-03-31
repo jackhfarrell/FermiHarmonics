@@ -251,7 +251,40 @@ end
 @inline surface_mass(s::GeneralFermiSurface2D)        = s.mass
 @inline surface_charge(s::GeneralFermiSurface2D)      = s.charge
 
-struct HarmonicBasis <: AbstractAngularDiscretization2D
+"""
+    AbstractHarmonicDiscretization <: AbstractAngularDiscretization2D
+
+Angular discretization using Fourier harmonic basis expansion.
+Efficient for linear transport; represents f(θ) ≈ Σ a_m·cos(mθ) + b_m·sin(mθ).
+
+Subtypes:
+- `HarmonicBasis` — primary implementation (configurable max harmonic)
+
+Characteristics:
+- Memory efficient (1 + 2M variables for M modes)
+- Fast linear transport
+- No direct angle discretization needed
+"""
+abstract type AbstractHarmonicDiscretization <: AbstractAngularDiscretization2D end
+
+"""
+    AbstractGridDiscretization <: AbstractAngularDiscretization2D
+
+Angular discretization using direct angle grid sampling.
+Required for nonlinear transport; evaluates f(θ) at discrete angle points.
+
+Subtypes:
+- `AngleGrid` — direct sampling at N equally-spaced angles
+
+Characteristics:
+- Direct representation: f_n = f(θ_n)
+- Can represent arbitrary (nonlinear) angular dependence
+- Requires FFT for harmonic transformation
+- Uses more memory (M angles × number of variables)
+"""
+abstract type AbstractGridDiscretization <: AbstractAngularDiscretization2D end
+
+struct HarmonicBasis <: AbstractHarmonicDiscretization
     max_harmonic::Union{Int, Symbol, Nothing}
 end
 
@@ -264,7 +297,7 @@ function HarmonicBasis(max_harmonic::Union{Integer, Symbol, Nothing})
     return HarmonicBasis(max_harmonic isa Integer ? Int(max_harmonic) : max_harmonic)
 end
 
-struct AngleGrid <: AbstractAngularDiscretization2D
+struct AngleGrid <: AbstractGridDiscretization
     theta_count::Int
 end
 
@@ -275,8 +308,22 @@ function AngleGrid(theta_count::Integer)
     return AngleGrid(ntheta)
 end
 
-struct IsotropicHarmonicStreaming <: AbstractStreamingOperator2D end
-struct IsotropicAngleStreaming <: AbstractStreamingOperator2D end
+"""
+    AbstractIsotropicStreaming <: AbstractStreamingOperator2D
+
+Streaming operators for isotropic Fermi surfaces (constant vF in all directions).
+Can use optimized matrix formulas.
+
+Subtypes:
+- `IsotropicHarmonicStreaming` — for harmonic basis
+- `IsotropicAngleStreaming` — for angle grids
+
+Future extension point for anisotropic streaming operators.
+"""
+abstract type AbstractIsotropicStreaming <: AbstractStreamingOperator2D end
+
+struct IsotropicHarmonicStreaming <: AbstractIsotropicStreaming end
+struct IsotropicAngleStreaming <: AbstractIsotropicStreaming end
 
 """
     AbstractBuiltInProfile <: AbstractModeRateProfile
