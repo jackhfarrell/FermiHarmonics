@@ -11,6 +11,7 @@ const ACTIVE_TEMP_MESH_DIRS = String[]
         recombine_all = config.recombine_all,
         algorithm = config.algorithm,
         save_groups_of_nodes = config.save_groups_of_nodes,
+        mesh_scale = config.mesh_scale,
         output_mode = config.output_mode,
         output_dir = isnothing(config.output_dir) ? nothing : abspath(config.output_dir),
         prefix = config.prefix,
@@ -66,6 +67,7 @@ function mesh_provenance_attributes(mesh_path::AbstractString)
         attrs["mesh_build_recombine_all"] = Int(mesh_build.recombine_all)
         attrs["mesh_build_algorithm"] = mesh_build.algorithm
         attrs["mesh_build_save_groups_of_nodes"] = Int(mesh_build.save_groups_of_nodes)
+        attrs["mesh_build_scale_factor"] = mesh_build.mesh_scale
         attrs["mesh_build_output_mode"] = String(mesh_build.output_mode)
         attrs["mesh_build_prefix"] = mesh_build.prefix
         if !isnothing(mesh_build.output_dir)
@@ -152,6 +154,10 @@ function apply_gmsh_options!(config::MeshBuildConfig)
     Base.invokelatest(gmsh.option.setNumber, "Mesh.SaveGroupsOfNodes", config.save_groups_of_nodes ? 1.0 : 0.0)
     Base.invokelatest(gmsh.option.setNumber, "Mesh.RecombineAll", config.recombine_all ? 1.0 : 0.0)
     Base.invokelatest(gmsh.option.setNumber, "Mesh.Algorithm", Float64(config.algorithm))
+    if !haskey(config.gmsh_options, "Mesh.CharacteristicLengthFactor") &&
+       !haskey(config.gmsh_options, "Mesh.MeshSizeFactor")
+        Base.invokelatest(gmsh.option.setNumber, "Mesh.CharacteristicLengthFactor", config.mesh_scale)
+    end
     for (name, value) in config.gmsh_options
         Base.invokelatest(gmsh.option.setNumber, name, Float64(value))
     end
@@ -182,6 +188,7 @@ function generate_mesh_from_geo(geo_path::AbstractString; config::MeshBuildConfi
             recombine_all = validated_config.recombine_all,
             algorithm = validated_config.algorithm,
             save_groups_of_nodes = validated_config.save_groups_of_nodes,
+            mesh_scale = validated_config.mesh_scale,
             output_mode = :temporary,
             output_dir = validated_config.output_dir,
             prefix = validated_config.prefix,
@@ -232,4 +239,62 @@ function resolve_mesh_path(problem::TrixiProblem)
     validate(problem)
     source_path = isnothing(problem.geometry_path) ? something(problem.mesh_path) : problem.geometry_path
     return resolve_mesh_path(source_path, problem.boundary_conditions; mesh_build=problem.mesh_build)
+end
+
+function read_inp_quads(mesh_path::AbstractString)
+    nodes = Dict{Int, NTuple{2, Float64}}()
+    quads = NTuple{4, Int}[]
+    in_nodes = false
+    in_elements = false
+
+    for raw_line in eachline(mesh_path)
+        line = strip(raw_line)
+        isempty(line) && continue
+        if startswith(line, "*")
+            header = lowercase(line)
+            in_nodes = startswith(header, "*node")
+            in_elements = startswith(header, "*element")
+            continue
+        end
+
+        if in_nodes
+            parts = split(line, ',')
+            length(parts) >= 3 || continue
+            node_id = tryparse(Int, strip(parts[1]))
+            isnothing(node_id) && continue
+            x = tryparse(Float64, strip(parts[2]))
+            y = tryparse(Float64, strip(parts[3]))
+            (isnothing(x) || isnothing(y)) && continue
+            nodes[node_id] = (x, y)
+        elseif in_elements
+            parts = split(line, ',')
+            length(parts) >= 5 || continue
+            elem_id = tryparse(Int, strip(parts[1]))
+            isnothing(elem_id) && continue
+            n1 = tryparse(Int, strip(parts[2]))
+            n2 = tryparse(Int, strip(parts[3]))
+            n3 = tryparse(Int, strip(parts[4]))
+            n4 = tryparse(Int, strip(parts[5]))
+            (isnothing(n1) || isnothing(n2) || isnothing(n3) || isnothing(n4)) && continue
+            push!(quads, (n1, n2, n3, n4))
+        end
+    end
+
+    isempty(nodes) && return zeros(0, 2), zeros(Int, 0, 4)
+    node_ids = sort(collect(keys(nodes)))
+    id_to_index = Dict{Int, Int}(id => idx for (idx, id) in enumerate(node_ids))
+    coords = Matrix{Float64}(undef, length(node_ids), 2)
+    @inbounds for (idx, id) in enumerate(node_ids)
+        coords[idx, 1], coords[idx, 2] = nodes[id]
+    end
+
+    quad_indices = Matrix{Int}(undef, length(quads), 4)
+    @inbounds for (row, quad) in enumerate(quads)
+        quad_indices[row, 1] = id_to_index[quad[1]]
+        quad_indices[row, 2] = id_to_index[quad[2]]
+        quad_indices[row, 3] = id_to_index[quad[3]]
+        quad_indices[row, 4] = id_to_index[quad[4]]
+    end
+
+    return coords, quad_indices
 end

@@ -5,6 +5,7 @@ using GLMakie
 
 import ElectronKinetics: LiveVisualizationConfig,
                          LiveVisualizationSnapshot,
+                         create_mesh_preview,
                          create_live_dashboard,
                          live_dashboard_is_open,
                          finalize_live_dashboard!,
@@ -85,6 +86,8 @@ function create_live_dashboard(config::LiveVisualizationConfig, snapshot::LiveVi
             colormap=config.colormap,
             colorrange=colorrange,
         )
+    elseif config.mesh_outline_only
+        nothing
     else
         mesh!(
             axis,
@@ -96,7 +99,18 @@ function create_live_dashboard(config::LiveVisualizationConfig, snapshot::LiveVi
         )
     end
 
-    Colorbar(fig[1, 2], field_plot; label=snapshot.field.label)
+    if config.mesh_outline && snapshot.field.geometry_mode === :mesh_native
+        wireframe!(
+            axis,
+            mesh_native_geometry(snapshot);
+            color=:black,
+            linewidth=0.5,
+        )
+    end
+
+    if field_plot !== nothing
+        Colorbar(fig[1, 2], field_plot; label=snapshot.field.label)
+    end
     Label(
         fig[2, 1:2],
         panel_text;
@@ -107,8 +121,8 @@ function create_live_dashboard(config::LiveVisualizationConfig, snapshot::LiveVi
         justification=:left,
     )
 
-    colsize!(fig.layout, 1, Relative(0.94))
-    colsize!(fig.layout, 2, Relative(0.06))
+    colsize!(fig.layout, 1, Relative(field_plot === nothing ? 1.0 : 0.94))
+    colsize!(fig.layout, 2, Relative(field_plot === nothing ? 0.0 : 0.06))
     rowsize!(fig.layout, 1, Relative(0.9))
     rowsize!(fig.layout, 2, Relative(0.1))
     colgap!(fig.layout, 8)
@@ -116,6 +130,43 @@ function create_live_dashboard(config::LiveVisualizationConfig, snapshot::LiveVi
 
     screen = config.show_window ? display(fig) : nothing
     return MakieLiveDashboard(fig, field_plot, field_values, colorrange, title_text, panel_text, String(name), screen)
+end
+
+function create_mesh_preview(
+    nodes::AbstractMatrix{<:Real},
+    quads::AbstractMatrix{<:Integer};
+    scale::Real=1.0,
+    name::AbstractString="mesh_preview",
+)
+    point_count = size(nodes, 1)
+    quad_count = size(quads, 1)
+    point_count > 0 || throw(ArgumentError("mesh preview requires non-empty node list"))
+    quad_count > 0 || throw(ArgumentError("mesh preview requires quad elements"))
+
+    scale_value = Float32(scale)
+    points = Vector{GLMakie.Point2f}(undef, point_count)
+    @inbounds for i in 1:point_count
+        points[i] = GLMakie.Point2f(scale_value * Float32(nodes[i, 1]), scale_value * Float32(nodes[i, 2]))
+    end
+
+    segments = GLMakie.Point2f[]
+    sizehint!(segments, quad_count * 8)
+    @inbounds for row in 1:quad_count
+        n1 = quads[row, 1]
+        n2 = quads[row, 2]
+        n3 = quads[row, 3]
+        n4 = quads[row, 4]
+        push!(segments, points[n1]); push!(segments, points[n2])
+        push!(segments, points[n2]); push!(segments, points[n3])
+        push!(segments, points[n3]); push!(segments, points[n4])
+        push!(segments, points[n4]); push!(segments, points[n1])
+    end
+
+    fig = Figure(; size=(920, 680), figure_padding=(8, 8, 8, 8))
+    axis = Axis(fig[1, 1]; title="$(name): mesh outline", xlabel="x", ylabel="y", aspect=DataAspect())
+    linesegments!(axis, segments; color=:black, linewidth=0.5)
+    screen = display(fig)
+    return (figure=fig, axis=axis, screen=screen)
 end
 
 function update_live_dashboard!(dashboard::MakieLiveDashboard, snapshot::LiveVisualizationSnapshot)

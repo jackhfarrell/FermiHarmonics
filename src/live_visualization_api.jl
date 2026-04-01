@@ -2,6 +2,8 @@ Base.@kwdef struct LiveVisualizationConfig
     field::Union{Nothing, Symbol} = nothing
     colormap::Symbol = :magma
     geometry_mode::Symbol = :mesh_native
+    mesh_outline::Bool = false
+    mesh_outline_only::Bool = false
     nvisnodes::Int = 120
     refine::Int = 4
     accepted_step_interval::Int = 500

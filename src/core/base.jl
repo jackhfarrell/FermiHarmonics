@@ -1007,6 +1007,7 @@ Base.@kwdef struct MeshBuildConfig
     recombine_all::Bool = true
     algorithm::Int = 8
     save_groups_of_nodes::Bool = true
+    mesh_scale::Float64 = 3.0
     output_mode::Symbol = :temporary
     output_dir::Union{Nothing, String} = nothing
     prefix::String = "ek_mesh_"
@@ -1016,6 +1017,7 @@ end
 function validate(config::MeshBuildConfig)
     config.output_mode in (:temporary, :persistent) ||
         throw(ArgumentError("mesh_build.output_mode must be :temporary or :persistent"))
+    config.mesh_scale > 0 || throw(ArgumentError("mesh_build.mesh_scale must be > 0"))
     isempty(config.prefix) && throw(ArgumentError("mesh_build.prefix must not be empty"))
     return config
 end

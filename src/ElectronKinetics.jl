@@ -280,7 +280,9 @@ export
     generate_mesh_from_geo,
     mesh_provenance_attributes,
     resolve_mesh_path,
-    preview_mesh
+    preview_mesh,
+    create_mesh_preview,
+    read_inp_quads
 
 # ============================================================================
 # Advanced API — For custom implementations and extensions

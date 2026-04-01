@@ -12,6 +12,7 @@ using ElectronKinetics
 using Trixi
 
 live = "--live" in ARGS
+mesh_only = "--mesh-only" in ARGS
 if live
     try
         @eval using GLMakie
@@ -89,9 +90,14 @@ if live
         model,
         config;
         visualization_mode=:mesh_native,
+        mesh_scale=1.0,
         wait_for_close=true,
         name="example_linear_harmonic_mesh",
     )
+end
+
+if mesh_only
+    exit()
 end
 
 callbacks = default_callbacks_builder()

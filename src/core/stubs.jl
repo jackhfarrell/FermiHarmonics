@@ -61,3 +61,7 @@ end
 function preview_mesh(args...; kwargs...)
     throw(ArgumentError("preview_mesh is provided by backend extensions. Load Trixi and GLMakie to preview meshes."))
 end
+
+function create_mesh_preview(args...; kwargs...)
+    throw(ArgumentError("create_mesh_preview is provided by the Makie extension. Load GLMakie to preview meshes."))
+end

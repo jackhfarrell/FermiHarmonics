@@ -110,13 +110,28 @@ function preview_mesh(
     model::KineticModel2D,
     config::SolverConfig;
     visualization_mode::Symbol=:mesh_native,
+    mesh_scale::Real=1.0,
     wait_for_close::Bool=false,
     name::AbstractString="mesh_preview",
 )
     resolved_mesh_path = ElectronKinetics.resolve_mesh_path(problem)
+    if endswith(lowercase(resolved_mesh_path), ".inp")
+        nodes, quads = read_inp_quads(resolved_mesh_path)
+        if size(quads, 1) > 0
+            preview = create_mesh_preview(nodes, quads; scale=mesh_scale, name=name)
+            if wait_for_close && !isnothing(preview) && hasproperty(preview, :screen)
+                while isopen(preview.screen)
+                    sleep(0.1)
+                end
+            end
+            return preview
+        end
+    end
     validate(config)
     live_visualization = LiveVisualizationConfig(;
         geometry_mode=visualization_mode,
+        mesh_outline=true,
+        mesh_outline_only=true,
         accepted_step_interval=1,
         min_update_seconds=0.0,
     )
