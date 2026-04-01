@@ -11,8 +11,8 @@
 using ElectronKinetics
 using Trixi
 
-live = "--live" in ARGS
 mesh_only = "--mesh-only" in ARGS
+live = "--live" in ARGS || mesh_only
 if live
     try
         @eval using GLMakie

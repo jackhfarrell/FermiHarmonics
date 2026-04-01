@@ -106,7 +106,7 @@ Start with a kinetic transport problem
 ## Live Visualization
 
 Each example accepts `--live` to enable the GLMakie live dashboard. This requires
-`GLMakie` in your environment. Use `--mesh-only` alongside `--live` to preview the
+`GLMakie` in your environment. Use `--mesh-only` (implies `--live`) to preview the
 mesh and exit before the solve starts. Mesh coarseness is controlled by
 `MeshBuildConfig(mesh_scale=...)` when using `.geo` inputs.
 
@@ -117,6 +117,9 @@ julia --project=. examples/01_linear_harmonic_transport.jl --live
 ```bash
 julia --project=. examples/01_linear_harmonic_transport.jl --live --mesh-only
 ```
+
+Note: the mesh preview shows the quad mesh from the `.inp`, while the live solver
+dashboard visualizes a triangulated mesh-native grid.
 
 ## Next Steps
 

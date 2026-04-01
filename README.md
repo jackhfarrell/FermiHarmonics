@@ -87,6 +87,19 @@ sol, semi = solve(
 )
 ```
 
+Minimal custom callback example:
+
+```julia
+callbacks = (semi, ode, config, live_visualization, name) -> begin
+    SciMLBase.CallbackSet(
+        Trixi.StepsizeCallback(cfl=config.cfl),
+    )
+end
+```
+
+Note: mesh preview uses quad outlines from the `.inp`, while the live solver
+dashboard visualizes a triangulated mesh-native grid.
+
 The physics core can be loaded without `Trixi`; the backend extension activates
 when `using Trixi` is present in the environment.
 
