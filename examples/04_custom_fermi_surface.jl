@@ -69,7 +69,7 @@ boundary_conditions = Dict(
 problem = if isfile(mesh_path)
     TrixiProblem(; mesh_path=mesh_path, boundary_conditions=boundary_conditions)
 elseif isfile(geometry_path)
-    TrixiProblem(; geometry_path=geometry_path, boundary_conditions=boundary_conditions, mesh_build=MeshBuildConfig(output_mode=:persistent))
+    TrixiProblem(; geometry_path=geometry_path, boundary_conditions=boundary_conditions)
 else
     error("No mesh found. Expected $(mesh_path) or $(geometry_path).")
 end

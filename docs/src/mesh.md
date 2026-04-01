@@ -60,12 +60,13 @@ using ElectronKinetics
 
 mesh_path = generate_mesh_from_geo(
     "assets/square_bells.geo";
-    config=MeshBuildConfig(output_mode=:persistent),
+    config=MeshBuildConfig(),
 )
 ```
 
-By default, `MeshBuildConfig()` uses temporary unique output paths, which is safe for
-cluster sweeps and parallel parameter scans.
+`MeshBuildConfig()` uses temporary unique output paths, which is safe for
+cluster sweeps and parallel parameter scans. `.geo` meshing always writes a
+unique temporary `.inp` (the `.geo` is the persistent source of truth).
 
 ## Map Mesh Boundaries To Boundary Conditions
 

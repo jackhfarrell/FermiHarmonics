@@ -82,8 +82,8 @@ function solve(
     end
 
     callback = callbacks(semi, ode, config, live_visualization, name)
-    callback isa SciMLBase.AbstractCallback ||
-        throw(ArgumentError("callbacks builder must return a SciMLBase.AbstractCallback"))
+    callback isa SciMLBase.DECallback || callback isa SciMLBase.CallbackSet ||
+        throw(ArgumentError("callbacks builder must return a SciMLBase callback (DiscreteCallback/ContinuousCallback/CallbackSet)."))
     dt_value = isnothing(dt) ? Trixi.StepsizeCallback(cfl=config.cfl)(ode) : Float64(dt)
 
     sol = Trixi.solve(
@@ -103,6 +103,69 @@ function solve(
     flush(stderr)
 
     return sol, semi
+end
+
+function preview_mesh(
+    problem::TrixiProblem,
+    model::KineticModel2D,
+    config::SolverConfig;
+    visualization_mode::Symbol=:mesh_native,
+    wait_for_close::Bool=false,
+    name::AbstractString="mesh_preview",
+)
+    resolved_mesh_path = ElectronKinetics.resolve_mesh_path(problem)
+    validate(config)
+    live_visualization = LiveVisualizationConfig(;
+        geometry_mode=visualization_mode,
+        accepted_step_interval=1,
+        min_update_seconds=0.0,
+    )
+    validate(live_visualization)
+
+    equations, _ = build_equations(model, config)
+    nvars = Trixi.nvariables(equations)
+    boundary_symbols = sort(collect(keys(problem.boundary_conditions)))
+    boundary_conditions = (; problem.boundary_conditions...)
+    solver = Trixi.DGSEM(polydeg=config.polydeg, surface_flux=Trixi.flux_lax_friedrichs)
+    mesh = Trixi.P4estMesh{2}(resolved_mesh_path; boundary_symbols=boundary_symbols)
+    mesh.current_filename = resolved_mesh_path
+
+    if equations isa NonlinearFermiHarmonics2D
+        semi = Trixi.SemidiscretizationHyperbolic(
+            mesh, equations, (x, t, eq) -> zeros(SVector{nvars, Float64}), solver;
+            boundary_conditions=boundary_conditions,
+            source_terms=source_terms,
+        )
+    elseif nonlinear_has_electrostatic_force(equations)
+        equations_parabolic = ElectrostaticGradientEquation2D(equations)
+        semi = Trixi.SemidiscretizationHyperbolicParabolic(
+            mesh,
+            (equations, equations_parabolic),
+            (x, t, eq) -> zeros(SVector{nvars, Float64}),
+            solver;
+            solver_parabolic=Trixi.ViscousFormulationLocalDG(),
+            source_terms=source_terms,
+            source_terms_parabolic=source_terms,
+            boundary_conditions=(boundary_conditions, boundary_conditions),
+        )
+    else
+        semi = Trixi.SemidiscretizationHyperbolic(
+            mesh, equations, (x, t, eq) -> zeros(SVector{nvars, Float64}), solver;
+            boundary_conditions=boundary_conditions,
+            source_terms=source_terms,
+        )
+    end
+
+    tspan = (0.0, config.tspan_end)
+    ode = Trixi.semidiscretize(semi, tspan)
+    monitor_state = create_monitor_state(ode, semi, live_visualization)
+    initialize_live_dashboard!(monitor_state, ode.u0, semi, config, name)
+    if wait_for_close && !isnothing(monitor_state.dashboard)
+        while live_dashboard_is_open(monitor_state.dashboard)
+            sleep(0.1)
+        end
+    end
+    return monitor_state.dashboard
 end
 
 function solve_status(sol, semi, config::SolverConfig; time_atol::Real=1e-10, stop_reason_override::Union{Nothing, Symbol}=nothing)

@@ -57,3 +57,7 @@ end
 function default_callbacks_builder(args...; kwargs...)
     throw(ArgumentError("default_callbacks_builder is provided by backend extensions. Load Trixi to use the current backend implementation."))
 end
+
+function preview_mesh(args...; kwargs...)
+    throw(ArgumentError("preview_mesh is provided by backend extensions. Load Trixi and GLMakie to preview meshes."))
+end

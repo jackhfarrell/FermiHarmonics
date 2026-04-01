@@ -67,14 +67,6 @@ boundary_conditions = Dict(
     :contact_bottom => OhmicContactBC(0.5),
 )
 
-problem = if isfile(mesh_path)
-    TrixiProblem(; mesh_path=mesh_path, boundary_conditions=boundary_conditions)
-elseif isfile(geometry_path)
-    TrixiProblem(; geometry_path=geometry_path, boundary_conditions=boundary_conditions, mesh_build=MeshBuildConfig(output_mode=:persistent))
-else
-    error("No mesh found. Expected $(mesh_path) or $(geometry_path).")
-end
-
 config = SolverConfig(;
     polydeg = 3,
     cfl = 0.8,
@@ -82,6 +74,25 @@ config = SolverConfig(;
     residual_tol = 1e-5,
     log_every = 200,
 )
+
+problem = if isfile(mesh_path)
+    TrixiProblem(; mesh_path=mesh_path, boundary_conditions=boundary_conditions)
+elseif isfile(geometry_path)
+    TrixiProblem(; geometry_path=geometry_path, boundary_conditions=boundary_conditions)
+else
+    error("No mesh found. Expected $(mesh_path) or $(geometry_path).")
+end
+
+if live
+    preview_mesh(
+        problem,
+        model,
+        config;
+        visualization_mode=:mesh_native,
+        wait_for_close=true,
+        name="example_linear_harmonic_mesh",
+    )
+end
 
 callbacks = default_callbacks_builder()
 

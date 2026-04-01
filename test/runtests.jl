@@ -198,7 +198,7 @@ Physical Curve("walls") = {1, 2, 3, 4};
 
         @test_throws ArgumentError ElectronKinetics.generate_mesh_from_geo(
             tri_geo;
-            config=MeshBuildConfig(recombine_all=false, algorithm=6, output_mode=:persistent, output_dir=dir),
+            config=MeshBuildConfig(recombine_all=false, algorithm=6),
         )
     end
 end

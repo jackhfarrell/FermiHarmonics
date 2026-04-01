@@ -176,6 +176,19 @@ function generate_mesh_from_geo(geo_path::AbstractString; config::MeshBuildConfi
     normalized_geo_path = normalize_mesh_path(geo_path)
     isfile(normalized_geo_path) || throw(ArgumentError("geometry file not found: $normalized_geo_path"))
 
+    if validated_config.output_mode !== :temporary
+        @warn "MeshBuildConfig.output_mode=$(validated_config.output_mode) is ignored; .geo meshing always writes a unique temporary .inp."
+        validated_config = MeshBuildConfig(;
+            recombine_all = validated_config.recombine_all,
+            algorithm = validated_config.algorithm,
+            save_groups_of_nodes = validated_config.save_groups_of_nodes,
+            output_mode = :temporary,
+            output_dir = validated_config.output_dir,
+            prefix = validated_config.prefix,
+            gmsh_options = validated_config.gmsh_options,
+        )
+    end
+
     output_path = mesh_output_path(normalized_geo_path, validated_config)
     mkpath(dirname(output_path))
 
