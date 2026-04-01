@@ -24,6 +24,18 @@ julia --project=. -e 'using Pkg; Pkg.instantiate()'
 julia --project=. examples/01_linear_harmonic_transport.jl
 ```
 
+Enable live visualization (requires GLMakie):
+
+```bash
+julia --project=. examples/01_linear_harmonic_transport.jl --live
+```
+
+Preview the mesh only (no solve):
+
+```bash
+julia --project=. examples/01_linear_harmonic_transport.jl --live --mesh-only
+```
+
 ## Core Solve Shape
 
 The public API is now built around typed model composition in the core package
@@ -42,14 +54,14 @@ model = KineticModel2D(
 )
 
 problem = TrixiProblem(;
-    # Convert the .geo to .inp first, e.g.:
-    # gmsh -2 assets/square_bells.geo -format inp -o assets/square_bells.inp
-    mesh_path = "assets/square_bells.inp",
+    # Convert the .geo to .inp first, or use a .geo directly with mesh_build.
+    geometry_path = "assets/square_bells.geo",
     boundary_conditions = Dict(
         :walls => MaxwellWallBC(1.0),
         :contact_top => OhmicContactBC(-0.5),
         :contact_bottom => OhmicContactBC(0.5),
     ),
+    mesh_build = MeshBuildConfig(mesh_scale=3.0),
 )
 
 config = SolverConfig(;
@@ -61,6 +73,8 @@ config = SolverConfig(;
     min_harmonic = 4,
     max_harmonic_auto = 150,
 )
+
+# MeshBuildConfig defaults: algorithm=8 (quasi-structured quads), mesh_scale=3.0.
 
 callbacks = default_callbacks_builder()
 

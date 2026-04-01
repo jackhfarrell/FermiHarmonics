@@ -1,5 +1,5 @@
 # This script implements required methods by the solver Trixi.jl for the custom FermiHarmonics2D equations type.
-# TODO: clean up this file. Do we need all of these methods now that we only support the P4estMesh
+# Note: This interface file currently targets P4estMesh only.
 
 # ======================================================================================================================
 # Required Equation Methods

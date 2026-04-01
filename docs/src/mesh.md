@@ -60,13 +60,19 @@ using ElectronKinetics
 
 mesh_path = generate_mesh_from_geo(
     "assets/square_bells.geo";
-    config=MeshBuildConfig(),
+    config=MeshBuildConfig(mesh_scale=3.0),
 )
 ```
 
-`MeshBuildConfig()` uses temporary unique output paths, which is safe for
+`MeshBuildConfig(mesh_scale=3.0)` uses temporary unique output paths, which is safe for
 cluster sweeps and parallel parameter scans. `.geo` meshing always writes a
 unique temporary `.inp` (the `.geo` is the persistent source of truth).
+
+### MeshBuildConfig Defaults
+
+- `algorithm = 8` (quad-friendly Gmsh algorithm for quasi-structured quads)
+- `recombine_all = true` (prefer quadrilateral elements)
+- `mesh_scale = 3.0` (coarser meshes via `Mesh.CharacteristicLengthFactor`)
 
 ## Map Mesh Boundaries To Boundary Conditions
 

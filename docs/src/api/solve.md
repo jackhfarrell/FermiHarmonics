@@ -81,7 +81,8 @@ sol, semi = solve(problem, model, config; callbacks=callbacks, name = "exact_bgk
 - `callbacks` is required; use `default_callbacks_builder()` or provide your own SciML callback builder.
 - The default builder wires logging/live visualization and finalizes the dashboard on completion.
 - `SolverConfig` controls discretization order, CFL, end time, residual target, logging cadence, and auto-harmonic bounds.
-- `MeshBuildConfig()` uses temporary unique output paths under `SLURM_TMPDIR` / `TMPDIR` / `tempdir()`.
+- `MeshBuildConfig(mesh_scale=3.0)` uses temporary unique output paths under `SLURM_TMPDIR` / `TMPDIR` / `tempdir()`.
+- The default Gmsh `algorithm=8` targets quasi-structured quadrilateral meshes with `recombine_all=true`.
 - `.geo` meshing always writes a unique temporary `.inp` (the `.geo` is the persistent input).
 - `HarmonicBasis(:auto)` resolves its working harmonic count from `estimate_max_harmonic(gamma_mr, gamma_ee; ...)`.
 - Linear harmonic closures use `LinearBGKCollision(gamma_mr, profile)`.

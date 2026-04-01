@@ -1003,6 +1003,16 @@ function validate(config::SolverConfig)
     return config
 end
 
+"""
+    MeshBuildConfig(; ...)
+
+Mesh generation controls when building `.inp` meshes from `.geo` sources.
+
+Defaults:
+- `algorithm = 8` (quad-friendly Gmsh algorithm for quasi-structured quads)
+- `recombine_all = true` (prefer quadrilateral elements)
+- `mesh_scale = 3.0` (coarser meshes; passes through to `Mesh.CharacteristicLengthFactor`)
+"""
 Base.@kwdef struct MeshBuildConfig
     recombine_all::Bool = true
     algorithm::Int = 8

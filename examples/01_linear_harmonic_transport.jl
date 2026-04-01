@@ -79,7 +79,11 @@ config = SolverConfig(;
 problem = if isfile(mesh_path)
     TrixiProblem(; mesh_path=mesh_path, boundary_conditions=boundary_conditions)
 elseif isfile(geometry_path)
-    TrixiProblem(; geometry_path=geometry_path, boundary_conditions=boundary_conditions)
+    TrixiProblem(;
+        geometry_path=geometry_path,
+        boundary_conditions=boundary_conditions,
+        mesh_build=MeshBuildConfig(output_mode=:persistent, mesh_scale=3.0),
+    )
 else
     error("No mesh found. Expected $(mesh_path) or $(geometry_path).")
 end
@@ -90,7 +94,7 @@ if live
         model,
         config;
         visualization_mode=:mesh_native,
-        mesh_scale=1.0,
+        mesh_scale=3.0,
         wait_for_close=true,
         name="example_linear_harmonic_mesh",
     )
