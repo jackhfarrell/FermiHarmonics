@@ -10,6 +10,9 @@ Recommended workflow:
 3. Let `solve` consume either the generated `.inp` or the `.geo` directly.
 4. Use the same physical names in your Julia `boundary_conditions` dictionary.
 
+`generate_mesh_from_geo` uses `Gmsh.jl` directly (not the `gmsh` CLI), so the
+Gmsh Julia package must be available in your environment.
+
 ## Quad Requirement (Important)
 
 Do not generate triangle-only meshes.
