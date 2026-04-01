@@ -62,6 +62,7 @@ function main()
         params,
         gamma_mr,
         gamma_ee;
+    callbacks=default_callbacks_builder(),
         transport          = :parabolic_nonlinear,
         max_harmonic       = :auto,
         mu0                = mu0,

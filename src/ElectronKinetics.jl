@@ -252,7 +252,8 @@ export
 
     # Main Solver Interface
     solve,
-    solve_status
+    solve_status,
+    default_callbacks_builder
 
 # ============================================================================
 # Reference Utilities

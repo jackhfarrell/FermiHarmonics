@@ -56,7 +56,9 @@ model = KineticModel2D(
 )
 
 problem = TrixiProblem(;
-    mesh_path = "projects/square_bells_ucsb/mesh/square_bells.inp",
+    # Convert the .geo to .inp first, e.g.:
+    # gmsh -2 assets/square_bells.geo -format inp -o assets/square_bells.inp
+    mesh_path = "assets/square_bells.inp",
     boundary_conditions = Dict(
         :walls => MaxwellWallBC(1.0),
         :contact_top => OhmicContactBC(-0.5),
@@ -74,7 +76,15 @@ config = SolverConfig(;
     max_harmonic_auto = 150,
 )
 
-sol, semi = solve(problem, model, config; name="quick_start")
+callbacks = default_callbacks_builder()
+
+sol, semi = solve(
+    problem,
+    model,
+    config;
+    callbacks=callbacks,
+    name="quick_start",
+)
 ```
 
 The physics core can be loaded without `Trixi`; the backend extension activates

@@ -57,6 +57,7 @@ sol_ref, semi_ref = ElectronKinetics.solve(
     params,
     gamma_mr,
     gamma_ee;
+    callbacks=default_callbacks_builder(),
     max_harmonic = reference_max_harmonic,
     visualize = visualize,
     name = "$(name)_reference_m$(reference_max_harmonic)",
@@ -73,6 +74,7 @@ sol_est, semi_est = ElectronKinetics.solve(
     params,
     gamma_mr,
     gamma_ee;
+    callbacks=default_callbacks_builder(),
     max_harmonic = estimated_max_harmonic,
     visualize = visualize,
     name = "$(name)_estimated_m$(estimated_max_harmonic)",

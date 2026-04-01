@@ -45,6 +45,7 @@ function main()
         params,
         gamma_mr,
         gamma_ee;
+    callbacks=default_callbacks_builder(),
         transport=:parabolic_nonlinear,
         collision_model=:exact_bgk,
         n_angles=n_angles,

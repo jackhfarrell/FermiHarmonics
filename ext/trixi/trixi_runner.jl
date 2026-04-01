@@ -2,11 +2,13 @@ function solve(
     problem::TrixiProblem,
     model::KineticModel2D,
     config::SolverConfig;
+    callbacks::Function,
     u0_override::Union{Nothing, AbstractVector}=nothing,
     live_visualization::Union{Nothing, LiveVisualizationConfig}=nothing,
     visualize::Bool=false,
     visualize_every::Union{Nothing, Integer}=nothing,
     visualization_mode::Symbol=:mesh_native,
+    dt::Union{Nothing, Real}=nothing,
     name::AbstractString="run",
 )
     resolved_mesh_path = ElectronKinetics.resolve_mesh_path(problem)
@@ -79,28 +81,23 @@ function solve(
         ode = SciMLBase.remake(ode; u0=warm.u0)
     end
 
-    monitor_state = create_monitor_state(ode, semi, live_visualization)
-    initialize_live_dashboard!(monitor_state, ode.u0, semi, config, name)
-
-    stepsize_callback = Trixi.StepsizeCallback(cfl=config.cfl)
-    steady_state_callback = Trixi.SteadyStateCallback(abstol=config.residual_tol, reltol=config.residual_reltol)
-    monitor = solve_monitor_callback(config, semi, monitor_state)
-
-    callbacks = Any[stepsize_callback, steady_state_callback, monitor]
+    callback = callbacks(semi, ode, config, live_visualization, name)
+    callback isa SciMLBase.AbstractCallback ||
+        throw(ArgumentError("callbacks builder must return a SciMLBase.AbstractCallback"))
+    dt_value = isnothing(dt) ? Trixi.StepsizeCallback(cfl=config.cfl)(ode) : Float64(dt)
 
     sol = Trixi.solve(
         ode,
         Trixi.CarpenterKennedy2N54();
-        dt=stepsize_callback(ode),
-        callback=Trixi.CallbackSet(callbacks...),
+        dt=dt_value,
+        callback=callback,
         adaptive=false,
         save_everystep=false,
         save_start=false,
         save_end=true,
     )
 
-    status = solve_status(sol, semi, config; stop_reason_override=monitor_state.window_closed ? :window_closed : nothing)
-    finalize_live_dashboard!(monitor_state, sol.u[end], semi, status, config)
+    status = solve_status(sol, semi, config)
     @info "Solve complete" name=name stop_reason=status.stop_reason final_time=status.final_time target_final_time=status.target_final_time final_residual=status.final_residual tolerance=config.residual_tol converged=status.converged retcode=status.retcode successful=status.successful
     flush(stdout)
     flush(stderr)
@@ -131,4 +128,20 @@ function solve_status(sol, semi, config::SolverConfig; time_atol::Real=1e-10, st
         successful=successful,
         retcode=retcode,
     )
+end
+
+function ElectronKinetics.default_callbacks_builder(; include_monitor::Bool=true)
+    return (semi, ode, config, live_visualization, name) -> begin
+        callbacks = Any[
+            Trixi.StepsizeCallback(cfl=config.cfl),
+            Trixi.SteadyStateCallback(abstol=config.residual_tol, reltol=config.residual_reltol),
+        ]
+        if include_monitor
+            monitor_state = create_monitor_state(ode, semi, live_visualization)
+            initialize_live_dashboard!(monitor_state, ode.u0, semi, config, name)
+            monitor = solve_monitor_callback(config, semi, monitor_state)
+            push!(callbacks, monitor)
+        end
+        return Trixi.CallbackSet(callbacks...)
+    end
 end

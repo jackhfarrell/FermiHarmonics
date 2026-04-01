@@ -278,7 +278,8 @@ end
         LinearBGKCollision(0.0, ConstantModeRateProfile(0.5)),
     )
     sol, semi = solve(
-        TrixiProblem(; mesh_path=TESLA_MESH, boundary_conditions=TESLA_BCS),
+        TrixiProblem(;
+    callbacks=default_callbacks_builder(), mesh_path=TESLA_MESH, boundary_conditions=TESLA_BCS),
         model,
         config;
         name="test_linear",
@@ -313,6 +314,7 @@ end
         problem,
         model,
         config;
+    callbacks=default_callbacks_builder(),
         name="test_linear_geometry_problem",
         live_visualization=LiveVisualizationConfig(; geometry_mode=:cartesian, accepted_step_interval=5, min_update_seconds=0.0, show_window=false, nvisnodes=24),
     )
@@ -350,6 +352,7 @@ end
         params,
         0.0,
         0.5;
+    callbacks=default_callbacks_builder(),
         max_harmonic=2,
         visualize=false,
         name="test_legacy_wrapper",
@@ -377,6 +380,7 @@ end
         params,
         0.0,
         0.5;
+    callbacks=default_callbacks_builder(),
         max_harmonic=2,
         visualize=false,
         name="test_legacy_geo_wrapper",
@@ -406,7 +410,8 @@ end
         QuadraticBGKCollision(0.0, OddQuarticRateProfile(0.5); mu0=1.0, mass=2.0, electrostatic_coupling=0.0),
     )
     sol, semi = solve(
-        TrixiProblem(; mesh_path=TESLA_MESH, boundary_conditions=TESLA_BCS),
+        TrixiProblem(;
+    callbacks=default_callbacks_builder(), mesh_path=TESLA_MESH, boundary_conditions=TESLA_BCS),
         model,
         config;
         name="test_quadratic",
@@ -439,7 +444,8 @@ end
         IsotropicAngleStreaming(),
         ExactAngleBGKCollision(; gamma_mr=0.0, gamma_ee=0.5, mu0=1.0, mass=2.0, electrostatic_coupling=0.0),
     )
-    sol, semi = solve(TrixiProblem(; mesh_path=TESLA_MESH, boundary_conditions=TESLA_BCS), model, config; name="test_exact_angle")
+    sol, semi = solve(TrixiProblem(;
+    callbacks=default_callbacks_builder(), mesh_path=TESLA_MESH, boundary_conditions=TESLA_BCS), model, config; name="test_exact_angle")
     snapshot = TrixiExt.build_live_field_snapshot(sol.u[end], semi, LiveVisualizationConfig(; geometry_mode=:mesh_native, show_window=false, refine=2))
 
     @test length(sol.u[end]) == length(Trixi.wrap_array(sol.u[end], semi))

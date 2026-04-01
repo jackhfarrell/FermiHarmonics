@@ -214,6 +214,7 @@ function solve(
     params::SolveParams,
     gamma_mr::Real,
     gamma_ee::Real;
+    callbacks::Function,
     max_harmonic::Union{Integer, Symbol, Nothing}=:auto,
     n_angles::Union{Nothing, Integer}=nothing,
     transport::Symbol=:linear,
@@ -229,6 +230,7 @@ function solve(
     viz_field::Union{Nothing, Symbol}=nothing,
     viz_colormap::Symbol=:magma,
     mesh_build::MeshBuildConfig=MeshBuildConfig(),
+    dt::Union{Nothing, Real}=nothing,
     name::AbstractString="run",
 )
     validate(params)
@@ -261,8 +263,10 @@ function solve(
         TrixiProblem(; mesh_path=String(mesh_path), boundary_conditions=boundary_conditions, mesh_build=mesh_build),
         model,
         params;
+        callbacks=callbacks,
         u0_override=u0_override,
         live_visualization=legacy_live_visualization(params; visualize=visualize, visualize_every=visualize_every, visualization_mode=visualization_mode, viz_field=viz_field, viz_colormap=viz_colormap),
+        dt=dt,
         name=name,
     )
 end
@@ -272,6 +276,7 @@ function solve(
     boundary_conditions::Dict{Symbol, Any},
     params::SolveParams,
     bands::AbstractVector;
+    callbacks::Function,
     max_harmonic::Union{Integer, Symbol, Nothing}=:auto,
     transport::Symbol=:linear,
     collision_model::Union{Nothing, Symbol}=nothing,
@@ -285,6 +290,7 @@ function solve(
     visualize_every::Union{Nothing, Integer}=nothing,
     visualization_mode::Symbol=:cartesian,
     mesh_build::MeshBuildConfig=MeshBuildConfig(),
+    dt::Union{Nothing, Real}=nothing,
     name::AbstractString="run",
 )
     validate(params)
@@ -312,8 +318,10 @@ function solve(
         TrixiProblem(; mesh_path=String(mesh_path), boundary_conditions=boundary_conditions, mesh_build=mesh_build),
         model,
         params;
+        callbacks=callbacks,
         u0_override=u0_override,
         live_visualization=legacy_live_visualization(params; visualize=visualize, visualize_every=visualize_every, visualization_mode=visualization_mode),
+        dt=dt,
         name=name,
     )
 end

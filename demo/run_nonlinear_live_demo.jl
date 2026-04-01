@@ -45,7 +45,8 @@ function main()
     )
 
     sol, semi = solve(
-        TrixiProblem(; mesh_path=mesh_path, boundary_conditions=boundary_conditions),
+        TrixiProblem(;
+    callbacks=default_callbacks_builder(), mesh_path=mesh_path, boundary_conditions=boundary_conditions),
         model,
         config;
         visualize = true,
