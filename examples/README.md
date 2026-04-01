@@ -103,6 +103,15 @@ Start with a kinetic transport problem
    └─ YES → Example 4 (custom_fermi_surface.jl)
 ```
 
+## Live Visualization
+
+Each example accepts `--live` to enable the GLMakie live dashboard. This requires
+`GLMakie` in your environment.
+
+```bash
+julia --project=. examples/01_linear_harmonic_transport.jl --live
+```
+
 ## Next Steps
 
 1. **Read the module docstring**: `?ElectronKinetics` for architecture overview

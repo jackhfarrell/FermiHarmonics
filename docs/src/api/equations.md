@@ -33,7 +33,7 @@ API.
 ## Example
 
 ```julia
-surface = Isotropic2DFermiSurface(; vF=1.0, nu=1.0, mass=1.0, charge=-1.0)
+surface = Isotropic2DFermiSurface(; fermi_velocity=1.0, nu=1.0, mass=1.0, charge=-1.0)
 discretization = HarmonicBasis(:auto)
 streaming = IsotropicHarmonicStreaming()
 collision = LinearBGKCollision(0.05, TwoRateProfile(0.40))

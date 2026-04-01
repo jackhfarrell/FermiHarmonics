@@ -11,7 +11,7 @@ function blg_reference_setup(; half_height::Real=0.25, p_scatter::Real=1.0)
     mass = 2.0
     gamma_mr = 0.0
     gamma_ee = 0.0
-    vF = zero_state_speed(mu0, mass)
+    fermi_velocity = zero_state_speed(mu0, mass)
     probe_x = 0.0
     probe_y = 0.0
     probe_offset_fraction = 0.3
@@ -25,7 +25,7 @@ function blg_reference_setup(; half_height::Real=0.25, p_scatter::Real=1.0)
         half_height = Float64(half_height),
         mu0 = mu0,
         mass = mass,
-        vF = vF,
+        fermi_velocity = fermi_velocity,
         gamma_mr = gamma_mr,
         gamma_ee = gamma_ee,
         p_scatter = Float64(p_scatter),

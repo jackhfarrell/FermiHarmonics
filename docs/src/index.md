@@ -62,7 +62,7 @@ For nonlinear straight-channel studies, the canonical dimensionless reference
 case is:
 
 - `mu0 = 1`
-- `vF = 1`
+- `fermi_velocity = 1`
 - `mass = 2`
 - `gamma_mr = 0`
 - `gamma_ee = 0`
@@ -70,7 +70,7 @@ case is:
 
 This convention is exposed through `ElectronKinetics.blg_reference_setup()`.
 Because the nonlinear parabolic-band transport uses
-`vF = sqrt(2 * mu0 / mass)`, setting `mu0 = 1` and `vF = 1` fixes the solver
+`fermi_velocity = sqrt(2 * mu0 / mass)`, setting `mu0 = 1` and `fermi_velocity = 1` fixes the solver
 mass to `2`.
 
 The intended physical interpretation is BLG-inspired, but the solver remains
@@ -93,7 +93,7 @@ The main public interfaces are documented in:
 using ElectronKinetics
 using Trixi
 
-surface = Isotropic2DFermiSurface(; vF=1.0, nu=1.0, mass=1.0, charge=-1.0)
+surface = Isotropic2DFermiSurface(; fermi_velocity=1.0, nu=1.0, mass=1.0, charge=-1.0)
 model = KineticModel2D(
     surface,
     HarmonicBasis(:auto),

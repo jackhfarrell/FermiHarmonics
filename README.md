@@ -33,7 +33,7 @@ plus a Trixi extension for execution:
 using ElectronKinetics
 using Trixi
 
-surface = Isotropic2DFermiSurface(; vF=1.0, nu=1.0, mass=1.0, charge=-1.0)
+surface = Isotropic2DFermiSurface(; fermi_velocity=1.0, nu=1.0, mass=1.0, charge=-1.0)
 model = KineticModel2D(
     surface,
     HarmonicBasis(:auto),
@@ -83,15 +83,15 @@ dimensionless BLG-oriented reference convention while keeping the solver API
 dimensionless:
 
 - `mu0 = 1`
-- `vF = 1`
+- `fermi_velocity = 1`
 - `mass = 2`
 - `gamma_mr = 0`
 - `gamma_ee = 0`
 - straight-channel total length `L = 1`
 
 These values are available through `ElectronKinetics.blg_reference_setup()`.
-The choice `mu0 = 1` and `vF = 1` implies `mass = 2` because the nonlinear
-transport model uses `vF = sqrt(2 * mu0 / mass)`.
+The choice `mu0 = 1` and `fermi_velocity = 1` implies `mass = 2` because the nonlinear
+transport model uses `fermi_velocity = sqrt(2 * mu0 / mass)`.
 
 The physical BLG effective mass `m = 0.03 m_e` is treated as part of the
 back-mapping to physical units, not as a direct low-level solver input.

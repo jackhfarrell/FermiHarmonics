@@ -76,7 +76,7 @@ end
 
 @inline harmonic_state_nvars(max_harmonic::Integer) = 1 + 2 * Int(max_harmonic)
 @inline band_momentum_weight(band::Band) =
-    density_of_states(band.surface) * mass(band.surface) * vF(band.surface)
+    density_of_states(band.surface) * mass(band.surface) * fermi_velocity(band.surface)
 # Mode rate profile accessor (works with LinearBGKCollision, QuadraticBGKCollision, AngleRateBGKCollision)
 @inline function mode_profile(collision::AbstractCollisionModel2D)
     error("$(typeof(collision)) does not have a mode_profile. Only collisions with AbstractModeRateProfile have this.")
@@ -127,7 +127,7 @@ end
 @inline profile_reference_rate(profile::AbstractModeRateProfile) = mode_rate(profile, 2)
 
 @inline zero_state_speed(mu0::Real, mass::Real) = sqrt(2.0 * Float64(mu0) / Float64(mass))
-@inline nonlinear_timestep_speed(vF::Real, chi::Real) = Float64(vF) * (1.0 + abs(Float64(chi)))
+@inline nonlinear_timestep_speed(fermi_velocity::Real, chi::Real) = Float64(fermi_velocity) * (1.0 + abs(Float64(chi)))
 
 function create_angle_transport_data(theta_count::Int)
     ntheta = Int(theta_count)
@@ -228,28 +228,28 @@ function create_nonlinear_transport_data(max_harmonic::Int, theta_oversample::In
     return NonlinearTransportData(ntheta, theta, cos_theta, sin_theta, thread_caches)
 end
 
-function streaming_matrices(M::Int, vF::Float64=1.0)
+function streaming_matrices(M::Int, fermi_velocity::Float64=1.0)
     n = 1 + 2 * M
     Ax = zeros(Float64, n, n)
     Ay = zeros(Float64, n, n)
 
     M >= 1 && begin
-        Ax[cosine_index(0), cosine_index(1)] = vF
-        Ay[cosine_index(0), sine_index(1)] = vF
+        Ax[cosine_index(0), cosine_index(1)] = fermi_velocity
+        Ay[cosine_index(0), sine_index(1)] = fermi_velocity
     end
 
     @inbounds @simd for m in 1:M
-        Ax[cosine_index(m), cosine_index(m - 1)] = 0.5 * vF
-        m + 1 <= M && (Ax[cosine_index(m), cosine_index(m + 1)] = 0.5 * vF)
+        Ax[cosine_index(m), cosine_index(m - 1)] = 0.5 * fermi_velocity
+        m + 1 <= M && (Ax[cosine_index(m), cosine_index(m + 1)] = 0.5 * fermi_velocity)
 
-        m - 1 >= 1 && (Ay[cosine_index(m), sine_index(m - 1)] = -0.5 * vF)
-        m + 1 <= M && (Ay[cosine_index(m), sine_index(m + 1)] = 0.5 * vF)
+        m - 1 >= 1 && (Ay[cosine_index(m), sine_index(m - 1)] = -0.5 * fermi_velocity)
+        m + 1 <= M && (Ay[cosine_index(m), sine_index(m + 1)] = 0.5 * fermi_velocity)
 
-        m - 1 >= 1 && (Ax[sine_index(m), sine_index(m - 1)] = 0.5 * vF)
-        m + 1 <= M && (Ax[sine_index(m), sine_index(m + 1)] = 0.5 * vF)
+        m - 1 >= 1 && (Ax[sine_index(m), sine_index(m - 1)] = 0.5 * fermi_velocity)
+        m + 1 <= M && (Ax[sine_index(m), sine_index(m + 1)] = 0.5 * fermi_velocity)
 
-        Ay[sine_index(m), cosine_index(m - 1)] = 0.5 * vF
-        m + 1 <= M && (Ay[sine_index(m), cosine_index(m + 1)] = -0.5 * vF)
+        Ay[sine_index(m), cosine_index(m - 1)] = 0.5 * fermi_velocity
+        m + 1 <= M && (Ay[sine_index(m), cosine_index(m + 1)] = -0.5 * fermi_velocity)
     end
 
     return Ax, Ay
@@ -260,49 +260,49 @@ end
 # ------------------------------------------------------------------
 
 # Optimized path for analytic surfaces: use direct formula (zero quadrature overhead)
-@inline streaming_matrices(M::Int, s::Isotropic2DFermiSurface) = streaming_matrices(M, s.vF)
+@inline streaming_matrices(M::Int, s::Isotropic2DFermiSurface) = streaming_matrices(M, s.fermi_velocity)
 
 function streaming_matrices(M::Int, s::AbstractAnalyticSurface)
     # All analytic surfaces can use the numerical quadrature path that's optimized
-    # for smooth vF_angle functions. For isotropic, the dispatch above will be used.
-    _anisotropic_streaming_matrices(M, θ -> vF_angle(surface, θ))
+    # for smooth fermi_velocity_angle functions. For isotropic, the dispatch above will be used.
+    _anisotropic_streaming_matrices(M, θ -> fermi_velocity_angle(s, θ))
 end
 
 # General path for user-defined surfaces: use numerical quadrature
 function streaming_matrices(M::Int, s::AbstractUserDefinedSurface)
-    _anisotropic_streaming_matrices(M, θ -> vF_angle(surface, θ))
+    _anisotropic_streaming_matrices(M, θ -> fermi_velocity_angle(s, θ))
 end
 
 # Fallback with helpful error for unknown surface types
 function streaming_matrices(M::Int, s::AbstractFermiSurface2D)
     error("streaming_matrices: unsupported surface type $(typeof(s)). " *
-          "Implement vF_angle(s::$(typeof(s)), θ) to support this surface type.")
+          "Implement fermi_velocity_angle(s::$(typeof(s)), θ) to support this surface type.")
 end
 
 """
-    _anisotropic_streaming_matrices(M, vF_func)
+    _anisotropic_streaming_matrices(M, fermi_velocity_func)
 
 Compute the harmonic-basis streaming matrices Ax and Ay for an anisotropic Fermi surface
-by numerical quadrature of `vF_func(θ)`.
+by numerical quadrature of `fermi_velocity_func(θ)`.
 
-Normalization convention matches `streaming_matrices(M, vF::Float64)`:
+Normalization convention matches `streaming_matrices(M, fermi_velocity::Float64)`:
   - Basis: φ₁=1, φ_{cosine_index(m)}=cos(mθ), φ_{sine_index(m)}=sin(mθ)  (unnormalized)
   - Weight: 1/π
-For constant vF, the result is identical to the analytic tridiagonal formula.
+For constant fermi_velocity, the result is identical to the analytic tridiagonal formula.
 """
-function _anisotropic_streaming_matrices(M::Int, vF_func)
+function _anisotropic_streaming_matrices(M::Int, fermi_velocity_func)
     n = 1 + 2 * M
     N_quad = max(4 * n, 128)
     θ    = range(0.0, 2π; length = N_quad + 1)[1:N_quad]
     dθ   = 2π / N_quad
-    vF_v = vF_func.(θ)
+    fermi_velocity_values = fermi_velocity_func.(θ)
 
     # Projection weights (row basis): χ[1]=1, χ[j≥2]=cos(mθ) or sin(mθ)
     # Physical column basis (encoding f = a₀ + 2Σ(aₘcos+bₘsin)):
     #   Φ_phys[1]=1, Φ_phys[j≥2]=2cos(mθ) or 2sin(mθ)
-    # Streaming matrix: Ax[i,j] = (1/2π) ∫ vF(θ) cos(θ) χᵢ(θ) Φ_phys,j(θ) dθ
-    # This gives the asymmetric (monopole, dipole) coupling Ax[1,2]=vF, Ax[2,1]=vF/2
-    # matching streaming_matrices(M, vF::Float64) exactly.
+    # Streaming matrix: Ax[i,j] = (1/2π) ∫ fermi_velocity(θ) cos(θ) χᵢ(θ) Φ_phys,j(θ) dθ
+    # This gives the asymmetric (monopole, dipole) coupling Ax[1,2]=fermi_velocity, Ax[2,1]=fermi_velocity/2
+    # matching streaming_matrices(M, fermi_velocity::Float64) exactly.
     χ     = zeros(N_quad, n)   # row (test) basis: 1, cos, sin, cos2, sin2, ...
     Φphys = zeros(N_quad, n)   # column (physical) basis: 1, 2cos, 2sin, 2cos2, ...
     χ[:, 1] .= 1.0
@@ -321,7 +321,7 @@ function _anisotropic_streaming_matrices(M::Int, vF_func)
         ax = 0.0
         ay = 0.0
         for k in 1:N_quad
-            c = vF_v[k] * χ[k, i] * Φphys[k, j]
+            c = fermi_velocity_values[k] * χ[k, i] * Φphys[k, j]
             ax += c * cos_θ[k]
             ay += c * sin_θ[k]
         end
@@ -335,26 +335,26 @@ end
     out::AbstractVector{Float64},
     state::AbstractVector{Float64},
     normal::SVector{2, Float64},
-    vF::Float64=1.0,
+    fermi_velocity::Float64=1.0,
 )
     n_vars = length(state)
     max_harmonic_local = (n_vars - 1) ÷ 2
     normal_x, normal_y = normal
     @inbounds begin
         out[cosine_index(0)] = (max_harmonic_local >= 1) ?
-            (normal_x * vF * state[cosine_index(1)] +
-             normal_y * vF * state[sine_index(1)]) : 0.0
+            (normal_x * fermi_velocity * state[cosine_index(1)] +
+             normal_y * fermi_velocity * state[sine_index(1)]) : 0.0
         for m in 1:max_harmonic_local
             out[cosine_index(m)] =
-                normal_x * (0.5 * vF) * state[cosine_index(m - 1)] +
-                (m + 1 <= max_harmonic_local ? normal_x * (0.5 * vF) * state[cosine_index(m + 1)] : 0.0) +
-                (m - 1 >= 1 ? normal_y * (-0.5 * vF) * state[sine_index(m - 1)] : 0.0) +
-                (m + 1 <= max_harmonic_local ? normal_y * (0.5 * vF) * state[sine_index(m + 1)] : 0.0)
+                normal_x * (0.5 * fermi_velocity) * state[cosine_index(m - 1)] +
+                (m + 1 <= max_harmonic_local ? normal_x * (0.5 * fermi_velocity) * state[cosine_index(m + 1)] : 0.0) +
+                (m - 1 >= 1 ? normal_y * (-0.5 * fermi_velocity) * state[sine_index(m - 1)] : 0.0) +
+                (m + 1 <= max_harmonic_local ? normal_y * (0.5 * fermi_velocity) * state[sine_index(m + 1)] : 0.0)
             out[sine_index(m)] =
-                (m - 1 >= 1 ? normal_x * (0.5 * vF) * state[sine_index(m - 1)] : 0.0) +
-                (m + 1 <= max_harmonic_local ? normal_x * (0.5 * vF) * state[sine_index(m + 1)] : 0.0) +
-                normal_y * (0.5 * vF) * state[cosine_index(m - 1)] +
-                (m + 1 <= max_harmonic_local ? normal_y * (-0.5 * vF) * state[cosine_index(m + 1)] : 0.0)
+                (m - 1 >= 1 ? normal_x * (0.5 * fermi_velocity) * state[sine_index(m - 1)] : 0.0) +
+                (m + 1 <= max_harmonic_local ? normal_x * (0.5 * fermi_velocity) * state[sine_index(m + 1)] : 0.0) +
+                normal_y * (0.5 * fermi_velocity) * state[cosine_index(m - 1)] +
+                (m + 1 <= max_harmonic_local ? normal_y * (-0.5 * fermi_velocity) * state[cosine_index(m + 1)] : 0.0)
         end
     end
     return out
@@ -369,4 +369,3 @@ end
 function collision_sources!(args...)
     throw(MethodError(collision_sources!, args))
 end
-

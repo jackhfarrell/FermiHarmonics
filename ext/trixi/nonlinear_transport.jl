@@ -67,7 +67,7 @@ end
     block = multiband_band_state_view(state, equations, band_index)
     a1 = length(block) >= 2 ? Float64(block[2]) : 0.0
     b1 = length(block) >= 3 ? Float64(block[3]) : 0.0
-    prefactor = charge(band.surface) * density_of_states(band.surface) * vF(band.surface)
+    prefactor = charge(band.surface) * density_of_states(band.surface) * fermi_velocity(band.surface)
     return (prefactor * a1, prefactor * b1)
 end
 
@@ -189,36 +189,36 @@ end
 @inline quadratic_flux_linear_speed(equations::FermiHarmonics2D) = equations.max_speed
 
 @inline function quadratic_shifted_flux(phi::Real, equations::FermiHarmonics2D)
-    vF = quadratic_flux_linear_speed(equations)
-    return vF * Float64(phi) + Float64(phi)^2 / (2.0 * equations.mass * vF)
+    fermi_velocity = quadratic_flux_linear_speed(equations)
+    return fermi_velocity * Float64(phi) + Float64(phi)^2 / (2.0 * equations.mass * fermi_velocity)
 end
 
 @inline function quadratic_shifted_flux_inverse(flux_value::Real, equations::FermiHarmonics2D)
-    vF = quadratic_flux_linear_speed(equations)
-    discriminant = equations.mass^2 * vF^4 + 2.0 * equations.mass * vF * Float64(flux_value)
+    fermi_velocity = quadratic_flux_linear_speed(equations)
+    discriminant = equations.mass^2 * fermi_velocity^4 + 2.0 * equations.mass * fermi_velocity * Float64(flux_value)
     if !(discriminant > 0.0)
         throw(DomainError(
             Float64(flux_value),
             "quadratic shifted flux inverse requires a positive discriminant; got $discriminant",
         ))
     end
-    return -equations.mass * vF^2 + sqrt(discriminant)
+    return -equations.mass * fermi_velocity^2 + sqrt(discriminant)
 end
 
 @inline function quadratic_speed(phi::Real, equations::FermiHarmonics2D)
-    vF = quadratic_flux_linear_speed(equations)
+    fermi_velocity = quadratic_flux_linear_speed(equations)
     phi_value = Float64(phi)
-    return vF +
-           phi_value / (equations.mass * vF) -
-           phi_value^2 / (2.0 * equations.mass^2 * vF^3)
+    return fermi_velocity +
+           phi_value / (equations.mass * fermi_velocity) -
+           phi_value^2 / (2.0 * equations.mass^2 * fermi_velocity^3)
 end
 
 @inline function quadratic_inverse_momentum(phi::Real, equations::FermiHarmonics2D)
-    vF = quadratic_flux_linear_speed(equations)
+    fermi_velocity = quadratic_flux_linear_speed(equations)
     phi_value = Float64(phi)
-    return 1.0 / (equations.mass * vF) -
-           phi_value / (equations.mass^2 * vF^3) +
-           1.5 * phi_value^2 / (equations.mass^3 * vF^5)
+    return 1.0 / (equations.mass * fermi_velocity) -
+           phi_value / (equations.mass^2 * fermi_velocity^3) +
+           1.5 * phi_value^2 / (equations.mass^3 * fermi_velocity^5)
 end
 
 @inline function harmonic_mean_phi(state::AbstractVector{<:Real})
@@ -357,11 +357,11 @@ function nonlinear_flux!(
 )
     t0 = nonlinear_timing_enabled() ? time_ns() : UInt64(0)
     cache = get_nonlinear_cache(equations)
-    vF = equations.max_speed
-    inv_quadratic_scale = 1.0 / (2.0 * equations.mass * vF)
+    fermi_velocity = equations.max_speed
+    inv_quadratic_scale = 1.0 / (2.0 * equations.mass * fermi_velocity)
     normal_x, normal_y = normal
 
-    harmonics_flux_scaled!(out, state, normal_x, normal_y, vF)
+    harmonics_flux_scaled!(out, state, normal_x, normal_y, fermi_velocity)
     multiply_harmonic_states!(cache.real_work, state, state)
     multiply_by_first_harmonic!(cache.real_scratch, normal_x, normal_y, cache.real_work)
     @inbounds for i in eachindex(out)
@@ -383,11 +383,11 @@ end
 end
 
 @inline function quadratic_speed_bound(phi_bound::Real, equations::FermiHarmonics2D)
-    vF = quadratic_flux_linear_speed(equations)
+    fermi_velocity = quadratic_flux_linear_speed(equations)
     amp = abs(Float64(phi_bound))
-    return vF +
-           amp / (equations.mass * vF) +
-           0.5 * amp^2 / (equations.mass^2 * vF^3)
+    return fermi_velocity +
+           amp / (equations.mass * fermi_velocity) +
+           0.5 * amp^2 / (equations.mass^2 * fermi_velocity^3)
 end
 
 function nonlinear_max_abs_speed(
@@ -424,11 +424,11 @@ function nonlinear_current_components(
     length(state) >= 3 || return (0.0, 0.0)
     cache = get_nonlinear_cache(equations)
     multiply_harmonic_states!(cache.real_work, state, state)
-    vF = equations.max_speed
-    correction = 1.0 / (2.0 * equations.mass * vF)
+    fermi_velocity = equations.max_speed
+    correction = 1.0 / (2.0 * equations.mass * fermi_velocity)
     return (
-        vF * Float64(state[cosine_index(1)]) + correction * cache.real_work[cosine_index(1)],
-        vF * Float64(state[sine_index(1)]) + correction * cache.real_work[sine_index(1)],
+        fermi_velocity * Float64(state[cosine_index(1)]) + correction * cache.real_work[cosine_index(1)],
+        fermi_velocity * Float64(state[sine_index(1)]) + correction * cache.real_work[sine_index(1)],
     )
 end
 
@@ -521,8 +521,8 @@ function local_equilibrium_samples!(
     delta_mu = mu_value - equations.mu0
     ux, uy = velocity
     u_sq = ux * ux + uy * uy
-    vF = equations.max_speed
-    linear_drift_scale = equations.mass * vF + delta_mu / vF
+    fermi_velocity = equations.max_speed
+    linear_drift_scale = equations.mass * fermi_velocity + delta_mu / fermi_velocity
     @inbounds for j in eachindex(samples)
         alpha = ux * data.cos_theta[j] + uy * data.sin_theta[j]
         phi_eq = delta_mu + linear_drift_scale * alpha +
@@ -543,8 +543,8 @@ function local_equilibrium_state!(
     delta_mu = Float64(mu) - equations.mu0
     ux, uy = velocity
     u_sq = ux * ux + uy * uy
-    vF = equations.max_speed
-    linear_drift_scale = equations.mass * vF + delta_mu / vF
+    fermi_velocity = equations.max_speed
+    linear_drift_scale = equations.mass * fermi_velocity + delta_mu / fermi_velocity
 
     out[cosine_index(0)] = 2.0 * delta_mu
     if length(out) >= 3
@@ -601,30 +601,30 @@ end
     state::AbstractVector,
     normal_x::Float64,
     normal_y::Float64,
-    vF::Float64,
+    fermi_velocity::Float64,
 )
     n_vars = length(state)
     max_harmonic_local = (n_vars - 1) ÷ 2
     @inbounds begin
         out[cosine_index(0)] = (max_harmonic_local >= 1) ?
-            (normal_x * vF * Float64(state[cosine_index(1)]) +
-             normal_y * vF * Float64(state[sine_index(1)])) : 0.0
+            (normal_x * fermi_velocity * Float64(state[cosine_index(1)]) +
+             normal_y * fermi_velocity * Float64(state[sine_index(1)])) : 0.0
         for m in 1:max_harmonic_local
             out[cosine_index(m)] =
-                normal_x * (0.5 * vF) * Float64(state[cosine_index(m - 1)]) +
-                (m + 1 <= max_harmonic_local ? normal_x * (0.5 * vF) *
+                normal_x * (0.5 * fermi_velocity) * Float64(state[cosine_index(m - 1)]) +
+                (m + 1 <= max_harmonic_local ? normal_x * (0.5 * fermi_velocity) *
                  Float64(state[cosine_index(m + 1)]) : 0.0) +
-                (m - 1 >= 1 ? normal_y * (-0.5 * vF) *
+                (m - 1 >= 1 ? normal_y * (-0.5 * fermi_velocity) *
                  Float64(state[sine_index(m - 1)]) : 0.0) +
-                (m + 1 <= max_harmonic_local ? normal_y * (0.5 * vF) *
+                (m + 1 <= max_harmonic_local ? normal_y * (0.5 * fermi_velocity) *
                  Float64(state[sine_index(m + 1)]) : 0.0)
             out[sine_index(m)] =
-                (m - 1 >= 1 ? normal_x * (0.5 * vF) *
+                (m - 1 >= 1 ? normal_x * (0.5 * fermi_velocity) *
                  Float64(state[sine_index(m - 1)]) : 0.0) +
-                (m + 1 <= max_harmonic_local ? normal_x * (0.5 * vF) *
+                (m + 1 <= max_harmonic_local ? normal_x * (0.5 * fermi_velocity) *
                  Float64(state[sine_index(m + 1)]) : 0.0) +
-                normal_y * (0.5 * vF) * Float64(state[cosine_index(m - 1)]) +
-                (m + 1 <= max_harmonic_local ? normal_y * (-0.5 * vF) *
+                normal_y * (0.5 * fermi_velocity) * Float64(state[cosine_index(m - 1)]) +
+                (m + 1 <= max_harmonic_local ? normal_y * (-0.5 * fermi_velocity) *
                  Float64(state[cosine_index(m + 1)]) : 0.0)
         end
     end

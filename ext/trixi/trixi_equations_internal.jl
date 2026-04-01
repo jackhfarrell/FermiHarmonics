@@ -95,8 +95,10 @@ function harmonic_equations(model::KineticModel2D, max_harmonic::Int)
         )
     end
 
-    vF = collision isa QuadraticBGKCollision ? zero_state_speed(collision.mu0, collision.mass) : vF(surface)
-    Ax, Ay = collision isa QuadraticBGKCollision ? streaming_matrices(max_harmonic, vF) : streaming_matrices(max_harmonic, surface)
+    fermi_velocity_value =
+        collision isa QuadraticBGKCollision ? zero_state_speed(collision.mu0, collision.mass) : fermi_velocity(surface)
+    Ax, Ay = collision isa QuadraticBGKCollision ? streaming_matrices(max_harmonic, fermi_velocity_value) :
+             streaming_matrices(max_harmonic, surface)
     gamma_mr = collision_gamma_mr(collision)
     gamma_ee = collision isa LinearCollisionMatrix ? collision.gamma_ee : profile_reference_rate(mode_profile(collision))
     gamma3 = collision isa LinearCollisionMatrix ? collision.gamma3 :
@@ -107,13 +109,14 @@ function harmonic_equations(model::KineticModel2D, max_harmonic::Int)
     theta_oversample = collision isa QuadraticBGKCollision ? collision.theta_oversample : 1
     nonlinear_data = collision isa QuadraticBGKCollision ? create_nonlinear_transport_data(max_harmonic, theta_oversample) : nothing
     transport_type = collision isa QuadraticBGKCollision ? NonlinearParabolicTransport : LinearTransport
-    timestep_speed = collision isa QuadraticBGKCollision ? nonlinear_timestep_speed(vF, chi) : vF
+    timestep_speed = collision isa QuadraticBGKCollision ?
+                     nonlinear_timestep_speed(fermi_velocity_value, chi) : fermi_velocity_value
 
     return FermiHarmonics2D{nvars, transport_type, typeof(nonlinear_data), typeof(model)}(
         gamma_mr,
         gamma_ee,
         gamma3,
-        vF,
+        fermi_velocity_value,
         timestep_speed,
         Ax,
         Ay,
@@ -171,7 +174,7 @@ function angle_equations(model::KineticModel2D)
 
     ntheta = discretization.theta_count
     data = create_angle_transport_data(ntheta)
-    vF = zero_state_speed(collision.mu0, collision.mass)
+    fermi_velocity = zero_state_speed(collision.mu0, collision.mass)
     mode_rate_filter = collision isa AngleRateBGKCollision ?
         build_angle_mode_rate_filter(
             collision.profile,
@@ -183,8 +186,8 @@ function angle_equations(model::KineticModel2D)
     return FermiAngles2D{ntheta, typeof(data), typeof(model)}(
         collision.gamma_mr,
         collision_gamma_ee(collision),
-        vF,
-        nonlinear_timestep_speed(vF, collision.electrostatic_coupling),
+        fermi_velocity,
+        nonlinear_timestep_speed(fermi_velocity, collision.electrostatic_coupling),
         collision.mu0,
         collision.mass,
         collision.electrostatic_coupling,

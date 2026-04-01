@@ -53,3 +53,7 @@ end
 function live_dashboard_is_open(args...; kwargs...)
     return true
 end
+
+function default_callbacks_builder(args...; kwargs...)
+    throw(ArgumentError("default_callbacks_builder is provided by backend extensions. Load Trixi to use the current backend implementation."))
+end

@@ -17,13 +17,13 @@ backends through Julia's type system and multiple dispatch.
 Represent quasiparticle properties on the Fermi surface:
 - **Analytic surfaces** (AbstractAnalyticSurface)
   - `Isotropic2DFermiSurface` — constant velocity in all directions
-  - `EllipticFermiSurface2D` — elliptic anisotropy: vF(θ) = vF0/√(cos²θ + sin²θ/a²)
+  - `EllipticFermiSurface2D` — elliptic anisotropy: fermi_velocity(θ) = fermi_velocity0/√(cos²θ + sin²θ/a²)
 - **User-defined surfaces** (AbstractUserDefinedSurface)
-  - `GeneralFermiSurface2D` — arbitrary velocity function vF(θ)
+  - `GeneralFermiSurface2D` — arbitrary velocity function fermi_velocity(θ)
 
 All surfaces implement:
 ```
-vF(surface), max_speed(surface), vF_angle(surface, θ),
+fermi_velocity(surface), max_speed(surface), fermi_velocity_angle(surface, θ),
 density_of_states(surface), mass(surface), charge(surface)
 ```
 
@@ -67,7 +67,7 @@ using ElectronKinetics
 
 # Define carrier properties (e.g., graphene electrons)
 surface = Isotropic2DFermiSurface(
-    vF = 1.0,           # Fermi velocity
+    fermi_velocity = 1.0,           # Fermi velocity
     nu = 1.0,           # density of states
     mass = 1.0,         # effective mass
     charge = -1.0       # electron charge
@@ -127,7 +127,7 @@ end
 For analytic surfaces with known formulas:
 ```julia
 struct MyAnalyticSurface <: AbstractAnalyticSurface
-    vF0::Float64
+    fermi_velocity0::Float64
     anisotropy_param::Float64
     nu::Float64
     mass::Float64
@@ -135,9 +135,9 @@ struct MyAnalyticSurface <: AbstractAnalyticSurface
 end
 
 # Implement the required interface (6 methods):
-vF(s::MyAnalyticSurface) = s.vF0
+fermi_velocity(s::MyAnalyticSurface) = s.fermi_velocity0
 max_speed(s::MyAnalyticSurface) = compute_max_speed(surface)
-vF_angle(s::MyAnalyticSurface, θ) = s.vF0 * my_formula(θ, s.anisotropy_param)
+fermi_velocity_angle(s::MyAnalyticSurface, θ) = s.fermi_velocity0 * my_formula(θ, s.anisotropy_param)
 density_of_states(s::MyAnalyticSurface) = s.nu
 mass(s::MyAnalyticSurface) = s.mass
 charge(s::MyAnalyticSurface) = s.charge
@@ -146,8 +146,8 @@ charge(s::MyAnalyticSurface) = s.charge
 For user-defined functions:
 ```julia
 struct MyCustomSurface <: AbstractUserDefinedSurface
-    vF_func::Function  # θ -> vF
-    max_vF::Float64    # CFL bound
+    fermi_velocity_func::Function  # θ -> fermi_velocity
+    max_fermi_velocity::Float64    # CFL bound
     nu::Float64
     mass::Float64
     charge::Float64
@@ -316,9 +316,9 @@ export
     band_momentum_weight,
 
     # Surface interface (implement these for custom surfaces)
-    vF,
+    fermi_velocity,
     max_speed,
-    vF_angle,
+    fermi_velocity_angle,
     density_of_states,
     mass,
     charge,

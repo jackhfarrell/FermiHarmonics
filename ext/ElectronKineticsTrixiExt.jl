@@ -93,9 +93,9 @@ import ElectronKinetics: AbstractAnalyticSurface,
                          resolve_max_harmonic,
                          resize_multiband_warm_start,
                          resize_warm_start,
-                         vF,
+                         fermi_velocity,
                          max_speed,
-                         vF_angle,
+                         fermi_velocity_angle,
                          density_of_states,
                          mass,
                          charge,
@@ -205,7 +205,7 @@ function legacy_surface(mu0::Union{Nothing, Real}, mass::Union{Nothing, Real})
     if isnothing(mu0) || isnothing(mass)
         return Isotropic2DFermiSurface()
     end
-    return Isotropic2DFermiSurface(; vF=sqrt(2 * Float64(mu0) / Float64(mass)), nu=1.0, mass=mass, charge=-1.0)
+    return Isotropic2DFermiSurface(; fermi_velocity=sqrt(2 * Float64(mu0) / Float64(mass)), nu=1.0, mass=mass, charge=-1.0)
 end
 
 function solve(

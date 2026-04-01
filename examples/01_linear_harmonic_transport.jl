@@ -9,11 +9,21 @@
 # - Routine kinetic transport calculations
 
 using ElectronKinetics
+using Trixi
+
+live = "--live" in ARGS
+if live
+    try
+        @eval using GLMakie
+    catch err
+        error("Live visualization requested, but GLMakie is not available: $(err)")
+    end
+end
 
 # Define carrier properties (e.g., graphene electrons)
 # Surface specifies the Fermi surface shape and quasiparticle properties
 surface = Isotropic2DFermiSurface(
-    vF = 1.0,           # Fermi velocity (energy units)
+    fermi_velocity = 1.0,           # Fermi velocity (energy units)
     nu = 1.0,           # density of states
     mass = 1.0,         # effective mass
     charge = -1.0       # electron charge (negative for electrons)
@@ -47,3 +57,40 @@ println("Linear harmonic model assembled successfully")
 println("Surface: $(typeof(surface))")
 println("Discretization: $(typeof(discretization))")
 println("Collision: $(typeof(collision))")
+
+project_root = normpath(joinpath(@__DIR__, ".."))
+mesh_path = joinpath(project_root, "assets", "square_bells.inp")
+geometry_path = joinpath(project_root, "assets", "square_bells.geo")
+boundary_conditions = Dict(
+    :walls => MaxwellWallBC(1.0),
+    :contact_top => OhmicContactBC(-0.5),
+    :contact_bottom => OhmicContactBC(0.5),
+)
+
+problem = if isfile(mesh_path)
+    TrixiProblem(; mesh_path=mesh_path, boundary_conditions=boundary_conditions)
+elseif isfile(geometry_path)
+    TrixiProblem(; geometry_path=geometry_path, boundary_conditions=boundary_conditions, mesh_build=MeshBuildConfig(output_mode=:persistent))
+else
+    error("No mesh found. Expected $(mesh_path) or $(geometry_path).")
+end
+
+config = SolverConfig(;
+    polydeg = 3,
+    cfl = 0.8,
+    tspan_end = 50.0,
+    residual_tol = 1e-5,
+    log_every = 200,
+)
+
+callbacks = default_callbacks_builder()
+
+sol, semi = solve(
+    problem,
+    model,
+    config;
+    callbacks=callbacks,
+    visualize=live,
+    visualization_mode=:mesh_native,
+    name="example_linear_harmonic",
+)

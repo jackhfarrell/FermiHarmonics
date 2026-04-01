@@ -4,26 +4,9 @@
 Fermi surface representation for 2D kinetic transport.
 
 All subtypes must implement the surface interface:
-- `vF(surface)` — reference Fermi velocity
+- `fermi_velocity(surface)` — reference Fermi velocity
 - `max_speed(surface)` — maximum velocity (for CFL stability)
-- `vF_angle(surface, θ)` — velocity at angle θ
-- `density_of_states(surface)` — density of states
-- `mass(surface)` — effective mass
-- `charge(surface)` — carrier charge
-
-Subtypes:
-- `AbstractAnalyticSurface` — analytic formula (isotropic, elliptic)
-- `AbstractUserDefinedSurface` — user-supplied function
-"""
-"""
-    AbstractFermiSurface2D
-
-Fermi surface representation for 2D kinetic transport.
-
-All subtypes must implement the surface interface:
-- `vF(surface)` — reference Fermi velocity
-- `max_speed(surface)` — maximum velocity (for CFL stability)
-- `vF_angle(surface, θ)` — velocity at angle θ
+- `fermi_velocity_angle(surface, θ)` — velocity at angle θ
 - `density_of_states(surface)` — density of states
 - `mass(surface)` — effective mass
 - `charge(surface)` — carrier charge
@@ -35,10 +18,10 @@ All subtypes must implement the surface interface:
 # Example
 ```julia
 # Isotropic Fermi surface (constant velocity)
-surface = Isotropic2DFermiSurface(vF=1.0, nu=1.0, mass=1.0)
+surface = Isotropic2DFermiSurface(fermi_velocity=1.0, nu=1.0, mass=1.0)
 
 # Elliptic anisotropy
-surface = EllipticFermiSurface2D(vF0=1.0, aspect=2.0, nu=1.0, mass=1.0)
+surface = EllipticFermiSurface2D(fermi_velocity0=1.0, aspect=2.0, nu=1.0, mass=1.0)
 ```
 """
 abstract type AbstractFermiSurface2D end
@@ -62,7 +45,7 @@ Fermi surfaces defined by user-supplied functions.
 These require numerical quadrature for streaming matrices.
 
 Subtypes:
-- `GeneralFermiSurface2D` — arbitrary vF(θ) function
+- `GeneralFermiSurface2D` — arbitrary fermi_velocity(θ) function
 """
 abstract type AbstractUserDefinedSurface <: AbstractFermiSurface2D end
 abstract type AbstractAngularDiscretization2D end
@@ -190,7 +173,7 @@ struct NonlinearParabolicTransport <: AbstractTransportMode end
     Band{S<:AbstractFermiSurface2D}
 
 Parameters for one carrier species in a multiband linear transport model.
-The surface holds all quasiparticle properties (vF, nu, mass, charge, shape);
+The surface holds all quasiparticle properties (fermi_velocity, nu, mass, charge, shape);
 the band adds momentum-relaxing and momentum-conserving scattering rates.
 """
 struct Band{S<:AbstractFermiSurface2D}
@@ -217,7 +200,7 @@ end
 Isotropic Fermi surface with constant velocity in all directions.
 
 # Parameters
-- `vF::Float64` — Fermi velocity (must be > 0)
+- `fermi_velocity::Float64` — Fermi velocity (must be > 0)
 - `nu::Float64` — density of states (must be > 0)
 - `mass::Float64` — effective mass (must be > 0)
 - `charge::Float64` — carrier charge (default: -1.0 for electrons)
@@ -228,15 +211,15 @@ Isotropic Fermi surface with constant velocity in all directions.
 - As reference for comparing with anisotropic surfaces
 
 # Comparison
-- `IsotropicFermiSurface` — constant vF (simplest)
-- `EllipticFermiSurface2D` — elliptic anisotropy (vF depends on angle)
+- `IsotropicFermiSurface` — constant fermi_velocity (simplest)
+- `EllipticFermiSurface2D` — elliptic anisotropy (fermi_velocity depends on angle)
 - `GeneralFermiSurface2D` — arbitrary custom function
 
 # Example
 ```julia
 # Electrons in graphene (dimensionless units)
 surface = Isotropic2DFermiSurface(
-    vF = 1.0,           # Fermi velocity
+    fermi_velocity = 1.0,           # Fermi velocity
     nu = 1.0,           # density of states
     mass = 1.0,         # effective mass (relative to electron)
     charge = -1.0       # electron charge
@@ -248,7 +231,7 @@ model = KineticModel2D(surface, HarmonicBasis(:auto), ...)
 """
 struct Isotropic2DFermiSurface <: AbstractAnalyticSurface
     name::Symbol
-    vF::Float64
+    fermi_velocity::Float64
     nu::Float64
     mass::Float64
     charge::Float64
@@ -256,112 +239,112 @@ end
 
 function Isotropic2DFermiSurface(;
     name=:isotropic_2d,
-    vF::Real=1.0,
+    fermi_velocity::Real=1.0,
     nu::Real=1.0,
     mass::Real=1.0,
     charge::Real=-1.0,
 )
-    vF_value = Float64(vF)
+    fermi_velocity_value = Float64(fermi_velocity)
     nu_value = Float64(nu)
     mass_value = Float64(mass)
     charge_value = Float64(charge)
-    vF_value > 0.0 || throw(ArgumentError("surface vF must be > 0"))
+    fermi_velocity_value > 0.0 || throw(ArgumentError("surface fermi_velocity must be > 0"))
     nu_value > 0.0 || throw(ArgumentError("surface nu must be > 0"))
     mass_value > 0.0 || throw(ArgumentError("surface mass must be > 0"))
-    return Isotropic2DFermiSurface(Symbol(name), vF_value, nu_value, mass_value, charge_value)
+    return Isotropic2DFermiSurface(Symbol(name), fermi_velocity_value, nu_value, mass_value, charge_value)
 end
 
 # ------------------------------------------------------------------
 # AbstractFermiSurface2D interface — all subtypes must implement these
 # ------------------------------------------------------------------
-@inline vF(s::Isotropic2DFermiSurface) = s.vF
-@inline max_speed(s::Isotropic2DFermiSurface) = s.vF
-@inline vF_angle(s::Isotropic2DFermiSurface, ::Float64) = s.vF
+@inline fermi_velocity(s::Isotropic2DFermiSurface) = s.fermi_velocity
+@inline max_speed(s::Isotropic2DFermiSurface) = s.fermi_velocity
+@inline fermi_velocity_angle(s::Isotropic2DFermiSurface, ::Float64) = s.fermi_velocity
 @inline density_of_states(s::Isotropic2DFermiSurface) = s.nu
 @inline mass(s::Isotropic2DFermiSurface) = s.mass
 @inline charge(s::Isotropic2DFermiSurface) = s.charge
 
 # ------------------------------------------------------------------
 # EllipticFermiSurface2D — elliptic Fermi surface
-#   vF(θ) = vF0 / sqrt(cos²θ + sin²θ / aspect²)
+#   fermi_velocity(θ) = fermi_velocity0 / sqrt(cos²θ + sin²θ / aspect²)
 #   aspect = b/a ratio; 1.0 → isotropic; <1 → compressed along y
 # ------------------------------------------------------------------
 struct EllipticFermiSurface2D <: AbstractAnalyticSurface
     name    :: Symbol
-    vF0     :: Float64   # speed at θ=0 (x-axis semi-axis)
+    fermi_velocity0     :: Float64   # speed at θ=0 (x-axis semi-axis)
     aspect  :: Float64   # b/a
     nu      :: Float64
     mass    :: Float64
     charge  :: Float64
-    max_vF  :: Float64   # precomputed CFL bound = vF0 * max(1, 1/aspect)
+    max_fermi_velocity  :: Float64   # precomputed CFL bound = fermi_velocity0 * max(1, 1/aspect)
 end
 
 function EllipticFermiSurface2D(;
     name = :elliptic_2d,
-    vF0::Real,
+    fermi_velocity0::Real,
     aspect::Real,
     nu::Real,
     mass::Real,
     charge::Real,
 )
-    vF0_v   = Float64(vF0)
+    fermi_velocity0_value   = Float64(fermi_velocity0)
     asp_v   = Float64(aspect)
     nu_v    = Float64(nu)
     mass_v  = Float64(mass)
-    vF0_v  > 0.0 || throw(ArgumentError("vF0 must be > 0"))
+    fermi_velocity0_value  > 0.0 || throw(ArgumentError("fermi_velocity0 must be > 0"))
     asp_v  > 0.0 || throw(ArgumentError("aspect must be > 0"))
     nu_v   > 0.0 || throw(ArgumentError("nu must be > 0"))
     mass_v > 0.0 || throw(ArgumentError("mass must be > 0"))
     return EllipticFermiSurface2D(
-        Symbol(name), vF0_v, asp_v, nu_v, mass_v, Float64(charge),
-        vF0_v * max(1.0, asp_v),   # max vF at θ=π/2 when aspect>1 (denominator=1/aspect)
+        Symbol(name), fermi_velocity0_value, asp_v, nu_v, mass_v, Float64(charge),
+        fermi_velocity0_value * max(1.0, asp_v),   # max fermi_velocity at θ=π/2 when aspect>1 (denominator=1/aspect)
     )
 end
 
-@inline vF(s::EllipticFermiSurface2D)          = s.vF0
-@inline max_speed(s::EllipticFermiSurface2D)    = s.max_vF
-@inline vF_angle(s::EllipticFermiSurface2D, θ::Float64) =
-    s.vF0 / hypot(cos(θ), sin(θ) / s.aspect)
+@inline fermi_velocity(s::EllipticFermiSurface2D)          = s.fermi_velocity0
+@inline max_speed(s::EllipticFermiSurface2D)    = s.max_fermi_velocity
+@inline fermi_velocity_angle(s::EllipticFermiSurface2D, θ::Float64) =
+    s.fermi_velocity0 / hypot(cos(θ), sin(θ) / s.aspect)
 @inline density_of_states(s::EllipticFermiSurface2D) = s.nu
 @inline mass(s::EllipticFermiSurface2D)         = s.mass
 @inline charge(s::EllipticFermiSurface2D)       = s.charge
 
 # ------------------------------------------------------------------
-# GeneralFermiSurface2D{F} — user-supplied vF(θ) function
-#   max_vF is required (upper bound on |vF(θ)| for CFL)
+# GeneralFermiSurface2D{F} — user-supplied fermi_velocity(θ) function
+#   max_fermi_velocity is required (upper bound on |fermi_velocity(θ)| for CFL)
 # ------------------------------------------------------------------
 struct GeneralFermiSurface2D{F} <: AbstractUserDefinedSurface
     name    :: Symbol
-    vF_func :: F         # vF_func(θ::Float64)::Float64
-    max_vF  :: Float64   # user-supplied CFL bound
+    fermi_velocity_func :: F         # fermi_velocity_func(θ::Float64)::Float64
+    max_fermi_velocity  :: Float64   # user-supplied CFL bound
     nu      :: Float64
     mass    :: Float64
     charge  :: Float64
 end
 
 function GeneralFermiSurface2D(
-    vF_func;
+    fermi_velocity_func;
     name = :general_2d,
-    max_vF::Real,
+    max_fermi_velocity::Real,
     nu::Real,
     mass::Real,
     charge::Real,
 )
-    max_vF_v = Float64(max_vF)
+    max_fermi_velocity_value = Float64(max_fermi_velocity)
     nu_v     = Float64(nu)
     mass_v   = Float64(mass)
-    max_vF_v > 0.0 || throw(ArgumentError("max_vF must be > 0"))
+    max_fermi_velocity_value > 0.0 || throw(ArgumentError("max_fermi_velocity must be > 0"))
     nu_v     > 0.0 || throw(ArgumentError("nu must be > 0"))
     mass_v   > 0.0 || throw(ArgumentError("mass must be > 0"))
-    return GeneralFermiSurface2D{typeof(vF_func)}(
-        Symbol(name), vF_func, max_vF_v, nu_v, mass_v, Float64(charge),
+    return GeneralFermiSurface2D{typeof(fermi_velocity_func)}(
+        Symbol(name), fermi_velocity_func, max_fermi_velocity_value, nu_v, mass_v, Float64(charge),
     )
 end
 
-# vF returns the CFL-relevant maximum for a general surface
-@inline vF(s::GeneralFermiSurface2D)          = s.max_vF
-@inline max_speed(s::GeneralFermiSurface2D)   = s.max_vF
-@inline vF_angle(s::GeneralFermiSurface2D, θ::Float64) = Float64(s.vF_func(θ))
+# fermi_velocity returns the CFL-relevant maximum for a general surface
+@inline fermi_velocity(s::GeneralFermiSurface2D)          = s.max_fermi_velocity
+@inline max_speed(s::GeneralFermiSurface2D)   = s.max_fermi_velocity
+@inline fermi_velocity_angle(s::GeneralFermiSurface2D, θ::Float64) = Float64(s.fermi_velocity_func(θ))
 @inline density_of_states(s::GeneralFermiSurface2D) = s.nu
 @inline mass(s::GeneralFermiSurface2D)        = s.mass
 @inline charge(s::GeneralFermiSurface2D)      = s.charge
@@ -503,7 +486,7 @@ end
 """
     AbstractIsotropicStreaming <: AbstractStreamingOperator2D
 
-Streaming operators for isotropic Fermi surfaces (constant vF in all directions).
+Streaming operators for isotropic Fermi surfaces (constant fermi_velocity in all directions).
 Can use optimized matrix formulas.
 
 Subtypes:
@@ -812,7 +795,7 @@ The constructor validates compatibility:
 ```julia
 # Single-band linear transport
 model = KineticModel2D(
-    surface = Isotropic2DFermiSurface(vF=1.0),
+    surface = Isotropic2DFermiSurface(fermi_velocity=1.0),
     discretization = HarmonicBasis(:auto),
     streaming = IsotropicHarmonicStreaming(),
     collision = LinearBGKCollision(0.1, TwoRateProfile(0.4))
@@ -825,7 +808,7 @@ sol = solve(problem, model, SolverConfig())
 ```julia
 # Nonlinear parabolic band transport
 model = KineticModel2D(
-    surface = Isotropic2DFermiSurface(vF=1.0),
+    surface = Isotropic2DFermiSurface(fermi_velocity=1.0),
     discretization = AngleGrid(32),  # 32 angles
     streaming = IsotropicAngleStreaming(),
     collision = QuadraticBGKCollision(0.1; mu0=1.0, mass=1.0)
@@ -838,8 +821,8 @@ sol = solve(problem, model, SolverConfig())
 ```julia
 # Two-carrier system (electrons and holes)
 bands = [
-    Band(Isotropic2DFermiSurface(vF=1.0); name=:electrons, gamma_mr=0.1, gamma_ee=0.2),
-    Band(Isotropic2DFermiSurface(vF=0.8); name=:holes, gamma_mr=0.1, gamma_ee=0.3)
+    Band(Isotropic2DFermiSurface(fermi_velocity=1.0); name=:electrons, gamma_mr=0.1, gamma_ee=0.2),
+    Band(Isotropic2DFermiSurface(fermi_velocity=0.8); name=:holes, gamma_mr=0.1, gamma_ee=0.3)
 ]
 
 model = KineticModel2D(
@@ -1227,4 +1210,3 @@ function resize_multiband_warm_start(
         target_nvars = target_nvars,
     )
 end
-

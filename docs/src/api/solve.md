@@ -27,7 +27,7 @@ config = SolverConfig(;
 )
 
 model = KineticModel2D(
-    Isotropic2DFermiSurface(; vF=1.0, nu=1.0, mass=1.0, charge=-1.0),
+    Isotropic2DFermiSurface(; fermi_velocity=1.0, nu=1.0, mass=1.0, charge=-1.0),
     HarmonicBasis(:auto),
     IsotropicHarmonicStreaming(),
     LinearBGKCollision(0.05, TwoRateProfile(0.40)),
@@ -51,7 +51,7 @@ For nonlinear harmonic runs:
 
 ```julia
 model = KineticModel2D(
-    Isotropic2DFermiSurface(; vF=1.0, nu=1.0, mass=2.0, charge=-1.0),
+    Isotropic2DFermiSurface(; fermi_velocity=1.0, nu=1.0, mass=2.0, charge=-1.0),
     HarmonicBasis(:auto),
     IsotropicHarmonicStreaming(),
     QuadraticBGKCollision(0.05, OddQuarticRateProfile(0.40); mu0=1.0, mass=2.0),
@@ -64,7 +64,7 @@ The explicit angle-grid reference solver stays available too:
 
 ```julia
 model = KineticModel2D(
-    Isotropic2DFermiSurface(; vF=1.0, nu=1.0, mass=2.0, charge=-1.0),
+    Isotropic2DFermiSurface(; fermi_velocity=1.0, nu=1.0, mass=2.0, charge=-1.0),
     AngleGrid(128),
     IsotropicAngleStreaming(),
     ExactAngleBGKCollision(; gamma_mr=0.05, gamma_ee=0.40, mu0=1.0, mass=2.0),
