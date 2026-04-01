@@ -193,7 +193,6 @@ include("core_api.jl")
 include("live_visualization_api.jl")
 include("reference_setup.jl")
 include("mesh_generation.jl")
-include("slurm_utils.jl")
 
 const SolveParams = SolverConfig
 
@@ -281,18 +280,6 @@ export
     generate_mesh_from_geo,
     mesh_provenance_attributes,
     resolve_mesh_path
-
-# ============================================================================
-# HPC/Sweep Utilities
-# ============================================================================
-export
-    submit_sweep!,
-    write_sweep_metadata!,
-    archive_mesh!,
-    copy_mesh_to_scratch,
-    select_cases,
-    grid_lookup,
-    ordered_case_indices
 
 # ============================================================================
 # Advanced API — For custom implementations and extensions

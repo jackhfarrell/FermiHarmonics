@@ -112,7 +112,7 @@ config = SolverConfig(;
 )
 
 problem = TrixiProblem(;
-    mesh_path = "projects/square_bells_ucsb/mesh/square_bells.inp",
+    mesh_path = "assets/square_bells.inp",
     boundary_conditions = Dict(
         :walls => MaxwellWallBC(1.0),
         :contact_top => OhmicContactBC(-0.5),
@@ -120,7 +120,9 @@ problem = TrixiProblem(;
     ),
 )
 
-sol, semi = solve(problem, model, config; visualize = false, name = "quick_start")
+callbacks = default_callbacks_builder()
+
+sol, semi = solve(problem, model, config; callbacks=callbacks, name = "quick_start")
 ```
 
 

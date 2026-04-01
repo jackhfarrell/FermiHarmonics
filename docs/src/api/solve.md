@@ -42,7 +42,9 @@ problem = TrixiProblem(;
     ),
 )
 
-sol, semi = solve(problem, model, config; visualize = false, name = "case_001")
+callbacks = default_callbacks_builder()
+
+sol, semi = solve(problem, model, config; callbacks=callbacks, name = "case_001")
 ```
 
 For nonlinear harmonic runs:
@@ -55,7 +57,7 @@ model = KineticModel2D(
     QuadraticBGKCollision(0.05, OddQuarticRateProfile(0.40); mu0=1.0, mass=2.0),
 )
 
-sol, semi = solve(problem, model, config; name = "quadratic_bgk_case")
+sol, semi = solve(problem, model, config; callbacks=callbacks, name = "quadratic_bgk_case")
 ```
 
 The explicit angle-grid reference solver stays available too:
@@ -68,7 +70,7 @@ model = KineticModel2D(
     ExactAngleBGKCollision(; gamma_mr=0.05, gamma_ee=0.40, mu0=1.0, mass=2.0),
 )
 
-sol, semi = solve(problem, model, config; name = "exact_bgk_case")
+sol, semi = solve(problem, model, config; callbacks=callbacks, name = "exact_bgk_case")
 ```
 
 ## Behavior Notes
@@ -76,6 +78,8 @@ sol, semi = solve(problem, model, config; name = "exact_bgk_case")
 - `ElectronKinetics.solve` is provided by the Trixi extension, not by the core-only package load.
 - `TrixiProblem` accepts exactly one of `mesh_path` or `geometry_path`.
 - Legacy `solve("mesh.geo", boundary_conditions, ...)` is supported and generates a temporary unique `.inp` automatically.
+- `callbacks` is required; use `default_callbacks_builder()` or provide your own SciML callback builder.
+- The default builder wires logging/live visualization and finalizes the dashboard on completion.
 - `SolverConfig` controls discretization order, CFL, end time, residual target, logging cadence, and auto-harmonic bounds.
 - `MeshBuildConfig()` defaults to temporary unique output paths under `SLURM_TMPDIR` / `TMPDIR` / `tempdir()`.
 - `HarmonicBasis(:auto)` resolves its working harmonic count from `estimate_max_harmonic(gamma_mr, gamma_ee; ...)`.
@@ -89,7 +93,7 @@ sol, semi = solve(problem, model, config; name = "exact_bgk_case")
 When a model uses `HarmonicBasis(:auto)`, the extension computes
 
 ```math
-\gamma_{\mathrm{tot}} = \gamma_{\mathrm{mr}} + \gamma_{\mathrm{mc}},
+\gamma_{\mathrm{tot}} = \gamma_{\mathrm{mr}} + \gamma_{\mathrm{ee}},
 ```
 
 then selects `M` using a conservative logarithmic rule:

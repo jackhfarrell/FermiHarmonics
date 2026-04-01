@@ -6,8 +6,6 @@ ElectronKinetics is a Julia framework for space-resolved electron flow in 2D kin
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18528662.svg)](https://doi.org/10.5281/zenodo.18528662)
 
-![ElectronKinetics regime demo](demo/streamlines.png)
-
 Documentation: <https://fermiflows.jackhfarrell.com>
 
 ## Quick Start
@@ -20,23 +18,11 @@ From the repository root:
 julia --project=. -e 'using Pkg; Pkg.instantiate()'
 ```
 
-### 2. Run the regime demo
-
-Generate demo output:
+### 2. Run an example
 
 ```bash
-julia --project=. demo/run_regime_demo.jl
+julia --project=. examples/01_linear_harmonic_transport.jl
 ```
-
-Render the streamline figure:
-
-```bash
-python demo/plot_regime_streamlines.py
-```
-
-The figure is written to:
-
-- `demo/streamlines.png`
 
 ## Core Solve Shape
 

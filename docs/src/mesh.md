@@ -46,7 +46,7 @@ Physical Curve("walls") = {2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 13, 14, 15, 16, 17, 1
 
 Reference file:
 
-- `projects/square_bells_ucsb/mesh/square_bells.geo`
+- `assets/square_bells.geo`
 
 ## Build `.inp` From `.geo` In Julia
 
@@ -56,7 +56,7 @@ From Julia:
 using ElectronKinetics
 
 mesh_path = generate_mesh_from_geo(
-    "projects/square_bells_ucsb/mesh/square_bells.geo";
+    "assets/square_bells.geo";
     config=MeshBuildConfig(output_mode=:persistent),
 )
 ```
@@ -89,11 +89,13 @@ model = KineticModel2D(
 config = SolverConfig()
 
 problem = TrixiProblem(;
-    geometry_path = "projects/square_bells_ucsb/mesh/square_bells.geo",
+    geometry_path = "assets/square_bells.geo",
     boundary_conditions = boundary_conditions,
 )
 
-sol, semi = solve(problem, model, config)
+callbacks = default_callbacks_builder()
+
+sol, semi = solve(problem, model, config; callbacks=callbacks)
 ```
 
 If names do not match, boundary assignment fails.
@@ -101,6 +103,5 @@ If names do not match, boundary assignment fails.
 ## Notes
 
 - Keep physical names stable once sweeps start.
-- When running on SLURM, this project copies the mesh to node-local scratch to avoid parallel file-system races.
 
 You can also keep using `mesh_path = "…/square_bells.inp"` for prebuilt meshes.

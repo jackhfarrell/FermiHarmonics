@@ -141,6 +141,26 @@ function ElectronKinetics.default_callbacks_builder(; include_monitor::Bool=true
             initialize_live_dashboard!(monitor_state, ode.u0, semi, config, name)
             monitor = solve_monitor_callback(config, semi, monitor_state)
             push!(callbacks, monitor)
+            finalized = Ref(false)
+            finalize_cb = SciMLBase.DiscreteCallback(
+                (u, t, integrator) -> !finalized[] &&
+                    (t >= integrator.sol.prob.tspan[2] - eps(t) ||
+                     (hasproperty(integrator, :retcode) &&
+                      getproperty(integrator, :retcode) == SciMLBase.ReturnCode.Terminated)),
+                integrator -> begin
+                    status = solve_status(
+                        integrator.sol,
+                        semi,
+                        config;
+                        stop_reason_override=monitor_state.window_closed ? :window_closed : nothing,
+                    )
+                    finalize_live_dashboard!(monitor_state, integrator.u, semi, status, config)
+                    finalized[] = true
+                    return nothing
+                end;
+                save_positions=(false, false),
+            )
+            push!(callbacks, finalize_cb)
         end
         return Trixi.CallbackSet(callbacks...)
     end
