@@ -82,7 +82,7 @@ function harmonic_equations(model::KineticModel2D, max_harmonic::Int)
     end
     if !isempty(model.bands)
         Ax, Ay = block_streaming_matrices(model.bands, max_harmonic)
-        max_speed = maximum(surface_max_speed(band.surface) for band in model.bands)
+        max_speed = maximum(max_speed(band.surface) for band in model.bands)
         return MultiBandFermiHarmonics2D{length(model.bands) * nvars, typeof(model)}(
             model.bands,
             model.gamma_drag,
@@ -95,7 +95,7 @@ function harmonic_equations(model::KineticModel2D, max_harmonic::Int)
         )
     end
 
-    vF = collision isa QuadraticBGKCollision ? zero_state_speed(collision.mu0, collision.mass) : surface_vF(surface)
+    vF = collision isa QuadraticBGKCollision ? zero_state_speed(collision.mu0, collision.mass) : vF(surface)
     Ax, Ay = collision isa QuadraticBGKCollision ? streaming_matrices(max_harmonic, vF) : streaming_matrices(max_harmonic, surface)
     gamma_mr = collision_gamma_mr(collision)
     gamma_ee = collision isa LinearCollisionMatrix ? collision.gamma_ee : profile_reference_rate(mode_profile(collision))

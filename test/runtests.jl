@@ -68,12 +68,12 @@ end
 @testset "Surface Interface and New Surface Types" begin
     # Isotropic surface interface
     s_iso = Isotropic2DFermiSurface(; vF=1.2, nu=1.5, mass=2.0, charge=-1.0)
-    @test surface_vF(s_iso) ≈ 1.2
-    @test surface_max_speed(s_iso) ≈ 1.2
-    @test surface_vF_angle(s_iso, 0.0) ≈ 1.2
-    @test surface_density_of_states(s_iso) ≈ 1.5
-    @test surface_mass(s_iso) ≈ 2.0
-    @test surface_charge(s_iso) ≈ -1.0
+    @test vF(s_iso) ≈ 1.2
+    @test max_speed(s_iso) ≈ 1.2
+    @test vF_angle(s_iso, 0.0) ≈ 1.2
+    @test density_of_states(s_iso) ≈ 1.5
+    @test mass(s_iso) ≈ 2.0
+    @test charge(s_iso) ≈ -1.0
 
     # Elliptic surface — isotropic limit matches scalar streaming_matrices
     s_ell = EllipticFermiSurface2D(; vF0=1.0, aspect=1.0, nu=1.0, mass=1.0, charge=-1.0)
@@ -87,9 +87,9 @@ end
     # vF(θ) = vF0/hypot(cos θ, sin θ/aspect)
     # aspect>1: max vF = vF0*aspect (at θ=π/2, hypot=1/aspect); aspect<1: max = vF0 (at θ=0)
     s_aniso = EllipticFermiSurface2D(; vF0=1.0, aspect=2.0, nu=1.0, mass=1.0, charge=-1.0)
-    @test surface_max_speed(s_aniso) ≈ 2.0        # vF0*aspect = 2.0
-    @test surface_vF_angle(s_aniso, 0.0) ≈ 1.0   # θ=0: hypot(1,0)=1
-    @test surface_vF_angle(s_aniso, π/2) ≈ 2.0   # θ=π/2: hypot(0,0.5)=0.5 → vF=1/0.5=2
+    @test max_speed(s_aniso) ≈ 2.0        # vF0*aspect = 2.0
+    @test vF_angle(s_aniso, 0.0) ≈ 1.0   # θ=0: hypot(1,0)=1
+    @test vF_angle(s_aniso, π/2) ≈ 2.0   # θ=π/2: hypot(0,0.5)=0.5 → vF=1/0.5=2
 
     # GeneralFermiSurface2D with constant vF matches scalar formula
     s_gen = GeneralFermiSurface2D(θ -> 1.3; max_vF=1.3, nu=1.0, mass=1.0, charge=-1.0)
@@ -105,9 +105,9 @@ end
     s = EllipticFermiSurface2D(; vF0=1.0, aspect=2.0, nu=1.5, mass=1.0, charge=-1.0)
     b = Band(s; name=:electron, gamma_mr=0.1, gamma_ee=0.2)
     @test b.surface === s
-    @test surface_vF(b.surface) ≈ 1.0
-    @test surface_max_speed(b.surface) ≈ 2.0     # vF0 * aspect = 2.0
-    @test surface_density_of_states(b.surface) ≈ 1.5
+    @test vF(b.surface) ≈ 1.0
+    @test max_speed(b.surface) ≈ 2.0     # vF0 * aspect = 2.0
+    @test density_of_states(b.surface) ≈ 1.5
     @test band_momentum_weight(b) ≈ 1.5 * 1.0 * 1.0
 end
 

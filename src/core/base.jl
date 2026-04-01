@@ -4,12 +4,12 @@
 Fermi surface representation for 2D kinetic transport.
 
 All subtypes must implement the surface interface:
-- `surface_vF(s)` — reference Fermi velocity
-- `surface_max_speed(s)` — maximum velocity (for CFL stability)
-- `surface_vF_angle(s, θ)` — velocity at angle θ
-- `surface_density_of_states(s)` — density of states
-- `surface_mass(s)` — effective mass
-- `surface_charge(s)` — carrier charge
+- `vF(surface)` — reference Fermi velocity
+- `max_speed(surface)` — maximum velocity (for CFL stability)
+- `vF_angle(surface, θ)` — velocity at angle θ
+- `density_of_states(surface)` — density of states
+- `mass(surface)` — effective mass
+- `charge(surface)` — carrier charge
 
 Subtypes:
 - `AbstractAnalyticSurface` — analytic formula (isotropic, elliptic)
@@ -21,12 +21,12 @@ Subtypes:
 Fermi surface representation for 2D kinetic transport.
 
 All subtypes must implement the surface interface:
-- `surface_vF(s)` — reference Fermi velocity
-- `surface_max_speed(s)` — maximum velocity (for CFL stability)
-- `surface_vF_angle(s, θ)` — velocity at angle θ
-- `surface_density_of_states(s)` — density of states
-- `surface_mass(s)` — effective mass
-- `surface_charge(s)` — carrier charge
+- `vF(surface)` — reference Fermi velocity
+- `max_speed(surface)` — maximum velocity (for CFL stability)
+- `vF_angle(surface, θ)` — velocity at angle θ
+- `density_of_states(surface)` — density of states
+- `mass(surface)` — effective mass
+- `charge(surface)` — carrier charge
 
 # Subtypes
 - `AbstractAnalyticSurface` — analytic formula (isotropic, elliptic)
@@ -274,12 +274,12 @@ end
 # ------------------------------------------------------------------
 # AbstractFermiSurface2D interface — all subtypes must implement these
 # ------------------------------------------------------------------
-@inline surface_vF(s::Isotropic2DFermiSurface) = s.vF
-@inline surface_max_speed(s::Isotropic2DFermiSurface) = s.vF
-@inline surface_vF_angle(s::Isotropic2DFermiSurface, ::Float64) = s.vF
-@inline surface_density_of_states(s::Isotropic2DFermiSurface) = s.nu
-@inline surface_mass(s::Isotropic2DFermiSurface) = s.mass
-@inline surface_charge(s::Isotropic2DFermiSurface) = s.charge
+@inline vF(s::Isotropic2DFermiSurface) = s.vF
+@inline max_speed(s::Isotropic2DFermiSurface) = s.vF
+@inline vF_angle(s::Isotropic2DFermiSurface, ::Float64) = s.vF
+@inline density_of_states(s::Isotropic2DFermiSurface) = s.nu
+@inline mass(s::Isotropic2DFermiSurface) = s.mass
+@inline charge(s::Isotropic2DFermiSurface) = s.charge
 
 # ------------------------------------------------------------------
 # EllipticFermiSurface2D — elliptic Fermi surface
@@ -318,13 +318,13 @@ function EllipticFermiSurface2D(;
     )
 end
 
-@inline surface_vF(s::EllipticFermiSurface2D)          = s.vF0
-@inline surface_max_speed(s::EllipticFermiSurface2D)    = s.max_vF
-@inline surface_vF_angle(s::EllipticFermiSurface2D, θ::Float64) =
+@inline vF(s::EllipticFermiSurface2D)          = s.vF0
+@inline max_speed(s::EllipticFermiSurface2D)    = s.max_vF
+@inline vF_angle(s::EllipticFermiSurface2D, θ::Float64) =
     s.vF0 / hypot(cos(θ), sin(θ) / s.aspect)
-@inline surface_density_of_states(s::EllipticFermiSurface2D) = s.nu
-@inline surface_mass(s::EllipticFermiSurface2D)         = s.mass
-@inline surface_charge(s::EllipticFermiSurface2D)       = s.charge
+@inline density_of_states(s::EllipticFermiSurface2D) = s.nu
+@inline mass(s::EllipticFermiSurface2D)         = s.mass
+@inline charge(s::EllipticFermiSurface2D)       = s.charge
 
 # ------------------------------------------------------------------
 # GeneralFermiSurface2D{F} — user-supplied vF(θ) function
@@ -358,13 +358,13 @@ function GeneralFermiSurface2D(
     )
 end
 
-# surface_vF returns the CFL-relevant maximum for a general surface
-@inline surface_vF(s::GeneralFermiSurface2D)          = s.max_vF
-@inline surface_max_speed(s::GeneralFermiSurface2D)   = s.max_vF
-@inline surface_vF_angle(s::GeneralFermiSurface2D, θ::Float64) = Float64(s.vF_func(θ))
-@inline surface_density_of_states(s::GeneralFermiSurface2D) = s.nu
-@inline surface_mass(s::GeneralFermiSurface2D)        = s.mass
-@inline surface_charge(s::GeneralFermiSurface2D)      = s.charge
+# vF returns the CFL-relevant maximum for a general surface
+@inline vF(s::GeneralFermiSurface2D)          = s.max_vF
+@inline max_speed(s::GeneralFermiSurface2D)   = s.max_vF
+@inline vF_angle(s::GeneralFermiSurface2D, θ::Float64) = Float64(s.vF_func(θ))
+@inline density_of_states(s::GeneralFermiSurface2D) = s.nu
+@inline mass(s::GeneralFermiSurface2D)        = s.mass
+@inline charge(s::GeneralFermiSurface2D)      = s.charge
 
 """
     AbstractHarmonicDiscretization <: AbstractAngularDiscretization2D

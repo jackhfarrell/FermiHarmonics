@@ -76,7 +76,7 @@ end
 
 @inline harmonic_state_nvars(max_harmonic::Integer) = 1 + 2 * Int(max_harmonic)
 @inline band_momentum_weight(band::Band) =
-    surface_density_of_states(band.surface) * surface_mass(band.surface) * surface_vF(band.surface)
+    density_of_states(band.surface) * mass(band.surface) * vF(band.surface)
 # Mode rate profile accessor (works with LinearBGKCollision, QuadraticBGKCollision, AngleRateBGKCollision)
 @inline function mode_profile(collision::AbstractCollisionModel2D)
     error("$(typeof(collision)) does not have a mode_profile. Only collisions with AbstractModeRateProfile have this.")
@@ -265,18 +265,18 @@ end
 function streaming_matrices(M::Int, s::AbstractAnalyticSurface)
     # All analytic surfaces can use the numerical quadrature path that's optimized
     # for smooth vF_angle functions. For isotropic, the dispatch above will be used.
-    _anisotropic_streaming_matrices(M, θ -> surface_vF_angle(s, θ))
+    _anisotropic_streaming_matrices(M, θ -> vF_angle(surface, θ))
 end
 
 # General path for user-defined surfaces: use numerical quadrature
 function streaming_matrices(M::Int, s::AbstractUserDefinedSurface)
-    _anisotropic_streaming_matrices(M, θ -> surface_vF_angle(s, θ))
+    _anisotropic_streaming_matrices(M, θ -> vF_angle(surface, θ))
 end
 
 # Fallback with helpful error for unknown surface types
 function streaming_matrices(M::Int, s::AbstractFermiSurface2D)
     error("streaming_matrices: unsupported surface type $(typeof(s)). " *
-          "Implement surface_vF_angle(s::$(typeof(s)), θ) to support this surface type.")
+          "Implement vF_angle(s::$(typeof(s)), θ) to support this surface type.")
 end
 
 """

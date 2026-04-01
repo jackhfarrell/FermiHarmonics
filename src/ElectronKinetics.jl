@@ -23,8 +23,8 @@ Represent quasiparticle properties on the Fermi surface:
 
 All surfaces implement:
 ```
-surface_vF(s), surface_max_speed(s), surface_vF_angle(s, θ),
-surface_density_of_states(s), surface_mass(s), surface_charge(s)
+vF(surface), max_speed(surface), vF_angle(surface, θ),
+density_of_states(surface), mass(surface), charge(surface)
 ```
 
 ### Angular Discretizations (AbstractAngularDiscretization2D)
@@ -135,12 +135,12 @@ struct MyAnalyticSurface <: AbstractAnalyticSurface
 end
 
 # Implement the required interface (6 methods):
-surface_vF(s::MyAnalyticSurface) = s.vF0
-surface_max_speed(s::MyAnalyticSurface) = compute_max_speed(s)
-surface_vF_angle(s::MyAnalyticSurface, θ) = s.vF0 * my_formula(θ, s.anisotropy_param)
-surface_density_of_states(s::MyAnalyticSurface) = s.nu
-surface_mass(s::MyAnalyticSurface) = s.mass
-surface_charge(s::MyAnalyticSurface) = s.charge
+vF(s::MyAnalyticSurface) = s.vF0
+max_speed(s::MyAnalyticSurface) = compute_max_speed(surface)
+vF_angle(s::MyAnalyticSurface, θ) = s.vF0 * my_formula(θ, s.anisotropy_param)
+density_of_states(s::MyAnalyticSurface) = s.nu
+mass(s::MyAnalyticSurface) = s.mass
+charge(s::MyAnalyticSurface) = s.charge
 ```
 
 For user-defined functions:
@@ -316,12 +316,12 @@ export
     band_momentum_weight,
 
     # Surface interface (implement these for custom surfaces)
-    surface_vF,
-    surface_max_speed,
-    surface_vF_angle,
-    surface_density_of_states,
-    surface_mass,
-    surface_charge,
+    vF,
+    max_speed,
+    vF_angle,
+    density_of_states,
+    mass,
+    charge,
 
     # Low-level utilities
     cosine_index,

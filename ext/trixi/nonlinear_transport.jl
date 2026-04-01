@@ -55,7 +55,7 @@ end
     band_index::Integer,
 )
     band = equations.bands[Int(band_index)]
-    return surface_density_of_states(band.surface) * Float64(multiband_band_state_view(state, equations, band_index)[1])
+    return density_of_states(band.surface) * Float64(multiband_band_state_view(state, equations, band_index)[1])
 end
 
 @inline function multiband_band_current(
@@ -67,7 +67,7 @@ end
     block = multiband_band_state_view(state, equations, band_index)
     a1 = length(block) >= 2 ? Float64(block[2]) : 0.0
     b1 = length(block) >= 3 ? Float64(block[3]) : 0.0
-    prefactor = surface_charge(band.surface) * surface_density_of_states(band.surface) * surface_vF(band.surface)
+    prefactor = charge(band.surface) * density_of_states(band.surface) * vF(band.surface)
     return (prefactor * a1, prefactor * b1)
 end
 
