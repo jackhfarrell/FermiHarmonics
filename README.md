@@ -100,6 +100,72 @@ end
 Note: mesh preview uses quad outlines from the `.inp`, while the live solver
 dashboard visualizes a triangulated mesh-native grid.
 
+## Practical I/O + Visualization Notes
+
+Here are the most common “how do I actually use this?” workflows.
+
+### Save Mesh-Native vs Cartesian Outputs
+
+Mesh-native outputs follow the unstructured mesh (triangulated for visualization),
+while cartesian outputs resample onto a uniform grid. Both are available:
+
+```julia
+using ElectronKinetics
+using Trixi
+
+# After solve(...)
+save_mesh_native_analysis(sol, semi, "run_mesh_native.h5"; refine=4, observables=[:n, :jx, :jy])
+save_for_analysis(sol, semi, "run_cartesian.h5"; nvisnodes=256, observables=[:n, :jx, :jy])
+```
+
+Tip: `save_mesh_native_analysis` uses a mesh-native triangulation even if the
+original mesh is quad-based.
+
+### Live Visualization (Configurable)
+
+You can control the live dashboard layout and geometry using `LiveVisualizationConfig`:
+
+```julia
+live_visualization = LiveVisualizationConfig(;
+    geometry_mode=:mesh_native, # or :cartesian
+    field=:n,                   # :n, :a0, :jx, :jy, :current_magnitude, ...
+    refine=3,                   # mesh-native refinement
+    nvisnodes=160,              # cartesian grid resolution
+    accepted_step_interval=50,
+    min_update_seconds=0.2,
+)
+
+callbacks = (semi, ode, config, live_config, name) -> begin
+    Trixi.CallbackSet(
+        Trixi.StepsizeCallback(cfl=config.cfl),
+        Trixi.SteadyStateCallback(abstol=config.residual_tol, reltol=config.residual_reltol),
+        ElectronKinetics.visualization_callback(config, semi, name; interval=config.log_every, mode=live_visualization.geometry_mode),
+    )
+end
+```
+
+You can also use the built-in `default_callbacks_builder()` if you just want
+the default live dashboard wiring.
+
+### Magnetic Fields (Current Scope)
+
+Uniform perpendicular magnetic fields are supported for **single-band linear
+harmonic** runs:
+
+```julia
+magnetic_field = MagneticField2D(0.2)
+model = KineticModel2D(
+    surface,
+    HarmonicBasis(:auto),
+    IsotropicHarmonicStreaming(),
+    LinearBGKCollision(0.0, TwoRateProfile(50.0));
+    magnetic_field=magnetic_field,
+)
+```
+
+If you need magnetic fields in multiband or nonlinear angle runs, we can add
+that next.
+
 The physics core can be loaded without `Trixi`; the backend extension activates
 when `using Trixi` is present in the environment.
 
